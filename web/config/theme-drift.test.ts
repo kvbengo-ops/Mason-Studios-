@@ -23,7 +23,7 @@
 // the element, so that one assertion actually compiles Tailwind.
 //
 // STRIP COMMENTS BEFORE MATCHING ANYTHING. These files document themselves
-// heavily: `:root` appears inside studio.css's header comment and
+// heavily: `:root` appears inside studio-dark.css's header comment and
 // declaration-shaped strings like `--warning:` appear inside studio-light.css's. A
 // naive scan goes red on the repo's own untouched files.
 import { readFileSync, readdirSync } from "node:fs";

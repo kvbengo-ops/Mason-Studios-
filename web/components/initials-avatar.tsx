@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import { cn } from "@/lib/utils";
 
 // Five slots, matching the theme's --chart-1..5 tokens exactly (see
-// config/themes/studio-light.css / studio.css) — reusing those instead of
+// config/themes/studio-light.css / studio-dark.css) — reusing those instead of
 // inventing a separate avatar palette means every colour here already has a
 // documented, checked contrast value in both themes, and a future theme swap
 // (a new NEXT_PUBLIC_THEME) recolours avatars along with everything else
@@ -91,7 +91,7 @@ export function InitialsAvatar({
       aria-hidden="true"
       className={cn(
         // text-background, not a hardcoded white/black: every --chart-N in
-        // both studio-light.css and studio.css was checked against --background
+        // both studio-light.css and studio-dark.css was checked against --background
         // at >=4.5:1 (that's the exact pairing each theme file's own header
         // comment documents under "chart-1..5 all >=4.5:1 against
         // background") — reusing --background as the *text* colour on top

@@ -9,11 +9,11 @@
  * `<html data-theme="...">` in app/layout.tsx activates and which a nested
  * element can use to scope a whole palette to a subtree. See config/theme.ts.
  *
- * Three themes: studio (navy), studio-light and
+ * Three themes: studio-dark (navy), studio-light and
  * higgsfield.
  */
 @import "../config/themes/studio-light.css";
-@import "../config/themes/studio.css";
+@import "../config/themes/studio-dark.css";
 @import "../config/themes/higgsfield.css";
 
 /* Tailwind v4's built-in `dark` variant is @media (prefers-color-scheme: dark);

@@ -1,5 +1,5 @@
 /*
- * studio theme (id "studio") — deep navy workspace from the studio mock: near-black
+ * studio theme (id "studio-dark") — deep navy workspace from the studio mock: near-black
  * blue ground, a slightly darker sidebar, and the mock's steel-blue (its
  * "280 cr" chip) as the primary: Generate and other filled buttons, with navy
  * ink. A SURFACE colour, never text on the page ground; --accent-foreground
@@ -9,11 +9,11 @@
  * Two arms. `:root[data-theme=...]` at (0,2,0) is what beats studio-light.css's bare
  * `:root` at (0,1,0) regardless of @import order — do not drop that prefix to
  * make the two tie. The bare arm adds nothing at <html>, but it is what lets a
- * nested `<span data-theme="studio">` take this whole palette, since
+ * nested `<span data-theme="studio-dark">` take this whole palette, since
  * declarations on an element beat inherited values at any specificity.
  */
-:root[data-theme="studio"],
-[data-theme="studio"] {
+:root[data-theme="studio-dark"],
+[data-theme="studio-dark"] {
   /* Matches studio-light.css's radius exactly — same shape language, only the
      palette inverts. */
   --radius: 0.625rem;

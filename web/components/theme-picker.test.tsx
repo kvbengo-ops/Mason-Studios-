@@ -159,8 +159,8 @@ describe("ThemePicker", () => {
     await user.type(input, "{End}"); // cursor -> last row of the full, unfiltered list
     await user.type(input, "dark{Enter}"); // narrows to one row, at index 0
 
-    expect(document.documentElement.dataset.theme).toBe("studio");
-    expect(document.cookie).toContain("ugc-theme=studio");
+    expect(document.documentElement.dataset.theme).toBe("studio-dark");
+    expect(document.cookie).toContain("ugc-theme=studio-dark");
   });
 
   it("renders a swatch scoped to higgsfield's row", async () => {

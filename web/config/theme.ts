@@ -1,5 +1,5 @@
 // Three themes are reachable at runtime, all through the theme picker (the
-// successor to components/theme-toggle.tsx): "studio" (navy),
+// successor to components/theme-toggle.tsx): "studio-dark" (navy),
 // "studio-light" and "higgsfield". globals.css imports all three statically as
 // `:root[data-theme="…"]` blocks (studio-light.css's block sits on a bare `:root`,
 // so it also doubles as the fallback for any unrecognised value), and
@@ -17,7 +17,7 @@ export type ThemeEntry = { id: string; label: string };
 export const THEME_LIST = [
   // Three themes only. A cookie still naming a removed theme fails isTheme
   // and falls back to the server default.
-  { id: "studio", label: "studio" },
+  { id: "studio-dark", label: "studio" },
   { id: "studio-light", label: "studio light" },
   { id: "higgsfield", label: "higgsfield" },
 ] as const satisfies readonly ThemeEntry[];

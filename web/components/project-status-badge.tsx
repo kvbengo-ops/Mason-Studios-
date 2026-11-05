@@ -27,7 +27,7 @@ export const STATUS_LABEL: Record<ProjectStatus, string> = {
 // light, saturated fill (sampled off a reference dashboard for rendering/
 // complete/delivered, matched in register for briefed/framed) paired with a
 // dark, near-neutral ink, inverted to a dark-fill/light-ink pair in
-// studio.css. See studio-light.css/studio.css's headers for the full measured
+// studio-dark.css. See studio-light.css/studio-dark.css's headers for the full measured
 // contrast table — every pair clears 4.5:1 in both themes, most by a wide
 // margin (7-14:1).
 //

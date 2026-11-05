@@ -21,7 +21,7 @@
      the pill-ish 12px this token used before this theme existed. */
   --radius: 0.625rem;
 
-  /* See studio.css for why this is declared: native controls (select
+  /* See studio-dark.css for why this is declared: native controls (select
      option lists, date pickers, scrollbars, autofill) are painted by the
      browser from this property, not from our CSS variables. Stated
      explicitly on the light themes too so a theme switch always sets it
