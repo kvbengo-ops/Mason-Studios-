@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * All theme files are imported statically (CSS `@import` can't be
+ * conditional). The default theme (studio-light) defines its variables on bare
+ * `:root`, so it doubles as the palette for any unrecognised data-theme
+ * value; every theme also carries a `[data-theme="..."]` arm, which
+ * `<html data-theme="...">` in app/layout.tsx activates and which a nested
+ * element can use to scope a whole palette to a subtree. See config/theme.ts.
+ *
+ * Three themes: studio (navy), studio-light and
+ * higgsfield.
+ */
+@import "../config/themes/studio-light.css";
+@import "../config/themes/studio.css";
+@import "../config/themes/higgsfield.css";
+
+/* Tailwind v4's built-in `dark` variant is @media (prefers-color-scheme: dark);
+   this redirects it to a `.dark` ancestor nothing here sets, which is what
+   keeps every `dark:` usage inert. Delete it and the next `dark:` anyone types
+   fires on the viewer's OS setting, uncorrelated with data-theme. */
+@custom-variant dark (&:is(.dark *));
+
+@keyframes app-banner-shine {
+  from {
+    transform: translateX(-140%) skewX(-20deg);
+  }
+  to {
+    transform: translateX(440%) skewX(-20deg);
+  }
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  /* Sidebar budget meter's middle severity step (lib/budget-tier.ts) — see config/themes/studio-light.css for why this isn't the accent colour. */
+  --color-warning: hsl(var(--warning));
+  /* render-progress.tsx's StatusIcon "done" check — see config/themes/studio-light.css for why this is its own token rather than a reused chart-* slot. */
+  --color-success: hsl(var(--success));
+
+  /* StatusIcon's queued/rendering pair (components/status-icon.tsx) — one
+     journey at two lightnesses, which is why they are a pair and not a reuse
+     of --warning. Each theme answers the hue question in its own file. */
+  --color-pending: hsl(var(--pending));
+  --color-pending-strong: hsl(var(--pending-strong));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+
+  /* Status pill fill+ink pairs (project-status-badge.tsx) — see
+     config/themes/studio-light.css's header for why these are separate from
+     chart-1..5 (authored as text colours, not fill colours) and why light
+     and dark need independently-checked values rather than one shared
+     pairing. Every theme file under config/themes/ defines all ten.
+
+     The muted fallback is written INSIDE var(), not as a separate `:root`
+     rule, and that distinction is not cosmetic — the separate rule was
+     tried and it silently turned every pill grey in production. studio-light.css
+     carries a bare `:root` arm (it IS the default theme, and that arm is
+     also the fallback palette for an unrecognised data-theme), an @import is
+     evaluated where it appears, and a later bare-`:root` block beats an
+     earlier one at equal specificity.
+     So the "safe fallback" overrode the real palette everywhere instead of
+     only where it was missing. `var(--x, fallback)` has the semantics that
+     were actually wanted: it applies only when --x has no definition at
+     all, and never competes with a theme that does define it. */
+  --color-status-briefed: hsl(var(--status-briefed, var(--muted)));
+  --color-status-briefed-foreground: hsl(var(--status-briefed-foreground, var(--muted-foreground)));
+  --color-status-framed: hsl(var(--status-framed, var(--muted)));
+  --color-status-framed-foreground: hsl(var(--status-framed-foreground, var(--muted-foreground)));
+  --color-status-rendering: hsl(var(--status-rendering, var(--muted)));
+  --color-status-rendering-foreground: hsl(var(--status-rendering-foreground, var(--muted-foreground)));
+  --color-status-complete: hsl(var(--status-complete, var(--muted)));
+  --color-status-complete-foreground: hsl(var(--status-complete-foreground, var(--muted-foreground)));
+  --color-status-delivered: hsl(var(--status-delivered, var(--muted)));
+  --color-status-delivered-foreground: hsl(var(--status-delivered-foreground, var(--muted-foreground)));
+
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * Set by next/font in app/layout.tsx (self-hosted at build time — no
+   * runtime font requests, which matters behind the strict environment this
+   * builds and runs in). --font-sans is the default; --font-serif is opt-in
+   * via the `font-serif` utility so long-form UI copy never slows down
+   * reading by rendering in a serif.
+   */
+  --font-sans: var(--font-inter-tight);
+  --font-serif: var(--font-source-serif);
+
+  /*
+   * Drives the `animate-shimmer` utility (components/shimmer-text.tsx).
+   * Registering it here, Tailwind-v4-style (see tw-animate-css's own
+   * --animate-* tokens above), is what makes `motion-safe:animate-shimmer`
+   * a real utility class. The `@keyframes shimmer-sweep` it points at is
+   * NOT here — it lives once per file under config/themes/, per that
+   * directory's existing convention (see any theme file's header comment),
+   * so it's duplicated identically across every theme rather than assumed
+   * to only matter for the active one.
+   */
+  --animate-shimmer: shimmer-sweep 2.2s ease-in-out infinite;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+
+  /* Headings read as editorial, not as UI chrome — everything else
+     (buttons, labels, body copy) stays on the sans in body's default. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif;
+  }
+}
+
+/**
+ * A scrollport that scrolls without drawing a scrollbar.
+ *
+ * For the scene page's settings column: a 400px panel beside the work, whose
+ * content genuinely overflows, but where a permanent grey track down the
+ * inside edge sits right next to the divider rules and reads as a second,
+ * competing border.
+ *
+ * Deliberately scoped to a class rather than applied to everything that
+ * scrolls. Hiding a scrollbar hides the only cue that there is more below,
+ * so it is only honest where the content itself makes the overflow obvious —
+ * a cut-off card does, a wall of text does not. The element keeps its
+ * overflow, its wheel, its trackpad, its keyboard and its scroll anchoring;
+ * only the paint is gone.
+ */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

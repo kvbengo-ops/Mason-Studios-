@@ -1,0 +1,66 @@
+project_id = "ugc-pipeline"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Match the linked project's Postgres major version.
+major_version = 17
+
+[db.seed]
+enabled = false
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[local_smtp]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.image_transformation]
+enabled = true
+
+# These services are not used by the app; keep the local Docker stack smaller.
+[analytics]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:9000"
+additional_redirect_urls = ["http://127.0.0.1:9000/**", "http://localhost:9000/**"]
+jwt_expiry = 3600
+
+# Self-serve signup, opened up once every verified account got its own
+# daily render budget (web/lib/spend.ts) instead of needing an admin to
+# hand-provision it in the dashboard. SIGNUP_ALLOWED_DOMAINS (render.yaml,
+# web/lib/signup-allowlist.ts) is the lever to close this back down to a
+# company domain without touching this file or the app.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+# Off: Supabase's built-in mailer only delivers to addresses on the
+# project's own team and is capped at 2/hour, so a confirmation email
+# never reaches a real editor. signUp/signIn in web/actions/auth.ts still
+# branch on whatever this is actually set to (here and on the hosted
+# project's dashboard, which is the copy that matters in production) rather
+# than assuming it's off, since either can be flipped back without a code
+# change.
+enable_confirmations = false

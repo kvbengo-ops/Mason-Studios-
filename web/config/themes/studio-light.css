@@ -1,0 +1,172 @@
+/*
+ * studio light theme (id "studio-light", the deployed default and the bare `:root`
+ * fallback for any unrecognised data-theme) — the light twin of the navy
+ * studio theme: cool off-white ground, white cards, the same steel-blue hue
+ * as the primary, deepened so white ink on it stays legible, and a pale-blue
+ * accent surface with deep-blue accent text.
+ */
+/*
+ * Two arms, deliberately. The bare `:root` is this theme's own slot AND the
+ * fallback for any unrecognised data-theme value; the bare `[data-theme]`
+ * arm is what lets a nested element scope the whole palette to its subtree,
+ * since declarations on an element beat inherited values at any specificity.
+ * Do NOT drop the `:root` prefix from the OTHER themes to make them tie with
+ * this one — a named theme's `:root[data-theme=X]` at (0,2,0) is what keeps
+ * palette selection independent of @import order. See app/globals.css.
+ */
+:root,
+[data-theme="studio-light"] {
+  /* 10px base — rounded-lg lands at 10px, rounded-md at 8px: the moderate,
+     consistent radius the brand's flat, restrained surfaces call for, not
+     the pill-ish 12px this token used before this theme existed. */
+  --radius: 0.625rem;
+
+  /* See studio.css for why this is declared: native controls (select
+     option lists, date pickers, scrollbars, autofill) are painted by the
+     browser from this property, not from our CSS variables. Stated
+     explicitly on the light themes too so a theme switch always sets it
+     rather than inheriting whatever the last one left. */
+  color-scheme: light;
+  --background: 220 33% 98%;
+  --foreground: 224 38% 12%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 224 38% 12%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 224 38% 12%;
+
+  --primary: 207 70% 42%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 25% 93%;
+  --secondary-foreground: 224 38% 14%;
+
+  --muted: 220 25% 94%;
+  --muted-foreground: 220 12% 42%;
+
+  --accent: 203 85% 92%;
+  --accent-foreground: 208 75% 30%;
+
+  --destructive: 355 70% 44%;
+  --destructive-foreground: 0 0% 98%;
+
+  /*
+   * --warning: the sidebar budget meter's middle severity step (lib/
+   * budget-tier.ts's "warning" tier, between "normal" and "critical" =
+   * --destructive). Deliberately NOT a hue near --primary's 38 (gold, this
+   * theme's one accent, spent on the "New project" button and every filled
+   * surface) — a warning colour that reads as "the brand's action colour,
+   * but urgent" fights the accent instead of standing apart from it. Placed
+   * instead in the gap between --destructive's red (355) and --primary's
+   * gold (38) — hue 15, true orange — so the three read as an ordered
+   * warm scale (red -> orange -> gold) with orange legibly its own colour,
+   * not a shade of either neighbour. Darkened (32% L) rather than a bright
+   * orange for the same reason --destructive sits at 42% L on this cream
+   * background: a light warm hue near-white has poor contrast as text.
+   *   warning/background contrast: ~5.3:1 (passes AA for normal text).
+   */
+  --warning: 20 80% 36%;
+
+  /*
+   * --success: render-progress.tsx's scene-tile status icons (StatusIcon,
+   * components/status-icon.tsx) — the "done" check. Nothing in this theme
+   * was green before; --chart-4 (155 55% 28%, also green-ish here) isn't
+   * reused because the chart slots are a per-theme ordered series, free to
+   * land on any hue that keeps five categories apart in that palette — so a
+   * caller that needs "green, always" across every theme needs its own
+   * token, not a chart slot whose hue is theme-specific by design.
+   * Hue 142 sits well clear of --primary (38), --warning (15)
+   * and --destructive (355) so a colour-blind viewer relying on hue alone
+   * still gets a fourth, distinct value, though StatusIcon's shapes (dot /
+   * spinner / check / X) are the actual differentiator, not colour alone.
+   *   success/background contrast: 6.73:1, success/card: 6.99:1.
+   */
+  --success: 150 60% 26%;
+
+  /*
+   * --pending / --pending-strong: StatusIcon's queued and rendering glyphs
+   * (components/status-icon.tsx), which are ONE journey and so must stay one
+   * hue at two lightnesses — never two different hues. These two values are
+   * the literals that lived inline in that component before it had tokens,
+   * so this theme renders pixel-identical to before. See status-icon.tsx for why
+   * this is not --warning: that token is about alarm, and a queued scene is
+   * waiting, not in trouble.
+   *   pending/background 4.54:1, pending-strong/background 2.63:1 — these
+   *   are 2.5px icon strokes, not text, and the visible status word beside
+   *   each glyph is what carries the meaning at text contrast.
+   */
+  --pending: 203 70% 38%;
+  --pending-strong: 203 80% 45%;
+
+  --border: 220 20% 87%;
+  --input: 220 20% 87%;
+  --ring: 207 70% 42%;
+
+  --chart-1: 208 75% 40%;
+  --chart-2: 265 45% 45%;
+  --chart-3: 160 55% 30%;
+  --chart-4: 28 80% 40%;
+  --chart-5: 340 60% 45%;
+
+  /*
+   * Status pill fill+ink pairs (project-status-badge.tsx). See this file's
+   * header for why these are decoupled (different hue register for ink vs
+   * fill) rather than reusing chart-1..5, which are 28-40% L, authored as
+   * TEXT colours, not fill colours. `rendering`/`complete`/`delivered` are
+   * sampled off a reference dashboard; `briefed`/`framed` invented to match
+   * that same register (~80% L fill, high saturation; ~8-9% L ink, same
+   * hue, near-full saturation but read as "near-black" at this lightness).
+   * Exact contrast numbers are in the header block above.
+   */
+  --status-briefed: 212 85% 88%;
+  --status-briefed-foreground: 212 100% 12%;
+  --status-framed: 265 65% 89%;
+  --status-framed-foreground: 266 90% 14%;
+  --status-rendering: 203 85% 88%;
+  --status-rendering-foreground: 205 100% 12%;
+  --status-complete: 145 60% 86%;
+  --status-complete-foreground: 145 100% 10%;
+  --status-delivered: 180 50% 86%;
+  --status-delivered-foreground: 180 100% 10%;
+
+  --sidebar: 220 30% 95%;
+  --sidebar-foreground: 224 38% 12%;
+  --sidebar-primary: 207 70% 42%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  /* White, matching the page ground: this is the pill behind the CURRENT
+     nav item (nav-links.tsx) and the hover state for the others. At its old
+     warm grey it was darker than the sidebar itself, so the selected row
+     read as pressed-in rather than as the page you are standing on. White
+     ties it to the content area it opens. */
+  --sidebar-accent: 0 0% 100%;
+  --sidebar-accent-foreground: 224 38% 14%;
+  --sidebar-border: 220 20% 88%;
+  --sidebar-ring: 207 70% 42%;
+}
+
+/*
+ * Feeds --animate-shimmer (app/globals.css `@theme inline`), used by
+ * components/shimmer-text.tsx for in-flight status labels (e.g.
+ * render-progress.tsx's "Rendering" tiles). `@keyframes` are global,
+ * unscoped by selector, and every theme file below is imported
+ * unconditionally regardless of NEXT_PUBLIC_THEME (see app/globals.css's
+ * header comment) — so defining this once would already reach every theme.
+ * It is nonetheless duplicated byte-for-byte in each theme file rather than
+ * left to live in just one, so nothing here reads as studio-light-only and gets
+ * deleted by a future edit that assumes (wrongly, for a bare @keyframes
+ * rule) it only applies under this file's own [data-theme] scope.
+ *
+ * Sweeps the gradient's highlight band from the right edge of the text to
+ * the left (background-position 100% -> 0%) — see shimmer-text.tsx for why
+ * the gradient itself is built from currentColor rather than a fixed
+ * colour here.
+ */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}

@@ -1,0 +1,147 @@
+/*
+ * studio theme (id "studio") — deep navy workspace from the studio mock: near-black
+ * blue ground, a slightly darker sidebar, and the mock's steel-blue (its
+ * "280 cr" chip) as the primary: Generate and other filled buttons, with navy
+ * ink. A SURFACE colour, never text on the page ground; --accent-foreground
+ * is the legible light-blue accent text.
+ */
+/*
+ * Two arms. `:root[data-theme=...]` at (0,2,0) is what beats studio-light.css's bare
+ * `:root` at (0,1,0) regardless of @import order — do not drop that prefix to
+ * make the two tie. The bare arm adds nothing at <html>, but it is what lets a
+ * nested `<span data-theme="studio">` take this whole palette, since
+ * declarations on an element beat inherited values at any specificity.
+ */
+:root[data-theme="studio"],
+[data-theme="studio"] {
+  /* Matches studio-light.css's radius exactly — same shape language, only the
+     palette inverts. */
+  --radius: 0.625rem;
+
+  /* Native controls follow this, not our CSS variables. A <select>'s open
+     option list, date pickers, scrollbars and autofill are painted by the
+     browser, and without color-scheme it paints them LIGHT no matter how
+     dark the page is — so the Length dropdown in /ugc rendered pale text on
+     a white popup and the numbers were unreadable. One declaration per
+     theme fixes every native control at once, which is why it lives here
+     rather than as a colour patched onto the one <select> that got
+     reported. */
+  color-scheme: dark;
+  --background: 224 38% 7%;
+  --foreground: 220 25% 94%;
+
+  --card: 223 32% 10%;
+  --card-foreground: 220 25% 94%;
+
+  --popover: 223 30% 11%;
+  --popover-foreground: 220 25% 94%;
+
+  --primary: 205 58% 76%;
+  --primary-foreground: 224 45% 10%;
+
+  --secondary: 222 26% 15%;
+  --secondary-foreground: 220 25% 92%;
+
+  --muted: 222 26% 15%;
+  --muted-foreground: 220 14% 62%;
+
+  --accent: 210 45% 22%;
+  --accent-foreground: 203 90% 80%;
+
+  --destructive: 355 78% 62%;
+  --destructive-foreground: 0 0% 98%;
+
+  /*
+   * --warning: same reasoning as studio-light.css (this theme's non-dark twin) —
+   * hue 15, the true-orange gap between --destructive's red (355) and
+   * --primary's gold (38), kept clearly off the brand accent. Lightened to
+   * 60% (vs. studio-light.css's 32%) for the same reason --destructive lightens
+   * from 42% to 58% here: a dark ground needs a light warm colour to read,
+   * not a dark one.
+   */
+  --warning: 28 90% 62%;
+
+  /*
+   * --success: same purpose as studio-light.css's twin token (render-progress.tsx's
+   * StatusIcon "done" check) — see that file's comment for why this isn't
+   * just --chart-4 reused. Lightened to read on a dark ground, same
+   * reasoning as --destructive/--warning above.
+   *   success/background contrast: 9.70:1, success/card: 9.23:1.
+   */
+  --success: 150 55% 55%;
+
+  /*
+   * --pending / --pending-strong: StatusIcon's queued and rendering glyphs
+   * (components/status-icon.tsx). Same hue as studio-light.css (38) at the same
+   * ordering — queued the lower lightness of the pair — because these two
+   * states are ONE journey and must never become two hues. Both lightened
+   * for a dark ground, the same move --destructive/--warning/--success all
+   * make above; studio-light.css's 33%/45% would sit nearly black here.
+   *   pending/background 7.01:1, pending-strong/background 10.99:1.
+   */
+  --pending: 203 60% 50%;
+  --pending-strong: 203 90% 75%;
+
+  --border: 222 22% 18%;
+  --input: 222 22% 18%;
+  --ring: 205 58% 76%;
+
+  --chart-1: 203 90% 70%;
+  --chart-2: 265 60% 72%;
+  --chart-3: 160 55% 55%;
+  --chart-4: 35 85% 62%;
+  --chart-5: 340 70% 70%;
+
+  /*
+   * Status pill fill+ink pairs (project-status-badge.tsx) — the INVERTED
+   * twin of studio-light.css's pairs. See this file's header for why: a light
+   * pastel fill that works on studio-light.css's cream ground glares here, so this
+   * is a deep, desaturated fill with a light, hue-tinted ink instead of the
+   * other way around. Exact contrast numbers are in the header block above.
+   */
+  --status-briefed: 212 35% 20%;
+  --status-briefed-foreground: 210 75% 82%;
+  --status-framed: 265 30% 22%;
+  --status-framed-foreground: 265 55% 84%;
+  --status-rendering: 203 40% 20%;
+  --status-rendering-foreground: 203 85% 80%;
+  --status-complete: 150 30% 18%;
+  --status-complete-foreground: 150 50% 76%;
+  --status-delivered: 180 30% 18%;
+  --status-delivered-foreground: 180 45% 78%;
+
+  --sidebar: 224 40% 6%;
+  --sidebar-foreground: 220 25% 94%;
+  --sidebar-primary: 205 58% 76%;
+  --sidebar-primary-foreground: 224 45% 10%;
+  --sidebar-accent: 222 26% 13%;
+  --sidebar-accent-foreground: 220 25% 96%;
+  --sidebar-border: 222 22% 15%;
+  --sidebar-ring: 205 58% 76%;
+}
+
+/*
+ * Feeds --animate-shimmer (app/globals.css `@theme inline`), used by
+ * components/shimmer-text.tsx for in-flight status labels (e.g.
+ * render-progress.tsx's "Rendering" tiles). `@keyframes` are global,
+ * unscoped by selector, and every theme file below is imported
+ * unconditionally regardless of NEXT_PUBLIC_THEME (see app/globals.css's
+ * header comment) — so defining this once would already reach every theme.
+ * It is nonetheless duplicated byte-for-byte in each theme file rather than
+ * left to live in just one, so nothing here reads as studio-light-only and gets
+ * deleted by a future edit that assumes (wrongly, for a bare @keyframes
+ * rule) it only applies under this file's own [data-theme] scope.
+ *
+ * Sweeps the gradient's highlight band from the right edge of the text to
+ * the left (background-position 100% -> 0%) — see shimmer-text.tsx for why
+ * the gradient itself is built from currentColor rather than a fixed
+ * colour here.
+ */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}

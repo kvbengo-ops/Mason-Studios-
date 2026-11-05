@@ -1,0 +1,23 @@
+-- The MODE contract's write half — see web/lib/mode.ts's header for the
+-- full incident this fixes: a locally mocked render was claimed and billed
+-- by the deployed production worker, because both processes poll this same
+-- table and a mock env var set on one of them has no say in which one
+-- claims a row first.
+--
+-- scenes.dev records, on the row itself, which MODE wrote it: a
+-- MODE=development web app writes dev=true on every scene it queues
+-- (web/actions/enqueue.ts's six status='queued' writes); MODE=production
+-- always writes dev=false. A worker then claims ONLY rows matching its own
+-- mode (worker/internal/store/store.go's ClaimQueuedScenes, CountRendering,
+-- StaleRendering) — a development worker can never claim, submit, or bill a
+-- production row, and vice versa, regardless of how many worker processes
+-- are polling this table at once.
+--
+-- not null default false: every scene written before this migration, and
+-- every future write that forgets the column outright, is production —
+-- the safe default is "a real production worker may claim this", not the
+-- other way, because a queued scene silently orphaned from every worker
+-- (unclaimed by either mode) is a stuck render nobody notices, while a
+-- scene claimed by production when it should not have been is at least
+-- visible as an unexpected charge.
+alter table scenes add column dev boolean not null default false;

@@ -1,0 +1,90 @@
+/*
+ * higgsfield theme — Higgsfield AI's look (higgsfield.ai): near-black ground,
+ * white ink, one neon lime accent (#d1fe17). Selected via
+ * `[data-theme="higgsfield"]`; see config/theme.ts and app/layout.tsx.
+ *
+ * Structure copied from serika-dark.css (a dark theme declaring all ten
+ * status-pill pairs — see app/globals.css for why that matters). Only the
+ * lime, the ground and the ink are taken from Higgsfield; everything else is
+ * invented and kept neutral so the lime stays the only loud colour.
+ *
+ * The lime is ~90% luminance, so the ink on it must be dark —
+ * --primary-foreground is the ground.
+ *
+ * Values are HSL triplets (no `hsl()` wrapper) consumed via hsl(var(--x)).
+ */
+:root[data-theme="higgsfield"],
+[data-theme="higgsfield"] {
+  --radius: 0.625rem;
+
+  color-scheme: dark;
+  --background: 0 0% 4%;
+  --foreground: 0 0% 96%;
+
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 96%;
+
+  --popover: 0 0% 10%;
+  --popover-foreground: 0 0% 96%;
+
+  --primary: 72 99% 54%;
+  --primary-foreground: 0 0% 4%;
+
+  --secondary: 0 0% 14%;
+  --secondary-foreground: 0 0% 96%;
+
+  --muted: 0 0% 14%;
+  --muted-foreground: 0 0% 64%;
+
+  --accent: 0 0% 14%;
+  --accent-foreground: 72 90% 66%;
+
+  --destructive: 0 80% 66%;
+  --destructive-foreground: 0 30% 10%;
+
+  --warning: 35 90% 62%;
+  --success: 145 55% 55%;
+
+  --pending: 72 45% 48%;
+  --pending-strong: 72 90% 68%;
+
+  --border: 0 0% 18%;
+  --input: 0 0% 18%;
+  --ring: 72 99% 54%;
+
+  --chart-1: 72 99% 54%;
+  --chart-2: 190 70% 60%;
+  --chart-3: 280 60% 72%;
+  --chart-4: 35 85% 62%;
+  --chart-5: 340 70% 70%;
+
+  --status-briefed: 213 25% 18%;
+  --status-briefed-foreground: 213 45% 78%;
+  --status-framed: 265 22% 20%;
+  --status-framed-foreground: 265 40% 80%;
+  --status-rendering: 72 35% 16%;
+  --status-rendering-foreground: 72 80% 70%;
+  --status-complete: 145 25% 16%;
+  --status-complete-foreground: 145 45% 72%;
+  --status-delivered: 180 25% 16%;
+  --status-delivered-foreground: 180 40% 74%;
+
+  --sidebar: 0 0% 2%;
+  --sidebar-foreground: 0 0% 96%;
+  --sidebar-primary: 72 99% 54%;
+  --sidebar-primary-foreground: 0 0% 4%;
+  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent-foreground: 0 0% 96%;
+  --sidebar-border: 0 0% 14%;
+  --sidebar-ring: 72 99% 54%;
+}
+
+/* Duplicated byte-for-byte in every theme file — see serika-dark.css. */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}

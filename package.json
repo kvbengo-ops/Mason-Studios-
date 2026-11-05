@@ -1,0 +1,28 @@
+{
+  "name": "ugc-pipeline",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:status": "supabase status",
+    "db:env": "bun scripts/local-db-env.mjs",
+    "db:push": "supabase db push --local",
+    "db:push:remote": "supabase db push --linked",
+    "db:reset": "supabase db reset --local"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "supabase": "2.116.0"
+  },
+  "trustedDependencies": [
+    "supabase"
+  ],
+  "lint-staged": {
+    "web/**/*.{ts,tsx}": [
+      "bash -c 'cd web && bunx prettier --write \"${@#web/}\"' --",
+      "bash -c 'cd web && bunx eslint --fix \"${@#web/}\"' --"
+    ]
+  }
+}

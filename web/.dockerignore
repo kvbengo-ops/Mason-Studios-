@@ -1,0 +1,12 @@
+.git
+node_modules
+.next
+.env
+.env.*
+!.env.example
+*.md
+coverage
+**/*.test.ts
+**/*.test.tsx
+.vscode
+.turbo

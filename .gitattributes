@@ -1,0 +1,15 @@
+# This repo is developed on both macOS and Windows. Windows checkouts run with
+# core.autocrlf=true, which lands CRLF in the working tree even though every
+# blob in the repository is already LF — and `gofmt -l .` then lists all 53 Go
+# files on nothing but line endings, which buries real formatting drift in
+# noise nobody reads. This file makes the checkout match the blobs.
+*               text=auto eol=lf
+
+# Left alone deliberately: text=auto already detects these, but Anton drives
+# the caption measurement tests and clip.mp4 drives the webhook tests, so a
+# newline rewrite here would surface as a baffling test failure rather than an
+# obvious corruption.
+*.ttf           binary
+*.png           binary
+*.ico           binary
+*.mp4           binary

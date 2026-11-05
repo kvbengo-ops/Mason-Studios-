@@ -1,0 +1,53 @@
+{
+  "character": "A woman in her late 20s with shoulder-length dark hair, wearing a cream linen shirt, standing in a sunlit minimalist kitchen.",
+  "scenes": [
+    {
+      "script_line": "Ever feel like your mornings are a race against the clock?",
+      "video_prompt": "Medium shot of the woman leaning on the kitchen counter, speaking directly to camera with an empathetic expression, soft natural window light, static tripod, shot for 9:16 vertical delivery.",
+      "is_talking_head": true,
+      "duration_s": 4
+    },
+    {
+      "script_line": "That's why we built a routine that takes five minutes, not fifty.",
+      "video_prompt": "Close-up of the woman speaking to camera with a warm, confident smile, golden morning light through the window behind her, slow push-in, framed for 9:16 vertical delivery.",
+      "is_talking_head": true,
+      "duration_s": 5
+    },
+    {
+      "script_line": "One scoop, cold water, done.",
+      "video_prompt": "Overhead close-up of hands scooping powder into a glass and pouring cold water in, a single practical warm lamp catches the splash, static tripod, 9:16 vertical framing.",
+      "is_talking_head": false,
+      "duration_s": 4
+    },
+    {
+      "script_line": "No blender, no mess, no excuses.",
+      "video_prompt": "Wide shot of the product jar rotating slowly on the counter as the woman's hand enters frame to pick it up, soft natural window light, slight pan following the motion, 9:16 vertical.",
+      "is_talking_head": false,
+      "duration_s": 3
+    },
+    {
+      "script_line": "I started seeing the difference in under two weeks.",
+      "video_prompt": "Medium shot of the woman speaking to camera, gesturing lightly with one hand as she talks, soft natural window light, handheld with subtle drift, 9:16 vertical delivery.",
+      "is_talking_head": true,
+      "duration_s": 5
+    },
+    {
+      "script_line": "More energy through the afternoon slump.",
+      "video_prompt": "Close-up of the glass being lifted off the counter and tilted toward the light, condensation visible on the glass, studio softbox lighting, slow push-in, 9:16 vertical framing.",
+      "is_talking_head": false,
+      "duration_s": 3
+    },
+    {
+      "script_line": "So if mornings have been feeling like a fight, try this instead.",
+      "video_prompt": "Medium shot of the woman speaking to camera with a reassuring, direct tone, soft natural window light, static tripod, shot for 9:16 vertical delivery.",
+      "is_talking_head": true,
+      "duration_s": 5
+    },
+    {
+      "script_line": "Your first order ships free this week.",
+      "video_prompt": "Close-up of the product jar centered on the counter with soft rim light, the woman's hand taps the lid twice and smiles off to the side, studio softbox lighting, locked-off camera, 9:16 vertical.",
+      "is_talking_head": false,
+      "duration_s": 3
+    }
+  ]
+}

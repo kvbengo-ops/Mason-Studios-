@@ -1,0 +1,164 @@
+-- =============================================================================
+-- scenes.render_settings_override — a PARTIAL render-settings object that
+-- belongs to one scene, so a retry can re-render just that scene on a
+-- different model than the project's.
+-- =============================================================================
+-- Until now there was exactly one place a model could be chosen:
+-- projects.render_settings (0012_render_settings.sql), one jsonb blob per
+-- project carrying {model, resolution, fps}. Every render reads it, and the
+-- worker reads it by joining `projects` into the claim query's own UPDATE
+-- (ClaimQueuedScenes, worker/internal/store/store.go) so that the settings
+-- and the claim are one statement and cannot race a settings write.
+--
+-- That shape makes the most common recovery in this product impossible to
+-- express. Three scenes out of eighteen come back wrong; the operator wants
+-- to re-render those three on a cheaper (or a better) model and leave the
+-- fifteen that are already paid for and correct exactly as they are. The
+-- only lever available is projects.render_settings, which is the WRONG
+-- lever twice over: it is project-wide, so changing it also repoints every
+-- scene not being retried, and it is a live read, so a scene still in
+-- flight would be submitted under settings the operator picked for a
+-- different scene entirely (which is why actions/render-settings.ts refuses
+-- the write at all while anything is queued or rendering).
+--
+-- So the per-scene choice needs somewhere to live. This is it.
+--
+-- =============================================================================
+-- Why PARTIAL, and why the merge is `project || override`
+-- =============================================================================
+-- This column does NOT hold a full copy of {model, resolution, fps}. It
+-- holds only the keys this scene overrides — in practice just {"model": ...}
+-- — and everything absent falls through to the project's own value:
+--
+--   settings.render_settings || coalesce(scenes.render_settings_override, '{}'::jsonb)
+--
+-- jsonb's `||` is a shallow right-wins merge, which is exactly the
+-- semantics wanted: the override wins per key, absent keys are inherited
+-- live. A full copy would freeze the project's resolution and fps into the
+-- scene at retry time, so a later project-level resolution change would
+-- silently stop applying to any scene that had ever been retried — a
+-- divergence nothing in the UI would show and nobody would think to look
+-- for.
+--
+-- The merge is done IN SQL, in the same three queries that already return
+-- projects.render_settings, and the Go side is untouched: it keeps
+-- receiving one []byte per scene and keeps parsing it with
+-- fal.ParseRenderSettings exactly as before. That is the point of doing it
+-- here rather than in Go — the worker's mental model does not change at
+-- all, there is no second field on store.Scene, no second parse site, and
+-- no extra round trip. It also means the merged blob resolves through the
+-- SAME "absent/invalid key falls back to the model's own default" path both
+-- languages already implement (fal.ParseRenderSettings /
+-- web/lib/models.ts's parseRenderSettings), so an override that names a
+-- model whose allowed resolutions differ from the project's picks up the
+-- NEW model's defaults rather than carrying an illegal value across —
+-- which is the same rule the render gate applies when the operator switches
+-- models by hand (components/render-gate.tsx resets resolution/fps to the
+-- new descriptor's defaults).
+--
+-- Three queries, not one — all three of the worker's paths that read
+-- render_settings get the merge, because all three either resolve the fal
+-- endpoint a scene was submitted to or price what it cost:
+--
+--   * ClaimQueuedScenes  — decides which endpoint the scene is SUBMITTED to.
+--   * SceneByFalRequestID — the webhook's model resolution (the result fetch
+--     is scoped to fal's application id, so a wrong model here 404s a render
+--     that ran fine) and the cost written to runs.cost_usd on failure.
+--   * StaleRendering     — the reconcile loop's status poll, same endpoint
+--     requirement, and the same cost write.
+--
+-- If any one of the three kept reading the raw project settings, a scene
+-- retried on a different model would be submitted to one endpoint and then
+-- polled at — or billed at — another.
+--
+-- =============================================================================
+-- Lifetime: it STICKS
+-- =============================================================================
+-- Nothing clears this column automatically. Not on success, not when the
+-- project's own render_settings change, not on delivery. It is a record of
+-- what that scene was actually rendered with, and the moment it is cleared
+-- on success, runs.cost_usd (written by the worker AFTER the render, from
+-- these same settings) and every later re-read disagree about which model
+-- was billed. A scene keeps its override until an explicit write replaces
+-- it — another retry with a different model, or a deliberate reset.
+--
+-- The visible consequence, stated rather than hidden: a scene retried on an
+-- expensive model and later swept back through the normal render path (via
+-- unfreezeScene, web/actions/brief.ts, which returns a scene to 'draft')
+-- still renders on that expensive model. That is intentional — the scene
+-- was moved to that model on purpose — and it is why the web app's spend
+-- guard had to change with this migration rather than after it. See below.
+--
+-- =============================================================================
+-- The money path (the actual reason this migration is dangerous)
+-- =============================================================================
+-- web/actions/enqueue.ts prices a render and checks it against the spend
+-- caps (lib/spend.ts's assertWithinSpendCaps) BEFORE writing anything. Every
+-- one of those pricing sites used to read projects.render_settings directly.
+-- With this column in place that is a cap bypass: a scene overridden onto a
+-- model several times the project's rate would be priced at the project's
+-- cheap rate, pass the ceiling, and then have real fal money spent against
+-- it at the expensive one.
+--
+-- So every pricing and cap-check site now resolves that scene's EFFECTIVE
+-- settings through one shared helper (mergeRenderSettings, web/lib/models.ts
+-- — the TypeScript mirror of the `||` above), and enqueueRender/
+-- enqueueTestScene group their scenes by effective settings so a batch
+-- containing a mix is priced per model rather than at whichever model
+-- happens to be the project's. web/actions/enqueue.test.ts pins the case
+-- directly: an expensive override inside a cheap project must be priced at
+-- the expensive model.
+--
+-- =============================================================================
+-- No CHECK constraint, deliberately — same reasoning as 0012
+-- =============================================================================
+-- Which models exist, and which resolutions and fps each one allows, is
+-- descriptor data (web/lib/models.ts, worker/internal/fal/models.go), not
+-- something SQL knows. 0012 removed a CHECK for exactly this reason and
+-- declined to add one to render_settings; a partial override of that same
+-- object gets the same treatment. Validation on the write path is Zod
+-- (RenderSettingsOverrideSchema, web/lib/models.ts, run by the retry
+-- actions), and on the read path both languages' parse functions are total
+-- and fall back rather than fail.
+--
+-- =============================================================================
+-- No index, deliberately
+-- =============================================================================
+-- This column is never a filter predicate. It is projected — read out
+-- alongside a row already located by scenes.id (ClaimQueuedScenes,
+-- SceneByFalRequestID) or by scenes.status (StaleRendering) — and nothing
+-- anywhere selects rows BY their override. An index would be write cost on
+-- the dispatch hot path for a lookup that does not exist.
+--
+-- =============================================================================
+-- Grants/RLS check (verified, not assumed — same audit 0041 documents)
+-- =============================================================================
+-- No new grant or policy needed. 0007_grants.sql's `alter default
+-- privileges ... grant select, insert, update, delete on tables to
+-- authenticated` was issued once at the TABLE level and is not re-evaluated
+-- per column, and 0002_rls.sql's scenes policies are ownership-scoped
+-- through the parent project rather than column-scoped — an owner who may
+-- UPDATE a scene at all may set this column on it. In practice every write
+-- in web/actions/ goes through createAdminClient() (service_role, which
+-- bypasses RLS per 0007's own header) after requireProject/requireScene has
+-- already checked ownership in code; retryScene and retryAllFailed, the two
+-- writers of this column, are no exception and both keep the strict,
+-- owner-only requireScene/requireProject guard (lib/guard-seam.test.ts).
+-- =============================================================================
+
+alter table scenes
+  add column render_settings_override jsonb;
+
+comment on column scenes.render_settings_override is
+  'PARTIAL per-scene render settings — typically just {"model": ...} — written by a retry that '
+  're-renders this scene on a different model than the project''s (retryScene/retryAllFailed, '
+  'web/actions/enqueue.ts). Never a full copy: the effective settings are '
+  'projects.render_settings || coalesce(this, ''{}''::jsonb), so absent keys keep inheriting the '
+  'project''s live values. That merge is done in SQL, in all three worker queries that return '
+  'render_settings (worker/internal/store/store.go), and mirrored in TypeScript by '
+  'mergeRenderSettings (web/lib/models.ts), which every pricing and spend-cap site must use — '
+  'pricing a scene at the project''s model while it renders on an overridden one is a cap bypass. '
+  'Null means "no override, use the project''s settings". STICKY: nothing clears this '
+  'automatically, not even a successful render — it is the record of what this scene was actually '
+  'rendered and billed at. Deliberately unconstrained in SQL; see 0045''s header and 0012''s.';
+-- =============================================================================

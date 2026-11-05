@@ -1,0 +1,47 @@
+# Gated deploy: a push to `main` deploys to Lightsail only *after* CI
+# (ci.yml) has passed.
+#
+# Trigger choice: `workflow_run` on ci.yml completing, rather than
+# `needs:` on ci.yml's jobs directly. Reasons:
+#   - `needs:` only works within the SAME workflow run/file; you cannot
+#     `needs:` a job that lives in a different workflow file.
+#   - `workflow_run` decouples the two files cleanly (CI stays a pure
+#     test gate, reusable for PRs too) while still blocking deploy until
+#     CI reports success.
+#
+# The Render deploy jobs were removed on 2026-10-28: production moved to
+# Lightsail and this repo has no RENDER_API_KEY, so they failed every run.
+#
+# Manual setup required (one-time, cannot be done from code):
+#   LIGHTSAIL_HOST, LIGHTSAIL_USER and LIGHTSAIL_SSH_KEY in this repo's
+#   Settings -> Secrets and variables -> Actions.
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  lightsail:
+    name: deploy (lightsail)
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    steps:
+      - name: Deploy to Lightsail
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ${{ secrets.LIGHTSAIL_USER }}
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          script: deploy
+          timeout: 10m
+          command_timeout: 10m

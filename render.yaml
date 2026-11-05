@@ -1,0 +1,371 @@
+# Both services run in Singapore, alongside the Supabase project.
+# They do not talk to each other — Postgres is the interface.
+#
+# Both services build from Dockerfiles. Render resolves dockerfilePath and
+# dockerContext relative to the REPO ROOT, not to rootDir — rootDir only
+# affects non-Docker build/start commands, so it's omitted here to avoid
+# implying otherwise.
+
+services:
+  - type: web
+    name: ugc-web
+    runtime: docker
+    region: singapore
+    plan: starter
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    healthCheckPath: /api/health
+    # OFF, and it goes back on only with the CI gate, not instead of it.
+    #
+    # .github/workflows/deploy.yml is the deploy gate: if Render also
+    # auto-deployed on push it would start building while CI runs, racing a
+    # possibly-failing test suite into production.
+    #
+    # It was ON for about an hour on 2026-09-07, on the reasoning that a gate
+    # blocked by an unpaid GitHub bill is not a gate. That reasoning was
+    # wrong in one specific way, and main proved it the same afternoon: main
+    # was already RED — two tests in decide-allowance-request-dialog have
+    # been failing since #34 merged — and with autoDeploy on, every merge
+    # onto a red main ships itself. "No gate" and "automatic" is a worse
+    # combination than either alone; without CI the manual deploy IS the
+    # gate, because it is the step where someone has to look.
+    autoDeploy: false
+    envVars:
+      # Build-time (see web/Dockerfile ARG/ENV): Render passes envVars
+      # through as Docker build args when the Dockerfile declares a
+      # matching ARG, which is why these plain NEXT_PUBLIC_* values also
+      # end up inlined into the client bundle at build time.
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false # this service's own public URL, e.g. https://ugc-web.onrender.com
+      # Build-time only, like the block comment above says — NEXT_PUBLIC_*
+      # gets inlined into the client bundle at `next build`, so changing
+      # this value needs a rebuild (a new image), not a restart of the
+      # existing one. A dashboard "restart" here silently keeps serving the
+      # old theme; this has bitten this project before.
+      - key: NEXT_PUBLIC_THEME
+        value: studio-light
+      # Optional authenticated-app launch strip. The ID is both the opt-in
+      # switch and the per-browser dismissal version: supply one to publish,
+      # change it for the next campaign, or clear it to hide the strip.
+      # Runtime-only server vars; changing them needs a deploy (a Render
+      # restart does not reload env vars).
+      - key: APP_BANNER_ID
+        sync: false
+      - key: APP_BANNER_TEXT
+        value: "New models unlocked: Kling 3.0 + Gemini Omni Video"
+      - key: APP_BANNER_CTA
+        value: Create now
+      - key: APP_BANNER_HREF
+        value: /projects
+      # The in-app "Report a problem" dialog (web/actions/report-issue.ts).
+      #
+      # A fine-grained PAT with `Issues: write` on this repository and
+      # nothing else. Server-side only: NOT NEXT_PUBLIC_, because a token in
+      # the client bundle is a token anyone with devtools can lift and use to
+      # write to the repo under our name.
+      #
+      # Unset is a supported state, not a broken one — issueReportingConfigured()
+      # checks both of these and the dialog says "reporting is not set up on
+      # this deployment" rather than failing at the GitHub call.
+      - key: GITHUB_ISSUE_TOKEN
+        sync: false
+      - key: GITHUB_ISSUE_REPO
+        sync: false
+
+      # Runtime-only — never passed as build args, never baked into the image.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional: organization cost reporting on /spend. Rebuild/redeploy after setting.
+      - key: ANTHROPIC_ADMIN_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-haiku-4-5
+      # kie.ai is the only vendor left — fal is decommissioned outright
+      # (worker/internal/fal, web/lib/fal.ts, web/lib/vendor-routing.ts,
+      # web/lib/image-vendor.ts and the FAL_KEY/FAL_ADMIN_KEY/IMAGE_VENDOR
+      # vars that routed between them are all gone, not merely unused).
+      # There is nothing left to route AWAY from, so there is no enable
+      # flag and no model allowlist any more either — KIE_ENABLED and
+      # KIE_MODELS were deleted from both services' config.
+      #
+      # ugc-web never submits a render (actions/enqueue.ts's own file
+      # header: it only ever writes scenes.status = 'queued'), so this key
+      # exists here purely for the pre-flight balance check
+      # (web/lib/spend.ts's assertWithinSpendCaps, via
+      # web/lib/kie-balance.ts) — reading the SAME account ugc-worker is
+      # about to bill, before the scene is even queued. kie has no
+      # separate admin-scoped credential the way fal did (see
+      # web/lib/kie-balance.ts's own header): this one key both submits
+      # and reads its own balance, so there is no second key to declare.
+      #
+      # MUST carry the exact same value as ugc-worker's KIE_API_KEY below
+      # — both keys read/bill the SAME kie account, so a mismatch here
+      # would gate ugc-web's pre-flight check against a different
+      # account's balance than the one ugc-worker actually spends from.
+      - key: KIE_API_KEY
+        sync: false
+      # All seven *_CAP_USD values below must be a bare non-negative number
+      # as a string — "20", not "$20" or "20 USD". web/lib/spend.ts parses
+      # each one through parseCapEnvUsd, which THROWS at process startup on
+      # anything else (a stray "$", an empty value, a negative number) —
+      # deliberately, so a blueprint typo here fails the deploy loudly
+      # instead of silently disabling the ceiling. Before that fix, a value
+      # like "$20" parsed to NaN, under which every over-cap comparison is
+      # false forever — the spend cap would still show up in the dashboard,
+      # still look configured, and simply never fire.
+      #
+      # All six role defaults come in
+      # role-tiered pairs since docs/Account_Usage_and_Cost_Control_Plan_
+      # Proposal.md's phase 1/2 rollout — a DAILY one (a burst guard) and a
+      # WEEKLY one (the account's real periodic allowance; see
+      # web/lib/spend.ts's file header for why the weekly figure, not the
+      # daily one, is the binding constraint by design). An admin can still
+      # override either window for one specific account
+      # (profiles.daily_cap_override_usd / weekly_cap_override_usd,
+      # 0031_account_allowances.sql) without touching this file — these
+      # values are only the ROLE DEFAULTS every account without an override
+      # falls back to.
+      #
+      # Role caps are per-account fairness limits; the optional global team cap is
+      # configured in app_settings and managed from Accounts Control. Role defaults
+      # are sized against the most expensive model regular or trusted editors reach.
+      # ZERO IS DELIBERATE, for both regular-editor figures below.
+      #
+      # 0001_init.sql gives every new profile role='editor', so this pair is
+      # what an account gets the moment signup completes — before anyone has
+      # verified who they are. At $5/$10 a stranger who finished signup could
+      # spend real vendor money immediately, while the optional global cap
+      # configured in Accounts Control acts as the team-wide backstop.
+      #
+      # At zero a new account can sign in, look around, compile scripts and
+      # build frames, and render nothing until an admin decides what it may
+      # spend. Two ways to give it to them, both already built: a standing
+      # per-account allowance (profiles.weekly_cap_override_usd, set on
+      # /users) or an approved allowance request, which stacks a grant on top
+      # of this figure. Onboarding becomes the moment spending is granted
+      # rather than something that already happened.
+      - key: DAILY_CAP_USD
+        value: "0" # regular editor's daily burst guard — none until an admin sets one
+      - key: WEEKLY_CAP_USD
+        value: "0" # regular editor's weekly allowance — none until an admin sets one
+      - key: TRUSTED_DAILY_CAP_USD
+        value: "10" # trusted editor's daily burst guard — two Kling 3.0 ads/day
+      # Also the PEER APPROVAL CEILING: the most a trusted editor may approve
+      # on a colleague's allowance request (web/actions/allowance.ts). One
+      # number, two jobs — changing it moves both. It took that second job
+      # over from WEEKLY_CAP_USD when that went to zero, since
+      # decisionBlockReason reads a ceiling of 0 as unreadable and would have
+      # blocked every peer approval.
+      - key: TRUSTED_WEEKLY_CAP_USD
+        value: "25" # trusted editor's weekly allowance — five Kling 3.0 ads/week
+      - key: ADMIN_DAILY_CAP_USD
+        value:
+          "100" # UNCHANGED by the phase 1/2 rollout — "admin keeps its current higher
+          # ceiling" was an explicit decision, not an oversight. Admins run
+          # cross-account fixes and need real headroom above the editor tiers above.
+          # Either cap only bounds what this app will *attempt* — the fal account
+          # balance is the real ceiling, and when it's lower than the cap a batch can
+          # run out of credit partway through, leaving some scenes paid-for and done
+          # and others failed.
+      - key: ADMIN_WEEKLY_CAP_USD
+        value:
+          "700" # No number for this existed before the phase 1/2 rollout (admins had no
+          # weekly figure at all). 7x ADMIN_DAILY_CAP_USD, matching
+          # web/lib/spend.ts's own fallback default — chosen so this stays generous
+          # enough to never be the practical binding constraint for an admin, unlike
+          # the editor tiers above where the weekly figure is meant to bind.
+      # Declared here on purpose, not left to the dashboard. This was set
+      # manually on the service while the blueprint said nothing about it —
+      # which meant a blueprint sync could silently drop it and put the
+      # service into live-fire mode, where the next render costs real money
+      # with nobody having decided that. Setting this to "development" is a
+      # spend decision; make it here, in review, not in a web form.
+      #
+      # MODE=production, not left to lib/mode.ts's "development" default:
+      # this is the one place a wrong default is genuinely dangerous, so it
+      # is spelled out rather than relied on. Replaced the old independent
+      # MOCK_CLAUDE/MOCK_FAL_IMAGE pair — see web/lib/mode.ts's header for
+      # why those were collapsed into one switch, and for the incident (a
+      # render mocked by a stale flag on ONE process, claimed and billed by
+      # the OTHER) that scenes.dev, not this var alone, is what actually
+      # fixes: MODE=production here writes scenes.dev=false on every
+      # enqueue, which ugc-worker's MODE=production below is the only mode
+      # that ever claims.
+      - key: MODE
+        value: "production"
+      # Same reasoning again: gates whether the "Ready to render" estimate
+      # (and, on the worker side, actual billing) routes talking-head
+      # scenes to the expensive lip-synced model. Must carry the exact same
+      # value as ugc-worker's AUDIO_ENABLED below, or the operator is
+      # quoted a price the worker won't actually charge.
+      - key: AUDIO_ENABLED
+        value: "1"
+      # Tells the Deliver page whether to show the quiet "assembling…"
+      # placeholder while it waits for ugc-worker to produce a `final`
+      # asset (lib/models.ts's isAssembleEnabled). Same "declared here, not
+      # left to the dashboard" reasoning as MOCK_*/AUDIO_ENABLED above: must
+      # carry the exact same value as ugc-worker's ASSEMBLE_ENABLED below,
+      # or the placeholder either never appears while assembly is actually
+      # running, or sits waiting on a `final` asset the worker isn't going
+      # to produce.
+      - key: ASSEMBLE_ENABLED
+        value: "1"
+      # Word-synced caption burn-in (internal/captions, worker's
+      # assemble.go) — HAS NO EFFECT TODAY. Captioning required fal-ai/
+      # whisper transcription, deleted along with fal itself; there is no
+      # replacement transcription vendor, so assemble.go now skips
+      # captioning outright rather than attempting-and-falling-back (see
+      # internal/captions/captions.go's package doc comment). Nothing in
+      # the web app reads this var either way. Left ON, and left declared
+      # here so both services' blocks stay symmetric matching every other
+      # feature flag in this file, for whenever a replacement vendor makes
+      # it mean something again. MUST match ugc-worker's CAPTIONS_ENABLED
+      # below regardless.
+      - key: CAPTIONS_ENABLED
+        value: "1"
+      # Server-side render timing (web/lib/perf-log.ts). Editors reported
+      # authenticated pages loading slowly and nobody could say what was
+      # slow: /login's TTFB measures 90-100ms warm, so the server is fine
+      # unauthenticated, and two attempts to measure a signed-in render from
+      # outside failed (a sandbox correctly refused to guess a password or
+      # read PII tables). This emits one `perf_render:` line per
+      # authenticated page with a per-step breakdown, plus a `perf_boot:`
+      # marker per process start so a slow first render after a deploy or an
+      # idle window can be told apart from a slow warm one — those two have
+      # completely different fixes and averaging them together produces a
+      # number that means nothing.
+      #
+      # ON deliberately, which is the opposite of every other flag in this
+      # file: it exists to collect the numbers, and it cannot do that turned
+      # off. Turn it back to "0" once the question is answered — it logs a
+      # line per page load, which is cheap but not free, and log volume is
+      # not something to leave running out of forgetfulness.
+      #
+      # Logs a user id and a STATIC route label only. Never an email, a
+      # project title, or anything a human wrote.
+      - key: PERF_LOGGING_ENABLED
+        value: "1"
+      # Domain allowlist for self-serve signup (web/lib/signup-allowlist.ts).
+      # Unset or empty means open signup — every verified account signs up
+      # as 'editor' (profiles.role's own default; role is never client-
+      # influenced — see web/app/signup/page.tsx) and gets that role's
+      # DAILY_CAP_USD/WEEKLY_CAP_USD render budget (web/lib/spend.ts), which
+      # is the exposure open signup trades in for not hand-provisioning
+      # accounts.
+      # If that gets abused, set this to a comma-separated domain list
+      # (e.g. "example.com") here to close signup down to a company
+      # domain without a code change. Left unset deliberately — do not set
+      # a value as part of this change.
+      - key: SIGNUP_ALLOWED_DOMAINS
+        sync: false
+
+  # "web" only because kie needs a public URL for its webhook callback.
+  # Everything else this service does runs in background goroutines.
+  - type: web
+    name: ugc-worker
+    runtime: docker
+    region: singapore
+    # Standard (2GB/1CPU), not starter, because ffmpeg runs here: two
+    # concurrent 1080x1920 H.264 encodes plus the downloaded source clips do
+    # not fit in starter's 512MB. The failure mode is expensive and one-sided
+    # — kie has already been paid for the clip by the time normalize runs, so
+    # an OOM kill loses work that costs money. ugc-web stays on starter; it
+    # only serves SSR.
+    plan: standard
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: ./worker
+    healthCheckPath: /health
+    # Off on purpose — see ugc-web's autoDeploy comment above; same reason
+    # applies here (.github/workflows/deploy.yml gates both services).
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # kie.ai — the only video vendor (worker/internal/kie). fal is
+      # decommissioned outright: worker/internal/fal, its client, and the
+      # KIE_ENABLED/KIE_MODELS pair that used to gate an opt-in cutover
+      # between the two are all deleted, not merely turned off — see
+      # worker/internal/config/config_test.go's own header for the
+      # removal. KieAPIKey (this var) is unconditionally required at
+      # startup now, the same bar FAL_KEY used to hold: a worker that
+      # cannot authenticate to its one vendor can never render anything.
+      #
+      # MUST carry the exact same value as ugc-web's KIE_API_KEY above —
+      # both read/bill the same kie account.
+      - key: KIE_API_KEY
+        sync: false
+      # Verifies inbound kie webhook signatures (internal/http/webhook_kie.go)
+      # — optional, unlike KIE_API_KEY: kie's webhook signing is opt-in on
+      # THEIR side, so an unset secret is a legitimate (if degraded) state,
+      # not a startup refusal. See config.Config.KieWebhookSecret's own doc
+      # comment for what "degraded" means here (a webhook rejected outright,
+      # 45-90s slower completion via the reconcile poll instead).
+      - key: KIE_WEBHOOK_SECRET
+        sync: false
+      - key: APP_BASE_URL
+        sync: false # this service's own public URL — kie's webhook callback target; worker.internal/config.Load fails startup without it
+      - key: RENDER_CONCURRENCY
+        value: "10" # raise once kie's account limit is confirmed
+      - key: FFMPEG_CONCURRENCY
+        # Do NOT raise this to go faster. It is the only thing bounding this
+        # service's memory: one Normalize peaks at ~554 MB (measured
+        # 2026-09-03), so 2 is ~1.17 GB of the 2 GB this plan has and 4 is an
+        # OOM kill. It also would not help — normalize is ~2.8s of CPU against
+        # a render measured in minutes. See config.go's FFmpegConcurrency.
+        value: "2"
+      # On: the worker concatenates each project's finished clips into a single
+      # final.mp4 and the Deliver page shows it above the individual clips.
+      # Costs nothing extra — ffmpeg on our own box, no vendor call.
+      - key: ASSEMBLE_ENABLED
+        value: "1"
+      - key: LOG_LEVEL
+        value: info # debug|info|warn|error — internal/logging.levelFromEnv
+      # Same reasoning as ugc-web's MODE above: this is the switch between
+      # simulated and billable renders, so it lives in the blueprint, spelled
+      # out as "production" rather than left to worker/internal/config.go's
+      # "development" default.
+      #
+      # Replaced the old MOCK_FAL_VIDEO. MUST carry the exact same value as
+      # ugc-web's MODE above for a normal deployment — but unlike every
+      # other paired flag in this file, an actual MISMATCH here is not the
+      # danger: scenes.dev (written by whichever MODE ugc-web is running,
+      # filtered on by whichever MODE this worker is running —
+      # internal/store/store.go's ClaimQueuedScenes/CountRendering/
+      # StaleRendering) means a mismatch just leaves one side's queue
+      # unclaimed rather than cross-billing it. See web/lib/mode.ts's header
+      # for the incident this design closes.
+      - key: MODE
+        value: "production"
+      # Gates kie.PickModel: "0" forces every scene to the cheap silent
+      # model regardless of is_talking_head. Must match ugc-web's
+      # AUDIO_ENABLED above — see that comment for why.
+      - key: AUDIO_ENABLED
+        value: "1"
+      # Word-synced caption burn-in — HAS NO EFFECT TODAY. Captioning
+      # required fal-ai/whisper transcription (internal/captions.
+      # TranscribeScene), deleted along with fal itself, and there is no
+      # replacement transcription vendor — see internal/captions/
+      # captions.go's package doc comment and config.Config.CaptionsEnabled's
+      # own comment. CaptionsEnabled has never been true in production
+      # regardless of this value, so this is not an observable behavior
+      # change for any deployment; left ON (and left declared, matching
+      # ugc-web's CAPTIONS_ENABLED above) for whenever a replacement
+      # vendor is chosen and this starts meaning something again. Before the
+      # fal decommission this was the value that actually did anything — the
+      # worker was the only service that transcribed, built the .ass, and
+      # burned it in. MUST match ugc-web's CAPTIONS_ENABLED above.
+      - key: CAPTIONS_ENABLED
+        value: "1"
+
+      # No *_CAP_USD vars here: the six role defaults are on ugc-web.
+      # Spend checks run there before a scene is queued; this worker only dispatches queued work.

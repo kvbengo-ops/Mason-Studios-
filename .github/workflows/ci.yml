@@ -1,0 +1,187 @@
+name: CI
+
+# Test gate for both services. Runs on every push to main and every PR.
+# deploy.yml (gated deploy) depends on these two jobs passing — see that
+# workflow for why: Render's autoDeploy is off, so nothing ships to
+# production until both jobs here are green.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web (${{ matrix.check }}${{ matrix.shard && format(' {0}/3', matrix.shard) || '' }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    # THE TEST LEG IS SHARDED THREE WAYS; the other three are single jobs.
+    #
+    # `test` is by far the longest of the four and had become the one every
+    # push waited on — the other legs finish while it is still running, so
+    # the whole gate is as slow as this one job. vitest splits by FILE, so
+    # three runners each take roughly a third of the files and the leg
+    # finishes in roughly a third of the time.
+    #
+    # Expressed as an `include` rather than a second matrix axis: a
+    # `shard: [1,2,3]` dimension would multiply lint, typecheck and build by
+    # three as well, which is three times the install cost for nothing.
+    #
+    # A shard number does not name a fixed set of files — vitest redistributes
+    # as files are added — so "shard 2 failed" is not a stable fact about the
+    # suite, only about that run. Read the job log, not the shard number.
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, typecheck, build]
+        include:
+          - check: test
+            shard: 1
+          - check: test
+            shard: 2
+          - check: test
+            shard: 3
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned rather than `latest`: this version must match both Dockerfile
+      # stages' `FROM oven/bun:...` and package.json's `packageManager` field.
+      # A mismatch between the CI that proves a build and the image that
+      # runs it is invisible until it isn't — bump all four together.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      # oven-sh/setup-bun doesn't have a built-in `cache:` toggle like
+      # setup-node — cache Bun's global install cache explicitly, keyed off
+      # the lockfile.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-cache-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+          restore-keys: |
+            bun-cache-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        if: matrix.check == 'lint'
+        run: bun run lint
+
+      - name: Type check
+        if: matrix.check == 'typecheck'
+        run: bunx tsc --noEmit
+
+      - name: Test
+        if: matrix.check == 'test'
+        # `bun run test` is `vitest run`; the extra flag is forwarded through.
+        run: bun run test --shard=${{ matrix.shard }}/3
+
+      - name: Build
+        if: matrix.check == 'build'
+        # NEXT_PUBLIC_* values are inlined at build time, but the CI build
+        # only needs to prove the app compiles — it is not the artifact
+        # that gets deployed (Render rebuilds the Docker image itself with
+        # the real build-time env vars). Dummy values are fine here.
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          NEXT_PUBLIC_APP_URL: https://ci-placeholder.example.com
+          NEXT_PUBLIC_THEME: studio-light
+        run: bun run build
+
+  worker:
+    name: worker (${{ matrix.check }})
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [gofmt, vet, build, test]
+    # Plain Postgres, not `supabase start` — the gated store tests touch no
+    # Auth/Storage/Realtime/Studio, just tables. Major version pinned to match
+    # supabase/config.toml's [db] major_version so schema behavior lines up
+    # with what Supabase actually runs.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: worker/go.sum
+
+      - name: gofmt
+        if: matrix.check == 'gofmt'
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "gofmt found unformatted files:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: go vet
+        if: matrix.check == 'vet'
+        run: go vet ./...
+
+      - name: go build
+        if: matrix.check == 'build'
+        run: go build ./...
+
+      # Must run BEFORE the migrations: a bare postgres image has no
+      # auth/storage schemas, so the first migration referencing
+      # auth.users would fail outright. `make db-test` needs no equivalent
+      # step — `supabase db reset` brings up the real Auth/Storage.
+      - name: Bootstrap Supabase-managed schemas
+        if: matrix.check == 'test'
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f ../scripts/ci/test-db-bootstrap.sql
+
+      # Apply every migration in filename order — never a hardcoded list —
+      # so a concurrently-added file (e.g. a new 0047_*) is picked up
+      # automatically without touching this workflow.
+      - name: Apply migrations
+        if: matrix.check == 'test'
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for f in $(find ../supabase/migrations -maxdepth 1 -name '*.sql' | sort); do
+            echo "Applying $f"
+            psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      - name: go test
+        if: matrix.check == 'test'
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+        run: go test ./...
