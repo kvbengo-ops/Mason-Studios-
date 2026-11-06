@@ -191,7 +191,7 @@ export default async function UsersPage({
     size?: string | string[];
   }>;
 }): Promise<JSX.Element> {
-  await requireAdmin();
+  const { user: viewer } = await requireAdmin();
 
   // Session client, not createAdminClient() — profiles_select_admin
   // (0002_rls.sql) already lets an admin read every profile, so the database
@@ -719,13 +719,14 @@ export default async function UsersPage({
                           context. */}
                       <TableCell>
                         {user.role === "admin" ? (
-                          allowance ? (
+                          allowance || user.id !== viewer.id ? (
                             <UserRowActions
                               userId={user.id}
                               email={user.email}
                               isTrusted={false}
                               allowance={allowance}
                               allowanceOnly
+                              canDemote={user.id !== viewer.id}
                             />
                           ) : null
                         ) : !requiresAccountApproval(user.role) ? null : (

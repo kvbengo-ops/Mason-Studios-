@@ -248,6 +248,42 @@ export async function promoteToAdmin(userId: string): Promise<ActionResult> {
   revalidatePath(USERS_PATH);
 }
 
+/** Demotes another admin to editor or trusted_editor, from /users. */
+export async function demoteAdmin(
+  userId: string,
+  role: "editor" | "trusted_editor",
+): Promise<ActionResult> {
+  const { user } = await requireAdmin();
+  if (role !== "editor" && role !== "trusted_editor") {
+    throw new Error(`Invalid demotion role: ${String(role)}`);
+  }
+  // ponytail: refusing yourself is also the last-admin guard — the caller stays an admin.
+  if (userId === user.id) {
+    return { error: "You can't change your own admin role." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .update({ role })
+    .eq("id", userId)
+    .eq("role", "admin")
+    .select("id");
+
+  if (error) {
+    throw new Error(`Failed to demote account ${userId}: ${error.message}`);
+  }
+
+  if ((data ?? []).length === 0) {
+    revalidatePath(USERS_PATH);
+    return {
+      error: "That account is no longer an admin — this list now shows where it stands.",
+    };
+  }
+
+  revalidatePath(USERS_PATH);
+}
+
 /**
  * Sets or clears one account's weekly allowance override, from /users.
  *
