@@ -355,11 +355,17 @@ export function UgcColumn({
     (o, i) => options.findIndex((candidate) => candidate.modelId === o.modelId) === i,
   );
   const modelMenuOptions = modelOptions.filter(
-    (o, i) => modelOptions.findIndex((candidate) => modelMenuId(candidate.modelId) === modelMenuId(o.modelId)) === i,
+    (o, i) =>
+      modelOptions.findIndex(
+        (candidate) => modelMenuId(candidate.modelId) === modelMenuId(o.modelId),
+      ) === i,
   );
   const kling4Modes = modelOptions.filter((mode) => modelMenuId(mode.modelId) === "kling-4.0");
-  const selectedKling4Id = kling4Modes.find((mode) => mode.modelId === option?.modelId)?.modelId ?? kling4Modes[0]?.modelId;
-  const modelLabel = option && modelMenuId(option.modelId) === "kling-4.0" ? "Kling 4.0" : option?.label;
+  const selectedKling4Id =
+    kling4Modes.find((mode) => mode.modelId === option?.modelId)?.modelId ??
+    kling4Modes[0]?.modelId;
+  const modelLabel =
+    option && modelMenuId(option.modelId) === "kling-4.0" ? "Kling 4.0" : option?.label;
 
   // THE FORM RESET LIES ABOUT THE MODEL. React 19 resets a `<form action>`
   // after every action that returns, error or not, via the native
@@ -420,7 +426,9 @@ export function UgcColumn({
    * reference from the PREVIOUS scene would silently ride along into a
    * Generate press on this one.
    */
-  const [selectedTags, setSelectedTags] = useState<string[]>([...(selectedScene?.referenceTags ?? [])]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([
+    ...(selectedScene?.referenceTags ?? []),
+  ]);
   const promptTags = tagsInOrder(prompt);
   // A tag that names no saved element goes through as plain text. The confirm
   // dialogs say so before the clip is paid for.
@@ -583,7 +591,11 @@ export function UgcColumn({
       const next = [...prev];
       for (const name of names) {
         if (next.some((t) => t.toLowerCase() === name.toLowerCase())) continue;
-        if (new Set([...next, ...promptElementNames].map((tag) => tag.toLowerCase())).size >= MAX_REFERENCES) break;
+        if (
+          new Set([...next, ...promptElementNames].map((tag) => tag.toLowerCase())).size >=
+          MAX_REFERENCES
+        )
+          break;
         next.push(name);
       }
       return next;
@@ -601,7 +613,8 @@ export function UgcColumn({
 
   const primaryOutsideBox =
     reference !== null &&
-    (reference.kind === "upload" || !boxElements.some((element) => element.id === reference.elementId));
+    (reference.kind === "upload" ||
+      !boxElements.some((element) => element.id === reference.elementId));
   const tooManyReferences = boxTags.length + Number(primaryOutsideBox) > MAX_REFERENCES;
   // Kling 4.0 Reference too: the worker sends it images only (kling4RefInput).
   const geminiAudioReference =
@@ -1423,7 +1436,11 @@ export function UgcColumn({
             window the OUTER column's overflow-y-auto scrolls to reach
             Settings/Generate instead of this section clipping or bleeding. */}
           <section
-            className={bar ? "flex min-w-0 flex-1 flex-col" : "flex flex-1 flex-col rounded-lg border bg-card"}
+            className={
+              bar
+                ? "flex min-w-0 flex-1 flex-col"
+                : "flex flex-1 flex-col rounded-lg border bg-card"
+            }
           >
             <div
               className={cn(
@@ -1450,9 +1467,10 @@ export function UgcColumn({
                 controlsDisabled={readOnly}
                 textareaClassName={
                   bar
-                    ? "h-20 max-h-20 min-h-20 flex-none rounded-xl border-transparent bg-transparent pr-32 shadow-none focus-visible:border-transparent focus-visible:ring-0"
+                    ? "h-20 max-h-20 min-h-20 flex-none rounded-xl border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0"
                     : undefined
                 }
+                boxClassName={bar ? "pr-32" : undefined}
                 name="prompt"
                 value={prompt}
                 onChange={setPrompt}
@@ -1521,7 +1539,8 @@ export function UgcColumn({
 
           {!isKling && tooManyReferences ? (
             <p className="text-xs text-destructive">
-              A scene holds at most {MAX_REFERENCES} references. Remove a tag or reference to generate.
+              A scene holds at most {MAX_REFERENCES} references. Remove a tag or reference to
+              generate.
             </p>
           ) : null}
 
@@ -1622,7 +1641,8 @@ export function UgcColumn({
                     <DropdownMenuItem
                       key={`${o.modelId}/${o.resolution}`}
                       onSelect={() => {
-                        if (modelMenuId(o.modelId) !== modelMenuId(option.modelId)) setModelIdx(options.indexOf(o));
+                        if (modelMenuId(o.modelId) !== modelMenuId(option.modelId))
+                          setModelIdx(options.indexOf(o));
                       }}
                       className="gap-3 rounded-xl px-2 py-2"
                     >
@@ -1681,24 +1701,28 @@ export function UgcColumn({
                   bar && "w-auto [field-sizing:content]",
                 )}
               >
-                {options.map((o, i) => modelMenuId(o.modelId) === "kling-4.0" &&
-                  o.modelId !== selectedKling4Id
-                  ? null : (
-                  <option
-                    key={`${o.modelId}/${o.resolution}`}
-                    value={i}
-                    className="bg-popover text-popover-foreground"
-                  >
-                    {modelMenuId(o.modelId) === "kling-4.0"
-                      ? "Kling 4.0"
-                      : o.label} · {ugcTierLabel(o.modelId, o.resolution)}
-                  </option>
-                ))}
+                {options.map((o, i) =>
+                  modelMenuId(o.modelId) === "kling-4.0" &&
+                  o.modelId !== selectedKling4Id ? null : (
+                    <option
+                      key={`${o.modelId}/${o.resolution}`}
+                      value={i}
+                      className="bg-popover text-popover-foreground"
+                    >
+                      {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label} ·{" "}
+                      {ugcTierLabel(o.modelId, o.resolution)}
+                    </option>
+                  ),
+                )}
               </select>
             </label>
 
             {modelMenuId(option.modelId) === "kling-4.0" ? (
-              <div role="group" aria-label="Kling 4.0 mode" className="flex h-9 items-center gap-0.5 rounded-lg bg-muted/60 p-1">
+              <div
+                role="group"
+                aria-label="Kling 4.0 mode"
+                className="flex h-9 items-center gap-0.5 rounded-lg bg-muted/60 p-1"
+              >
                 {kling4Modes.map((mode) => (
                   <button
                     key={mode.modelId}
@@ -1706,12 +1730,19 @@ export function UgcColumn({
                     disabled={readOnly}
                     aria-pressed={mode.modelId === option.modelId}
                     onClick={() => {
-                      const tier = options.find((candidate) => candidate.modelId === mode.modelId && candidate.resolution === option.resolution) ?? mode;
+                      const tier =
+                        options.find(
+                          (candidate) =>
+                            candidate.modelId === mode.modelId &&
+                            candidate.resolution === option.resolution,
+                        ) ?? mode;
                       setModelIdx(options.indexOf(tier));
                     }}
                     className={cn(
                       "h-full rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
-                      mode.modelId === option.modelId ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                      mode.modelId === option.modelId
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
                     )}
                   >
                     {mode.modelId === "kling-4.0-reference" ? "References" : "Start/end frames"}
@@ -1807,7 +1838,9 @@ export function UgcColumn({
                     min={0}
                     max={durations.length - 1}
                     value={durations.indexOf(activeDuration)}
-                    onChange={(e) => setDurationS(durations[Number(e.target.value)] ?? activeDuration)}
+                    onChange={(e) =>
+                      setDurationS(durations[Number(e.target.value)] ?? activeDuration)
+                    }
                     disabled={readOnly || durations.length === 1}
                     className="min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
                   />
@@ -1826,19 +1859,33 @@ export function UgcColumn({
                   <AspectRatioIcon ratio={activeAspectRatio ?? "9:16"} />
                   {activeAspectRatio ?? "9:16"}
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44 rounded-2xl p-2">
+                <DropdownMenuContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className="w-44 rounded-2xl p-2"
+                >
                   <DropdownMenuLabel>Aspect ratio</DropdownMenuLabel>
                   {aspectRatios.map((ratio) => (
-                    <DropdownMenuItem key={ratio} onSelect={() => setAspectRatio(ratio)} className="gap-2 rounded-lg">
+                    <DropdownMenuItem
+                      key={ratio}
+                      onSelect={() => setAspectRatio(ratio)}
+                      className="gap-2 rounded-lg"
+                    >
                       <AspectRatioIcon ratio={ratio} />
                       <span className="flex-1">{ratio}</span>
-                      {ratio === (activeAspectRatio ?? "9:16") ? <Check aria-hidden="true" className="size-4 text-primary" /> : null}
+                      {ratio === (activeAspectRatio ?? "9:16") ? (
+                        <Check aria-hidden="true" className="size-4 text-primary" />
+                      ) : null}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <span aria-disabled="true" className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground">
+              <span
+                aria-disabled="true"
+                className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground"
+              >
                 <RectangleVerticalIcon aria-hidden="true" className="size-3.5" />
                 <span className="sr-only">Aspect ratio</span>
                 9:16
@@ -1854,12 +1901,19 @@ export function UgcColumn({
                 <GaugeIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
                 {ugcTierLabel(option.modelId, option.resolution)}
               </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48 rounded-2xl p-2">
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-48 rounded-2xl p-2"
+              >
                 <DropdownMenuLabel>Resolution</DropdownMenuLabel>
                 {resolutions.map((resolution) => {
                   const tier = tierOptions.find((o) => o.resolution === resolution);
                   const rate = tier?.nativeAudio
-                    ? (effectiveSoundOn ? tier.soundCreditsPerSecond : tier.silentCreditsPerSecond)
+                    ? effectiveSoundOn
+                      ? tier.soundCreditsPerSecond
+                      : tier.silentCreditsPerSecond
                     : tier?.creditsPerSecond;
                   return (
                     <DropdownMenuItem
@@ -1870,9 +1924,15 @@ export function UgcColumn({
                     >
                       <span className="flex-1">{ugcTierLabel(option.modelId, resolution)}</span>
                       <span className="text-xs tabular-nums text-muted-foreground">
-                        {tier ? (rate === null ? "Price unavailable" : `${rate} cr/s`) : "Price unverified"}
+                        {tier
+                          ? rate === null
+                            ? "Price unavailable"
+                            : `${rate} cr/s`
+                          : "Price unverified"}
                       </span>
-                      {resolution === option.resolution ? <Check aria-hidden="true" className="size-4 text-primary" /> : null}
+                      {resolution === option.resolution ? (
+                        <Check aria-hidden="true" className="size-4 text-primary" />
+                      ) : null}
                     </DropdownMenuItem>
                   );
                 })}
@@ -1967,9 +2027,7 @@ export function UgcColumn({
           ) : null}
         </div>
 
-        <div
-          className={bar ? "absolute right-3 top-3 flex flex-col items-end gap-1" : "contents"}
-        >
+        <div className={bar ? "absolute right-3 top-3 flex flex-col items-end gap-1" : "contents"}>
           {/* ---- generate ---- */}
           {/* Two buttons, because the two writes are not the same commitment.
             A new scene submits the form directly. A regenerate opens the
@@ -2003,7 +2061,8 @@ export function UgcColumn({
                     type="button"
                     className={cn(
                       "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
-                      bar && "h-9 min-h-0 w-auto whitespace-nowrap rounded-lg bg-primary px-4 text-xs font-bold uppercase text-primary-foreground hover:bg-primary/90",
+                      bar &&
+                        "h-9 min-h-0 w-auto whitespace-nowrap rounded-lg bg-primary px-4 text-xs font-bold uppercase text-primary-foreground hover:bg-primary/90",
                     )}
                     disabled={
                       !prompt.trim() ||
@@ -2070,8 +2129,8 @@ export function UgcColumn({
                 </p>
               ) : geminiAudioReference ? (
                 <p className={cn("text-center text-xs text-muted-foreground", bar && "text-right")}>
-                  {option.label} can&apos;t use audio references. Remove the audio reference, or switch
-                  to Seedance to use your audio.
+                  {option.label} can&apos;t use audio references. Remove the audio reference, or
+                  switch to Seedance to use your audio.
                 </p>
               ) : null}
             </>
@@ -2112,7 +2171,8 @@ export function UgcColumn({
                     type="button"
                     className={cn(
                       "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
-                      bar && "h-auto min-h-12 w-auto shrink-0 flex-col gap-0.5 whitespace-nowrap rounded-lg bg-primary px-4 py-1 text-xs font-bold uppercase leading-tight text-primary-foreground hover:bg-primary/90",
+                      bar &&
+                        "h-auto min-h-12 w-auto shrink-0 flex-col gap-0.5 whitespace-nowrap rounded-lg bg-primary px-4 py-1 text-xs font-bold uppercase leading-tight text-primary-foreground hover:bg-primary/90",
                     )}
                     disabled={
                       !prompt.trim() ||
@@ -2177,7 +2237,10 @@ export function UgcColumn({
                 !!prompt.trim() &&
                 ((isKling && (missingRequiredReference || promptOverBy > 0)) ||
                   (!isKling &&
-                    (missingRequiredReference || videoPriceUnknown || geminiAudioReference || promptOverBy > 0)))) ? (
+                    (missingRequiredReference ||
+                      videoPriceUnknown ||
+                      geminiAudioReference ||
+                      promptOverBy > 0)))) ? (
                 <p className={cn("text-center text-xs text-muted-foreground", bar && "text-right")}>
                   {!prompt.trim()
                     ? "Write a prompt to generate."
@@ -2224,7 +2287,6 @@ export function UgcColumn({
               ignores the selected output duration when a source video is attached.
             </p>
           ) : null}
-
         </div>
       </PendingFieldset>
     </ActionForm>

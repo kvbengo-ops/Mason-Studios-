@@ -3,10 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent, JSX } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  GenerateProjectImageResult,
-  ImageAttempt,
-} from "@/actions/image-generator";
+import type { GenerateProjectImageResult, ImageAttempt } from "@/actions/image-generator";
 import { PendingButton } from "@/components/pending-button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -412,9 +409,7 @@ export function ImageGeneratorForm({
             </div>
             <div className="flex items-center justify-between gap-4 border-t pt-3">
               <dt className="text-muted-foreground">Estimated cost</dt>
-              <dd className="text-lg font-semibold">
-                {batchCostLabel}
-              </dd>
+              <dd className="text-lg font-semibold">{batchCostLabel}</dd>
             </div>
           </dl>
           <p className="text-xs leading-relaxed text-muted-foreground">
@@ -555,7 +550,8 @@ export function ImageGeneratorForm({
                     // shared with the highlight mirror drawn on top of this box,
                     // and changing them on one layer paints every @tag twice,
                     // out of register. See UgcPromptEditorProps.textareaClassName.
-                    textareaClassName="h-16 max-h-16 min-h-16 flex-none rounded-xl border-transparent bg-transparent pr-32 shadow-none focus-visible:border-transparent focus-visible:ring-0"
+                    textareaClassName="h-16 max-h-16 min-h-16 flex-none rounded-xl border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0"
+                    boxClassName="pr-32"
                   />
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -603,7 +599,9 @@ export function ImageGeneratorForm({
                             onSelect={() => setImageCount(count)}
                             className="gap-3 rounded-lg px-2 py-2"
                           >
-                            <span className="flex-1">{count} {count === 1 ? "image" : "images"}</span>
+                            <span className="flex-1">
+                              {count} {count === 1 ? "image" : "images"}
+                            </span>
                             {count === imageCount ? (
                               <Check aria-hidden="true" className="size-4 text-foreground" />
                             ) : null}

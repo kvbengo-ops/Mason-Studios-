@@ -170,6 +170,13 @@ export interface UgcPromptEditorProps {
    * itself, four pixels and one font-size apart.
    */
   textareaClassName?: string;
+  /**
+   * Box metrics applied to BOTH layers — the place for padding that clears
+   * an overlaid button (the bars' `pr-32` under Generate). On the textarea
+   * alone it narrowed only that layer's wrap width, so every tag past the
+   * first wrap painted a few characters off its own word.
+   */
+  boxClassName?: string;
   /** Disables prompt action buttons for read-only scenes. */
   controlsDisabled?: boolean;
 }
@@ -251,6 +258,7 @@ export function UgcPromptEditor({
   placeholder,
   historyKey,
   textareaClassName,
+  boxClassName,
   controlsDisabled = false,
 }: UgcPromptEditorProps): JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -481,6 +489,7 @@ export function UgcPromptEditor({
             // overflow-hidden clips it to that box; scrollTop below is what
             // keeps the highlights on their lines.
             "pointer-events-none absolute inset-0 overflow-hidden border-transparent text-transparent",
+            boxClassName,
           )}
         >
           {renderMirror(segments, query?.start ?? null, markerRef, setPreview)}
@@ -546,6 +555,7 @@ export function UgcPromptEditor({
             // line falls regardless of how tall the box itself is.
             "relative min-h-40 flex-1 resize-none border-input bg-transparent text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
             textareaClassName,
+            boxClassName,
           )}
         />
         {preview && previewTag && typeof document !== "undefined"
@@ -561,11 +571,7 @@ export function UgcPromptEditor({
       </div>
 
       {/* Keep editing controls outside the text and its highlight mirror. */}
-      <div
-        className="flex shrink-0 justify-end gap-1 pt-1"
-        role="group"
-        aria-label="Edit history"
-      >
+      <div className="flex shrink-0 justify-end gap-1 pt-1" role="group" aria-label="Edit history">
         <button
           type="button"
           onClick={undo}
