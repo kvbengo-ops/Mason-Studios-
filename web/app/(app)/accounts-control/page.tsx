@@ -1274,11 +1274,13 @@ export default async function AccountsControlPage({
                 Every recorded attempt across the team, including failures. Costs are in USD.
               </p>
               <div className="overflow-hidden rounded-xl border border-border">
-                <Table className="min-w-[680px]">
+                <Table className="min-w-[840px]">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
+                      <TableHead>Preview</TableHead>
                       <TableHead className="whitespace-nowrap">Date</TableHead>
                       <TableHead>Project</TableHead>
+                      <TableHead>Provider</TableHead>
                       <TableHead className="whitespace-nowrap">Model</TableHead>
                       <TableHead numeric>Cost</TableHead>
                       <TableHead>Details</TableHead>
@@ -1287,11 +1289,23 @@ export default async function AccountsControlPage({
                   <TableBody>
                     {runLog.rows.map((run) => (
                       <TableRow key={run.id} className="align-top">
+                        <TableCell className="py-4">
+                          <div className="h-24 w-14 overflow-hidden rounded-md bg-muted">
+                            <BinThumbnail
+                              thumbnail={run.thumbnail}
+                              itemLabel={`Output of ${run.model}`}
+                              badge="—"
+                            />
+                          </div>
+                        </TableCell>
                         <TableCell className="whitespace-nowrap py-4 text-xs text-muted-foreground">
                           {dateTimeFormatter.format(new Date(run.createdAt))}
                         </TableCell>
                         <TableCell className="min-w-36 py-4 font-medium">
                           {run.projectTitle ?? "—"}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap py-4 text-xs">
+                          {run.provider}
                         </TableCell>
                         <TableCell className="max-w-64 break-words py-4 text-xs">
                           <span className="inline-block rounded-md bg-muted px-2 py-1">
