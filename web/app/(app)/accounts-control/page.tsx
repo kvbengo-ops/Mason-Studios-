@@ -538,7 +538,11 @@ export default async function AccountsControlPage({
     }
   }
 
-  const maxDailyUsd = Math.max(...overview.dailySeries.map((point) => point.totalUsd), 0);
+  const maxLineUsd = Math.max(
+    ...overview.dailySeries.flatMap((point) => [point.renderUsd, point.iterateUsd]),
+    0,
+  );
+  const pctOfMaxLine = (usd: number): number => (maxLineUsd > 0 ? (usd / maxLineUsd) * 100 : 0);
   const maxAccountRangeUsd = Math.max(
     ...overview.accounts.map((account) => account.rangeTotalUsd),
     0,
@@ -652,59 +656,113 @@ export default async function AccountsControlPage({
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
-                  <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+                  <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
                   Video {formatCredits(overview.rangeCategoryTotals.renderUsd)}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span aria-hidden="true" className="size-2 rounded-full bg-primary/35" />
+                  <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
                   Images {formatCredits(overview.rangeCategoryTotals.iterateUsd)}
                 </span>
               </div>
 
+              {/* The top border is the peak day, the bottom border is zero. */}
               <div
                 role="img"
                 aria-label={`Daily credit consumption over the last ${windowDays} days`}
-                className="flex h-52 items-end gap-1 border-b border-border"
+                className="relative h-52 border-y border-border"
               >
-                {series.map((point) => {
-                  const totalPct = maxDailyUsd > 0 ? (point.totalUsd / maxDailyUsd) * 100 : 0;
-                  const renderPct =
-                    point.totalUsd > 0 ? (point.renderUsd / point.totalUsd) * 100 : 0;
-                  const iteratePct =
-                    point.totalUsd > 0 ? (point.iterateUsd / point.totalUsd) * 100 : 0;
-                  return (
-                    <div
-                      key={point.date}
-                      title={`${point.label} (${point.date}): ${formatDual(point.totalUsd)} — Video: ${formatCredits(point.renderUsd)}, Images: ${formatCredits(point.iterateUsd)}`}
-                      className="group flex h-full flex-1 items-end justify-center"
-                    >
-                      {point.totalUsd > 0 ? (
-                        // <=24px wide, 4px rounded data-end, square at the baseline,
-                        // 2px surface gap between the stacked segments.
+                {maxLineUsd > 0 ? (
+                  <span className="absolute bottom-full right-0 text-[11px] tabular-nums text-muted-foreground">
+                    {formatCredits(maxLineUsd)}
+                  </span>
+                ) : null}
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  className="absolute inset-0 size-full overflow-visible"
+                >
+                  {[
+                    { stroke: "stroke-chart-4", values: series.map((p) => p.iterateUsd) },
+                    { stroke: "stroke-chart-1", values: series.map((p) => p.renderUsd) },
+                  ].map(({ stroke, values }) => (
+                    <polyline
+                      key={stroke}
+                      points={values
+                        .map(
+                          (usd, i) =>
+                            `${((i + 0.5) / values.length) * 100},${100 - pctOfMaxLine(usd)}`,
+                        )
+                        .join(" ")}
+                      fill="none"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                      className={stroke}
+                    />
+                  ))}
+                </svg>
+                {/* ponytail: CSS hover keeps this a server component; no keyboard
+                    tooltip, the sr-only table below carries the same numbers. */}
+                <div className="absolute inset-0 flex">
+                  {series.map((point, i) => (
+                    <div key={point.date} className="group relative h-full flex-1">
+                      <div className="pointer-events-none absolute inset-0 hidden group-hover:block">
+                        <div className="absolute inset-y-0 left-1/2 w-px bg-muted-foreground/40" />
+                        <span
+                          className="absolute left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-chart-4 ring-2 ring-card"
+                          style={{ bottom: `${pctOfMaxLine(point.iterateUsd)}%` }}
+                        />
+                        <span
+                          className="absolute left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-chart-1 ring-2 ring-card"
+                          style={{ bottom: `${pctOfMaxLine(point.renderUsd)}%` }}
+                        />
                         <div
-                          className="flex w-full max-w-6 flex-col gap-0.5 overflow-hidden rounded-t-[4px] transition-opacity group-hover:opacity-80"
-                          style={{ height: `${Math.max(totalPct, 6)}%` }}
+                          className={cn(
+                            "absolute top-2 z-10 flex flex-col gap-0.5 whitespace-nowrap rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs tabular-nums text-popover-foreground shadow-sm",
+                            i < series.length / 2
+                              ? "left-[calc(50%+0.5rem)]"
+                              : "right-[calc(50%+0.5rem)]",
+                          )}
                         >
-                          {iteratePct > 0 ? (
-                            <div
-                              className="w-full bg-primary/35"
-                              style={{ height: `${iteratePct}%` }}
-                            />
-                          ) : null}
-                          {renderPct > 0 ? (
-                            <div
-                              className="w-full bg-primary"
-                              style={{ height: `${renderPct}%` }}
-                            />
-                          ) : null}
+                          <span className="text-muted-foreground">{point.label}</span>
+                          <span className="font-medium">{formatDual(point.totalUsd)}</span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="size-2 rounded-full bg-chart-1" />
+                            {formatCredits(point.renderUsd)} Video
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="size-2 rounded-full bg-chart-4" />
+                            {formatCredits(point.iterateUsd)} Images
+                          </span>
                         </div>
-                      ) : (
-                        <div className="h-0.5 w-full max-w-6 rounded-full bg-muted" />
-                      )}
+                      </div>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
+              <table className="sr-only">
+                <caption>Daily spend</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Day</th>
+                    <th scope="col">Video</th>
+                    <th scope="col">Images</th>
+                    <th scope="col">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {series.map((point) => (
+                    <tr key={point.date}>
+                      <th scope="row">{point.label}</th>
+                      <td>{formatCredits(point.renderUsd)}</td>
+                      <td>{formatCredits(point.iterateUsd)}</td>
+                      <td>{formatDual(point.totalUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               <div className="flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
                 <span>{series[0]?.label ?? ""}</span>
                 {series.length > 2 ? (
