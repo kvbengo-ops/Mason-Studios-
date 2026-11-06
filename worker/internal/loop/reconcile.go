@@ -154,7 +154,17 @@ func reconcileScene(ctx context.Context, deps Deps, scene store.Scene) {
 	case kie.StatusCompleted:
 		reconcileCompleted(ctx, deps, logger, scene, model, requestID)
 	case kie.StatusFailed:
-		markFailedRun(ctx, deps, logger, scene, "kie reported the render failed", true)
+		reason := "kie reported the render failed"
+		// A vendor that can say WHY (BytePlus: a real-face refusal, a content
+		// block, an expiry) gets its own words on the run instead.
+		if explainer, ok := deps.Kie.(interface {
+			FailureReason(ctx context.Context, requestID string) (string, error)
+		}); ok {
+			if why, err := explainer.FailureReason(ctx, requestID); err == nil && why != "" {
+				reason = why
+			}
+		}
+		markFailedRun(ctx, deps, logger, scene, reason, true)
 	case kie.StatusInQueue, kie.StatusInProgress:
 		// Still working. Leave it — the next dispatch/webhook or the next
 		// reconcile pass will pick it up.

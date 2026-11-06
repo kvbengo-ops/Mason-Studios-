@@ -75,7 +75,14 @@ type SubmitRequest struct {
 	// source for this value; nothing constructs it by hand.
 	KieModelID string
 	Prompt     string
-	ImageURL   string // reference frame; the character-consistency mechanism.
+	// ReferencePrompt is the operator's own words (scenes.video_prompt) with
+	// each tag bound to its reference by kind — "@Image N", "@Video N",
+	// "@Audio N" — and no saved descriptions pasted in. Only BytePlus reads
+	// it (internal/byteplus): it documents positional syntax for all three
+	// kinds, where kie documents only @imageN, which is why Prompt keeps the
+	// descriptions. Empty when the scene has no video_prompt.
+	ReferencePrompt string
+	ImageURL        string // reference frame; the character-consistency mechanism.
 	// ImageURLs is EVERY reference image for this scene, in the order the
 	// vendor indexes them — element 0 is the "@image1" the prompt can name
 	// (0071's scene_references.ordinal).

@@ -382,7 +382,9 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	requestID, err := deps.Kie.Submit(ctx, kie.SubmitRequest{
 		KieModelID: model.KieModelID,
 		Prompt:     promptForScene(scene, refs, withSpeech(scene, model), model),
-		ImageURL:   refURL,
+		// BytePlus only (see kie.SubmitRequest.ReferencePrompt); kie ignores it.
+		ReferencePrompt: referencePrompt(scene, refs, withSpeech(scene, model)),
+		ImageURL:        refURL,
 		// Every reference, in vendor order. ImageURL above stays the first
 		// of them: Hailuo, which takes exactly one, still reads that field
 		// directly. Kling reads this whole slice instead — up to its first
@@ -912,6 +914,61 @@ func promptForScene(
 	}
 
 	return base
+}
+
+// referencePrompt is the scene's own words (video_prompt) with every tag that
+// earned a reference bound to BytePlus's positional syntax for its kind:
+//
+//	{jen: image 1, walking: video 1, voice: audio 1}
+//	"@walking with @jen saying hi in @voice" -> "@Video 1 with @Image 1 saying hi in @Audio 1"
+//
+// N is the reference's ordinal within its kind, which is also its position
+// among that kind in the vendor's content array — BytePlus numbers each type
+// that way. A tag that earned no reference loses its '@' and stays a word,
+// and an email-looking token is left alone, exactly as in bindUITags.
+//
+// Empty when there is no video_prompt (the scripted route), so the vendor
+// falls back to Prompt. The dialogue line is appended the same way
+// promptForScene appends it.
+func referencePrompt(scene store.Scene, refs []store.SceneReference, withSpeech bool) string {
+	if scene.VideoPrompt == nil || strings.TrimSpace(*scene.VideoPrompt) == "" {
+		return ""
+	}
+	prompt := *scene.VideoPrompt
+	label := map[string]string{"image": "Image", "video": "Video", "audio": "Audio"}
+	bound := make(map[string]string, len(refs))
+	for _, r := range refs {
+		if r.Tag == nil || label[r.Kind] == "" {
+			continue
+		}
+		if name := strings.ToLower(strings.TrimSpace(*r.Tag)); name != "" {
+			bound[name] = fmt.Sprintf("@%s %d", label[r.Kind], r.Ordinal)
+		}
+	}
+
+	var b strings.Builder
+	last := 0
+	for _, m := range uiTagPattern.FindAllStringSubmatchIndex(prompt, -1) {
+		at, end := m[0], m[1]
+		name := prompt[m[2]:m[3]]
+		b.WriteString(prompt[last:at])
+		switch tag, ok := bound[strings.ToLower(name)]; {
+		case ok:
+			b.WriteString(tag)
+		case leadIsWordish(prompt, at):
+			b.WriteString(prompt[at:end])
+		default:
+			b.WriteString(name)
+		}
+		last = end
+	}
+	b.WriteString(prompt[last:])
+	out := b.String()
+
+	if withSpeech && scene.ScriptLine != nil && *scene.ScriptLine != "" {
+		out = fmt.Sprintf(`%s Dialogue, spoken aloud on camera: "%s"`, out, *scene.ScriptLine)
+	}
+	return out
 }
 
 // failScene marks a claimed scene 'failed', logging both the original
