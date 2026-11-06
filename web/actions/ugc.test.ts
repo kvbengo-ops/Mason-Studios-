@@ -450,7 +450,15 @@ describe("generateClip takes the conditioning frame from a tag", () => {
     // so copyStorageObject is NOT a usable signal here.
     const spies = mockWriteSurfaces({
       element: { asset_id: "asset-clip1", user_id: "user-1" },
-      elementNames: [{ name: "clip1", description: "a product demo", assetKind: "video_ref" }],
+      elementNames: [
+        { name: "clip1", description: "a product demo", assetKind: "video_ref", durationS: 4.064 },
+      ],
+      // The single-row assets read (the reference attach) must answer as the
+      // video it is — the mock's id-blind default is a picture, which would
+      // make the ref_frame assertion below fail for the mock's reason, not
+      // the product's.
+      sourceAssetKind: "video_ref",
+      sourceStorageKey: "projects/other/video_ref/clip1.mp4",
     });
     const { generateClip } = await import("./ugc");
 
