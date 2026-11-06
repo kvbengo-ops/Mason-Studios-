@@ -1,5 +1,8 @@
+import { cache } from "react";
+import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { takeActionSlot } from "@/lib/action-rate-limit";
 import { canUseApp } from "@/lib/account-approval";
 import { deriveProjectStatus, deriveReachedSteps, type ReachedSteps } from "@/lib/project-status";
 import type { Database } from "@/types/db";
@@ -20,6 +23,30 @@ export class AuthorizationError extends Error {
     this.name = "AuthorizationError";
   }
 }
+
+/** Thrown when a user exceeds the per-user Server Action rate limit. */
+export class RateLimitError extends Error {
+  constructor() {
+    super("Too many requests — wait a minute and try again.");
+    this.name = "RateLimitError";
+  }
+}
+
+/**
+ * Counts this request against the user's Server Action limit, once per
+ * request (cache) however many guards it passes through. Page loads are not
+ * Server Actions — Next marks an action POST with a `next-action` header — so
+ * they are never counted.
+ */
+const withinActionLimit = cache(async (userId: string): Promise<boolean> => {
+  let isAction = false;
+  try {
+    isAction = (await headers()).has("next-action");
+  } catch {
+    // Outside a request (tests, scripts): nothing to limit.
+  }
+  return !isAction || takeActionSlot(userId);
+});
 
 /**
  * Every one of these guards MUST run — and pass — before any
@@ -62,7 +89,10 @@ export class AuthorizationError extends Error {
  *     session cookie exactly where it was. /pending carries a sign-out
  *     button instead, where the write happens in a Server Action and lands.
  */
-export async function requireUser(): Promise<{ user: User; profile: Profile }> {
+export async function requireUser({ rateLimit = true }: { rateLimit?: boolean } = {}): Promise<{
+  user: User;
+  profile: Profile;
+}> {
   const supabase = await createClient();
 
   const {
@@ -71,6 +101,10 @@ export async function requireUser(): Promise<{ user: User; profile: Profile }> {
 
   if (!user) {
     redirect("/login");
+  }
+
+  if (rateLimit && !(await withinActionLimit(user.id))) {
+    throw new RateLimitError();
   }
 
   const { data: profile, error } = await supabase
