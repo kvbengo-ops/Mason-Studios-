@@ -3,7 +3,18 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { JSX } from "react";
 import Link from "next/link";
-import { Bell, Check, CircleAlert, CircleCheck, Clock, Coins, HandCoins, ImageIcon } from "lucide-react";
+import {
+  Bell,
+  Check,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Coins,
+  HandCoins,
+  ImageIcon,
+  SlidersHorizontal,
+} from "lucide-react";
 import { markAllNotificationsRead, markNotificationRead } from "@/actions/notifications";
 import type { Notification } from "@/lib/notifications";
 import { notificationHref } from "@/lib/notification-href";
@@ -67,7 +78,10 @@ function notificationFromRealtime(row: NotificationRow): Notification {
 
 function iconFor(kind: Notification["kind"]): typeof CircleCheck {
   if (kind === "credit_requested") return HandCoins;
-  if (kind === "credit_received" || kind === "credit_sent" || kind === "credit_renewed") return Coins;
+  if (kind === "credit_denied") return CircleX;
+  if (kind === "credit_limits_changed") return SlidersHorizontal;
+  if (kind === "credit_received" || kind === "credit_sent" || kind === "credit_renewed")
+    return Coins;
   if (kind === "image_queued") return Clock;
   if (kind === "image_generating") return ImageIcon;
   if (kind === "image_failed" || kind === "image_billing_unknown") return CircleAlert;

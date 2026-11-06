@@ -19,4 +19,4 @@ export const BUILD_SHA = (process.env.RENDER_GIT_COMMIT ?? "dev").slice(0, 7);
 // version.test.ts's drift guard, which reads the migrations directory
 // directly and fails CI the moment this constant and the repo disagree —
 // bump this by hand whenever a new migration is added.
-export const EXPECTED_DB_VERSION = "0124";
+export const EXPECTED_DB_VERSION = "0125";

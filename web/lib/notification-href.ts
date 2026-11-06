@@ -28,7 +28,8 @@ export function notificationHref(notification: Notification): string {
   }
   return notification.kind === "credit_received" ||
     notification.kind === "credit_sent" ||
-    notification.kind === "credit_renewed"
+    notification.kind === "credit_renewed" ||
+    notification.kind === "credit_limits_changed"
     ? "/profile"
     : "/allowances";
 }

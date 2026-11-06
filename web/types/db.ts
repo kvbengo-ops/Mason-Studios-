@@ -105,6 +105,8 @@ export type NotificationKind =
   | "credit_received"
   | "credit_sent"
   | "credit_renewed"
+  | "credit_denied"
+  | "credit_limits_changed"
   | "image_queued"
   | "image_generating"
   | "image_completed"
