@@ -115,10 +115,18 @@ Then point `APP_BASE_URL` at that URL and set `KIE_WEBHOOK_SECRET` to a `webhook
 generated in kie's settings. Unset means every callback is rejected.
 
 `BYTEPLUS_API_KEY` (worker only, optional) sends Seedance 2.5 to BytePlus ModelArk instead
-of kie; every other model stays on kie. It is ignored under `MODE=development`. BytePlus
-renders have no webhook (its callback is unsigned) — completion arrives through the reconcile
-poll. An Individual BytePlus account runs 3 tasks at once; extra submissions are refused,
-unbilled.
+of kie; every other model stays on kie. It is ignored under `MODE=development`.
+
+- `BYTEPLUS_MAX_INFLIGHT` (default 3 = Individual account; Enterprise 10): BytePlus tasks at
+  once. Over its limit BytePlus queues rather than refusing, so the worker sends the overflow
+  to kie. Rate-limit, queue-full, overdue-balance and model-not-activated refusals also fall
+  back to kie, unbilled. Parameter and content-safety refusals (including real faces) fail the
+  scene with BytePlus's reason in plain words.
+- `BYTEPLUS_ROUTE=0` stops new BytePlus renders while still polling the ones in flight. Use it
+  to switch BytePlus off; removing the key strands running tasks.
+- `BYTEPLUS_MODEL`: an `ep-…` endpoint id if the account refuses model-id access.
+- No webhook: BytePlus's callback is unsigned, so completion arrives through the reconcile
+  poll (45–90s), like a kie render without `KIE_WEBHOOK_SECRET`.
 
 Put the env files back afterwards. A stale `MODE=production` is the shape that costs
 money exactly once.

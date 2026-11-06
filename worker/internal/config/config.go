@@ -46,6 +46,18 @@ type Config struct {
 	// every render on kie, which is today's behaviour. Ignored in
 	// MODE=development, where every render is mocked through kie's client.
 	BytePlusAPIKey string
+	// BytePlusModel (BYTEPLUS_MODEL) is the model or endpoint id sent to
+	// BytePlus. Empty = dreamina-seedance-2-5-260628; set an "ep-..." endpoint
+	// id when the account refuses model-id access.
+	BytePlusModel string
+	// BytePlusRoute (BYTEPLUS_ROUTE, on unless "0") sends NEW Seedance 2.5
+	// renders to BytePlus. "0" stops new submissions while the key stays set,
+	// so renders already running there are still polled to the end.
+	BytePlusRoute bool
+	// BytePlusMaxInflight (BYTEPLUS_MAX_INFLIGHT, default 3 — an Individual
+	// account's limit; Enterprise is 10) caps BytePlus tasks running at once.
+	// Over it, Seedance 2.5 goes to kie instead of queueing at BytePlus.
+	BytePlusMaxInflight int
 	// AppBaseURL is this worker's own publicly-reachable base URL (e.g.
 	// https://worker.example.com), used to build the webhook callback
 	// URL ({AppBaseURL}/webhooks/kie) passed on every render submission.
@@ -282,6 +294,14 @@ func load(env map[string]string) (*Config, error) {
 		KieWebhookSecret: env["KIE_WEBHOOK_SECRET"],
 		// Optional; see BytePlusAPIKey's doc comment.
 		BytePlusAPIKey: strings.TrimSpace(env["BYTEPLUS_API_KEY"]),
+		BytePlusModel:  strings.TrimSpace(env["BYTEPLUS_MODEL"]),
+		BytePlusRoute:  strings.TrimSpace(env["BYTEPLUS_ROUTE"]) != "0",
+	}
+
+	if v, err := positiveIntVar(env, "BYTEPLUS_MAX_INFLIGHT", 3); err != nil {
+		errs = append(errs, err)
+	} else {
+		cfg.BytePlusMaxInflight = v
 	}
 
 	if cfg.KieWebhookSecret == "" {

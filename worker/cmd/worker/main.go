@@ -28,7 +28,7 @@ import (
 
 // The router is loop's one video vendor; pinned here, where both packages are
 // already imported, because byteplus deliberately does not import loop.
-var _ loop.VideoVendor = byteplus.Router{}
+var _ loop.VideoVendor = (*byteplus.Router)(nil)
 
 func main() {
 	if err := run(); err != nil {
@@ -118,10 +118,20 @@ func run() error {
 	// (internal/byteplus); every other model, and every render when it is
 	// unset, stays on kie. Never in development: there every render is
 	// mocked through kie's client, and a real key there would bill.
-	router := byteplus.Router{Kie: kieClient}
+	router := &byteplus.Router{Kie: kieClient, Log: logger}
 	if cfg.BytePlusAPIKey != "" && !cfg.IsDev() {
-		router.BytePlus = byteplus.NewClient(cfg.BytePlusAPIKey, nil)
-		logger.Info("BYTEPLUS_API_KEY is set: Seedance 2.5 renders go to BytePlus ModelArk, every other model to kie")
+		router.BytePlus = byteplus.NewClient(cfg.BytePlusAPIKey, cfg.BytePlusModel, nil)
+		router.Route = cfg.BytePlusRoute
+		router.MaxInflight = cfg.BytePlusMaxInflight
+		router.Inflight = func(ctx context.Context) (int, error) {
+			return st.RenderingWithTaskPrefix(ctx, kie.BytePlusTaskPrefix)
+		}
+		if router.Route {
+			logger.Info("BYTEPLUS_API_KEY is set: Seedance 2.5 renders go to BytePlus ModelArk (overflow and refusals to kie), every other model to kie",
+				slog.Int("byteplus_max_inflight", router.MaxInflight))
+		} else {
+			logger.Info("BYTEPLUS_ROUTE=0: no new renders go to BytePlus; tasks already there are still polled")
+		}
 	}
 
 	deps := loop.Deps{
