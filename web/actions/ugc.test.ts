@@ -438,14 +438,17 @@ describe("generateClip takes the conditioning frame from a tag", () => {
     expect((result as { error: string }).error).toMatch(/@tag one in the prompt/);
   });
 
-  it("still refuses when the only tag names a video", async () => {
-    // THE BUG THIS PINS (0093_video_reference_elements.sql): firstTagged-
-    // ImageElementId used to adopt any kind that merely was not audio, so an
-    // @tagged .mp4 passed the same way the MP3 above must not. Reverting the
-    // allowlist back to that denylist makes this test see a SUCCESSFUL
-    // generateClip instead of this refusal, because "not audio" is also true
-    // of "video_ref".
-    mockWriteSurfaces({
+  it("queues a video-only prompt WITHOUT making the video the frame", async () => {
+    // Seedance's multimodal reference mode takes a video with no picture
+    // (kie's bytedance/seedance-2-5 schema, read 2026-11-06), so this now
+    // succeeds. What still matters is the bug 0093 pinned:
+    // firstTaggedImageElementId once adopted any kind that merely was not
+    // audio, putting an .mp4 in the conditioning-frame slot. Reverting the
+    // allowlist to that denylist would store the video as a ref_frame asset
+    // and set ref_frame_asset_id — both asserted absent below. The video is
+    // still copied in and attached (as video_ref) through scene_references,
+    // so copyStorageObject is NOT a usable signal here.
+    const spies = mockWriteSurfaces({
       element: { asset_id: "asset-clip1", user_id: "user-1" },
       elementNames: [{ name: "clip1", description: "a product demo", assetKind: "video_ref" }],
     });
@@ -457,8 +460,13 @@ describe("generateClip takes the conditioning frame from a tag", () => {
 
     const result = await generateClip(form);
 
-    expect(result).toHaveProperty("error");
-    expect((result as { error: string }).error).toMatch(/@tag one in the prompt/);
+    expect(result ?? {}).not.toHaveProperty("error");
+    expect(spies.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ ref_frame_asset_id: null }),
+    );
+    expect(spies.insert, "the video was stored as a conditioning frame").not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "ref_frame" }),
+    );
   });
 
   it("skips a tagged video and falls through to a tagged picture later in the same prompt", async () => {
@@ -3853,7 +3861,9 @@ describe("generateClip enforces the References box only when the marker is prese
     form.set("referencesBox", "1");
     for (let i = 0; i < 11; i++) form.append("referenceTag", `ref${i}`);
 
-    expect((await generateClip(form) as { error: string }).error).toMatch(/at most 10 references/);
+    expect(((await generateClip(form)) as { error: string }).error).toMatch(
+      /at most 10 references/,
+    );
     expect(insert).not.toHaveBeenCalled();
   });
 
