@@ -177,7 +177,11 @@ export function SidebarShell({
     // into the mobile panel).
     <aside
       className={cn(
-        "hidden flex-col justify-between border-b border-border bg-sidebar p-4 peer-checked:flex md:sticky md:top-0 md:flex md:h-svh md:shrink-0 md:border-r md:border-b-0",
+        // md:z-30: sticky makes this its own stacking context, and without a
+        // z-index it painted UNDER <main> (later in the DOM), so the nav's
+        // hover labels (z-50 inside it) slid beneath page images. Above the
+        // pages' own floating controls (z-20), below dialogs (z-50).
+        "hidden flex-col justify-between border-b border-border bg-sidebar p-4 peer-checked:flex md:sticky md:top-0 md:z-30 md:flex md:h-svh md:shrink-0 md:border-r md:border-b-0",
         // md:p-2 when collapsed, not the p-4 the expanded rail uses: at
         // md:w-16 (64px), p-4 leaves 32px of content box, and the account
         // trigger's own p-2 takes 16 more — so a 32px `size-8` avatar had
@@ -203,10 +207,7 @@ export function SidebarShell({
     >
       <div className="flex flex-col gap-6">
         <div
-          className={cn(
-            "border-b border-sidebar-border pb-4",
-            collapsed && "md:border-0 md:pb-0",
-          )}
+          className={cn("border-b border-sidebar-border pb-4", collapsed && "md:border-0 md:pb-0")}
         >
           <Link
             href="/projects"
