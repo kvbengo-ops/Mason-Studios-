@@ -5,8 +5,12 @@
 // Deliberately not dismissible. The whole failure it guards against is
 // forgetting — an operator who is about to delete a scene has usually
 // stopped reading the chrome, which is precisely when this has to still be
-// there. It costs one line of vertical space in development and renders
-// nothing at all in production.
+// there. It renders nothing at all in production.
+//
+// ONE LINE, full explanation on hover (2026-11-06). The old two-line
+// paragraph wrapped over the top of every page and covered /create's mode
+// switch. The line keeps the two facts that matter in view — the database is
+// real, and whether renders are — and the rest is its `title`.
 //
 // Also deliberately not styled as an error. Nothing is wrong: this is a
 // legitimate setup that makes local development useful. It is a standing
@@ -30,52 +34,33 @@ export function HostedDbWarning(): JSX.Element | null {
   // not override a variable already in the shell), and the file was quoted
   // three times as proof that local was mocked before a real $2.52 render
   // said otherwise. A file is a claim; this is the answer. That incident is
-  // also why this is a single mode(), not two independent isMockFalImage()/
-  // isMockClaude() booleans that could themselves have disagreed — see
-  // lib/mode.ts's header.
+  // also why this is a single mode(), not two independent booleans that could
+  // themselves have disagreed — see lib/mode.ts's header.
   const dev = isDev();
 
+  // Deliberately NOT fetched from the worker: the two services share nothing
+  // but Postgres by design, and the worker answers the same question itself
+  // at GET /health.
+  //
+  // THE SENTENCE THAT USED TO COST MONEY, corrected. On 2026-08-31 a local
+  // mock flag decided what a worker did AFTER it claimed a job, with no say
+  // in who claimed it — the deployed worker claimed and billed it. scenes.dev
+  // (written by every enqueue, filtered on by every claim) is the fix: a row
+  // this MODE writes can only be claimed by a worker running the SAME mode.
+  const details = dev
+    ? "Scenes queued here are written dev=true and can only be claimed by a worker also running MODE=development — the deployed worker runs MODE=production and will never touch them."
+    : "Scenes queued from this machine are written dev=false, the same as the deployed worker claims — any production-mode worker sharing this database, including the deployed one, can claim and bill them for real. Suspend a local production-mode worker, or expect real renders.";
+
   return (
-    <div className="border-b border-warning/40 bg-warning/10 px-4 py-1.5 text-center text-xs text-foreground">
-      Local dev, <strong className="font-medium">hosted database</strong>
-      {ref ? <span className="font-mono"> ({ref})</span> : null} — every project, scene and delete
-      on this screen is real.{" "}
+    <div
+      title={`${details} Check yours with curl localhost:8080/health.`}
+      className="truncate border-b border-warning/40 bg-warning/10 px-4 py-1 text-center text-[11px] text-foreground"
+    >
+      Local dev · <strong className="font-medium">hosted database</strong>
+      {ref ? <span className="font-mono"> ({ref})</span> : null} — changes here are real ·{" "}
       <span className={dev ? undefined : "font-medium text-destructive"}>
-        MODE={mode()}: images and compiler are {dev ? "mocked" : "REAL"} here.
-      </span>{" "}
-      {/* Deliberately NOT fetched from the worker. The two services share
-          nothing but Postgres by design (render.yaml's own header), and a
-          cross-service call here would be the first exception to that for a
-          diagnostic. The worker answers the same question itself, at
-          GET /health — and its /mock/clip.mp4 route exists ONLY in mock mode,
-          so a 200 there is proof no code can fake. */}
-      {/* THE SENTENCE THAT USED TO COST MONEY, corrected. On 2026-08-31 an
-          operator tested locally with MOCK_FAL_VIDEO=1 and was billed for
-          real renders anyway: the deployed worker polled this same database
-          every 30s, and whichever worker claimed a queued scene first was
-          the one that rendered it — a local mock flag decided what a worker
-          did AFTER it claimed a job, with no say in who claimed it first.
-          scenes.dev (written by every enqueue, filtered on by every claim —
-          see lib/mode.ts's header) is the fix: it is no longer a coin flip,
-          because a row this MODE writes can only ever be claimed by a
-          worker running the SAME mode. */}
-      {dev ? (
-        <>
-          Scenes queued here are written <code className="font-mono">dev=true</code> and can only
-          be claimed by a worker also running <code className="font-mono">MODE=development</code>{" "}
-          — the deployed worker runs <code className="font-mono">MODE=production</code> and will
-          never touch them.
-        </>
-      ) : (
-        <>
-          <strong className="font-medium">MODE=production here</strong>: scenes queued from this
-          machine are written <code className="font-mono">dev=false</code>, the same as the
-          deployed worker claims — any production-mode worker sharing this database, including
-          the deployed one, can claim and bill them for real. Suspend a local production-mode
-          worker, or expect real renders.
-        </>
-      )}{" "}
-      Check yours with <code className="font-mono">curl localhost:8080/health</code>.
+        MODE={mode()}: renders are {dev ? "mocked" : "REAL"}
+      </span>
     </div>
   );
 }
