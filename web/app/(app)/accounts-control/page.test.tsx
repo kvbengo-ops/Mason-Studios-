@@ -122,6 +122,7 @@ describe("AccountsControlPage", () => {
       weekSpendUsd: 12.0,
       monthSpendUsd: 45.0,
       kieBalanceUsd: 60.0,
+      bytePlusRangeUsd: 0,
       runwayEstimate: { status: "ok", days: 35 },
       rangeCategoryTotals: {
         renderUsd: 10.0,
@@ -211,6 +212,7 @@ describe("AccountsControlPage", () => {
       weekSpendUsd: 5.0,
       monthSpendUsd: 15.0,
       kieBalanceUsd: 50.0,
+      bytePlusRangeUsd: 0,
       runwayEstimate: { status: "ok", days: 70 },
       rangeCategoryTotals: { renderUsd: 5.0, iterateUsd: 0, totalUsd: 5.0 },
       modelUsage: [],
@@ -276,6 +278,7 @@ describe("AccountsControlPage", () => {
       weekSpendUsd: 0.04,
       monthSpendUsd: 0.04,
       kieBalanceUsd: 50.0,
+      bytePlusRangeUsd: 0,
       runwayEstimate: { status: "ok", days: 70 },
       rangeCategoryTotals: { renderUsd: 0, iterateUsd: 0.04, totalUsd: 0.04 },
       modelUsage: [],

@@ -278,6 +278,71 @@ export const VIDEO_INPUT_PRICING: {
  * be selected.
  */
 export const KIE_RATES: Readonly<Record<string, KieRates>> = {
+  "seedance-2.5-byteplus": {
+    // BytePlus ModelArk published token pricing converted to the app's
+    // display unit (200 credits per USD). Token usage is estimated; the worker
+    // replaces it with usage.completion_tokens from the completed task.
+    silent: {
+      "480p": {
+        creditsPerSecond: 20.56005,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 46.224,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "1080p": {
+        creditsPerSecond: 113.724,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $11.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+    },
+    sound: {
+      "480p": {
+        creditsPerSecond: 20.56005,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 46.224,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "1080p": {
+        creditsPerSecond: 113.724,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $11.70/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+    },
+    video: {
+      "480p": {
+        creditsPerSecond: 12.2976,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 27.648,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+      "1080p": {
+        creditsPerSecond: 68.04,
+        provenance: "published",
+        pricedAt: "2026-11-06",
+        note: "BytePlus ModelArk Seedance 2.5: $7.00/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+    },
+  },
   "gemini-omni-video": {
     // Presence/provenance gate only. Gemini's actual quote comes from
     // geminiOmniCredits above: its published schedule has a fixed

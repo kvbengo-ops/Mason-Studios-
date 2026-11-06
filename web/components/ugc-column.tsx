@@ -75,6 +75,17 @@ import {
   resolveGeneratePending,
 } from "@/lib/ugc-generate-pending-store";
 
+/** BytePlus bills in USD per token, so its picker prices read in dollars, not kie credits. */
+function isUsdPricedModel(modelId: string): boolean {
+  return modelId === "seedance-2.5-byteplus";
+}
+
+function rateLabel(modelId: string, creditsPerSecond: number): string {
+  return isUsdPricedModel(modelId)
+    ? `$${(creditsPerSecond / 200).toFixed(3)}/s`
+    : `${creditsPerSecond} cr/s`;
+}
+
 export interface UgcOption {
   readonly modelId: string;
   readonly label: string;
@@ -1018,6 +1029,7 @@ export function UgcColumn({
               taggedVideoDurationsS.reduce<number>((sum, d) => sum + Math.floor(d ?? 0), 0)))
         : (exactCredits ?? option.creditsPerSecond * activeDuration);
   const usd = credits === null ? null : credits / 200;
+  const usdOnly = isUsdPricedModel(option.modelId);
   // The three values that decide the number above, named on the confirm so
   // the price can be checked against something rather than taken on trust.
   // ugcTierLabel, not option.resolution raw — display only; the hidden
@@ -1700,7 +1712,8 @@ export function UgcColumn({
                           {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
-                          {o.creditsPerSecond} cr/s · {ugcTierLabel(o.modelId, o.resolution)}
+                          {rateLabel(o.modelId, o.creditsPerSecond)} ·{" "}
+                          {ugcTierLabel(o.modelId, o.resolution)}
                         </span>
                       </span>
                       {modelMenuId(o.modelId) === modelMenuId(option.modelId) ? (
@@ -1971,9 +1984,9 @@ export function UgcColumn({
                       <span className="flex-1">{ugcTierLabel(option.modelId, resolution)}</span>
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {tier
-                          ? rate === null
+                          ? rate == null
                             ? "Price unavailable"
-                            : `${rate} cr/s`
+                            : rateLabel(option.modelId, rate)
                           : "Price unverified"}
                       </span>
                       {resolution === option.resolution ? (
@@ -2028,7 +2041,8 @@ export function UgcColumn({
               // ml-auto pushes it to the far end; the pill skin above is
               // cancelled so it reads as text, like the image bar's cost.
               <p className="ml-auto whitespace-nowrap !border-0 !bg-transparent pr-1 text-xs text-muted-foreground">
-                {credits} cr (${usd?.toFixed(2)}) per {activeDuration}s clip
+                {usdOnly ? `$${usd?.toFixed(2)}` : `${credits} cr ($${usd?.toFixed(2)})`} per{" "}
+                {activeDuration}s clip
               </p>
             ) : null}
           </div>
@@ -2254,9 +2268,11 @@ export function UgcColumn({
                       <>
                         <span>Generate</span>
                         <span className="text-[10px] font-semibold normal-case opacity-90">
-                          {credits} cr (${usd?.toFixed(2)})
+                          {usdOnly ? `$${usd?.toFixed(2)}` : `${credits} cr ($${usd?.toFixed(2)})`}
                         </span>
                       </>
+                    ) : usdOnly ? (
+                      `Generate · $${usd?.toFixed(2)}`
                     ) : (
                       `Generate · ${credits} credits`
                     )}

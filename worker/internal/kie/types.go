@@ -1,6 +1,9 @@
 package kie
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // This file holds the vendor-neutral vocabulary that used to live in
 // internal/fal/client.go: Status, SubmitRequest, Result, and
@@ -20,6 +23,26 @@ import "errors"
 // reason CREDITS_PER_USD in web/lib/kie/rates.ts is a named export rather
 // than a repeated 200.
 const Vendor = "kie"
+
+// BytePlusTaskPrefix marks a task id that belongs to BytePlus ModelArk, not
+// kie (internal/byteplus). Seedance 2.5 goes there when BYTEPLUS_API_KEY is
+// set; its ids are stored in the same scenes.kie_task_id / runs.kie_task_id
+// columns with this prefix, which WE write, so routing a status poll back to
+// the right vendor needs no migration and no guess at either vendor's id
+// format.
+const BytePlusTaskPrefix = "byteplus:"
+
+// BytePlusVendor is runs.vendor for a render BytePlus ran.
+const BytePlusVendor = "byteplus"
+
+// VendorOf is the runs.vendor value for a persisted task id: BytePlusVendor
+// for a BytePlusTaskPrefix id, Vendor for everything else.
+func VendorOf(taskID string) string {
+	if strings.HasPrefix(taskID, BytePlusTaskPrefix) {
+		return BytePlusVendor
+	}
+	return Vendor
+}
 
 // Status is a video render's lifecycle state, translated from kie's own
 // vocabulary by statusFromState in client.go. StatusFailed is not one of
@@ -46,13 +69,23 @@ const (
 // the field name by the caller), so carrying them forward would be dead
 // weight with no reader.
 type SubmitRequest struct {
+	// SelectedModelID is the product model selection. It distinguishes
+	// provider variants that share a KieModelID for Kie fallback.
+	SelectedModelID string
 	// KieModelID is the string kie itself expects in createTask's "model"
 	// field, and the key Client.Submit looks up a Descriptor's BuildInput
 	// by — see DescriptorByKieModelID. Descriptor.KieModelID is the only
 	// source for this value; nothing constructs it by hand.
 	KieModelID string
 	Prompt     string
-	ImageURL   string // reference frame; the character-consistency mechanism.
+	// ReferencePrompt is the operator's own words (scenes.video_prompt) with
+	// each tag bound to its reference by kind — "@Image N", "@Video N",
+	// "@Audio N" — and no saved descriptions pasted in. Only BytePlus reads
+	// it (internal/byteplus): it documents positional syntax for all three
+	// kinds, where kie documents only @imageN, which is why Prompt keeps the
+	// descriptions. Empty when the scene has no video_prompt.
+	ReferencePrompt string
+	ImageURL        string // reference frame; the character-consistency mechanism.
 	// ImageURLs is EVERY reference image for this scene, in the order the
 	// vendor indexes them — element 0 is the "@image1" the prompt can name
 	// (0071's scene_references.ordinal).
@@ -125,8 +158,8 @@ type Result struct {
 	InferenceMS *int
 	// ActualCostUSD is a vendor-reported charge for this specific render,
 	// populated only when the vendor's own API hands one back.
-	// kie.Client.Result sets this from recordInfo's creditsConsumed field
-	// (1 credit = $0.005 — see creditUSD in client.go). Every caller that
+	// kie.Client.Result reads recordInfo's creditsConsumed; BytePlus.Router
+	// computes it from completion_tokens and the model price. Every caller that
 	// turns a Result into runs.cost_usd (internal/ingest.FromResult) must
 	// prefer this over EstimateCost's estimate when it is non-nil: an
 	// estimate exists to approximate a bill nobody can read back yet; a
@@ -140,14 +173,4 @@ type Result struct {
 // job, so callers must record the uncertainty (see store.BillingUnknownPrefix)
 // and must not replay the request automatically without a vendor-backed
 // idempotency key.
-//
-// Moved here from fal/client.go verbatim, and — unlike most of this
-// migration — NOT just a rename. Until this change, only fal.Client's
-// doJSON ever produced this sentinel; kie.Client's own classifyAmbiguousFailure
-// (client.go) had no equivalent, so an ambiguous lost-POST failure on kie
-// was silently recorded as a confident, free ($0) failure instead of a
-// billing-unknown one — invisible while fal was still the vendor most
-// submissions went through, and a real gap the moment kie became the only
-// vendor. classifyAmbiguousFailure and doOnce's 408-on-POST branch both now
-// wrap this, mirroring exactly what fal's doJSON used to do.
-var ErrSubmissionOutcomeUnknown = errors.New("kie: submission outcome unknown")
+var ErrSubmissionOutcomeUnknown = errors.New("submission outcome unknown")

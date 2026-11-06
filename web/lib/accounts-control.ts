@@ -69,6 +69,8 @@ export interface AccountsControlOverview {
   weekSpendUsd: number;
   monthSpendUsd: number;
   kieBalanceUsd: number | null;
+  /** BytePlus ModelArk render spend in the selected window, from runs.vendor. */
+  bytePlusRangeUsd: number;
   runwayEstimate: RunwayEstimate;
   rangeCategoryTotals: SpendCategoryTotals;
   dailySeries: DailySpendPoint[];
@@ -202,11 +204,12 @@ export function runModelLabel(model: string): string {
 
 /** Billed runs per model in the window, most-used first, then by spend. */
 export function buildModelUsage(
-  runs: readonly { model: string; cost_usd: number | null }[],
+  runs: readonly { model: string; cost_usd: number | null; vendor?: string }[],
 ): ModelUsage[] {
   const byLabel = new Map<string, ModelUsage>();
   for (const run of runs) {
-    const label = runModelLabel(run.model);
+    // BytePlus and kie share Seedance 2.5's wire id; runs.vendor tells them apart.
+    const label = runModelLabel(run.model) + (run.vendor === "byteplus" ? " · BytePlus" : "");
     const usage = byLabel.get(label) ?? { label, runs: 0, costUsd: 0 };
     usage.runs += 1;
     usage.costUsd += run.cost_usd ?? 0;
@@ -310,11 +313,12 @@ export async function loadAccountsControlOverview(
     cost_usd: number | null;
     scene_id: string | null;
     model: string;
+    vendor: string;
   }[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const { data: runBatch, error: runsError } = await supabase
       .from("runs")
-      .select("created_at, cost_usd, scene_id, model")
+      .select("created_at, cost_usd, scene_id, model, vendor")
       .gte("created_at", windowStart.toISOString())
       .lt("created_at", tomorrowStart.toISOString())
       .not("cost_usd", "is", null)
@@ -344,6 +348,9 @@ export async function loadAccountsControlOverview(
     weekSpendUsd,
     monthSpendUsd,
     kieBalanceUsd,
+    bytePlusRangeUsd: windowRuns
+      .filter((run) => run.vendor === "byteplus")
+      .reduce((sum, run) => sum + (run.cost_usd ?? 0), 0),
     runwayEstimate,
     rangeCategoryTotals,
     dailySeries,

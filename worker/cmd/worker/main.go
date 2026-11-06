@@ -16,6 +16,7 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"ugc-pipeline/worker/internal/byteplus"
 	"ugc-pipeline/worker/internal/config"
 	whttp "ugc-pipeline/worker/internal/http"
 	"ugc-pipeline/worker/internal/kie"
@@ -24,6 +25,10 @@ import (
 	"ugc-pipeline/worker/internal/media"
 	"ugc-pipeline/worker/internal/store"
 )
+
+// The router is loop's one video vendor; pinned here, where both packages are
+// already imported, because byteplus deliberately does not import loop.
+var _ loop.VideoVendor = (*byteplus.Router)(nil)
 
 func main() {
 	if err := run(); err != nil {
@@ -109,12 +114,32 @@ func run() error {
 			slog.String("mock_video_url", mockVideoURL))
 	}
 
+	// Seedance 2.5 goes to BytePlus ModelArk when BYTEPLUS_API_KEY is set
+	// (internal/byteplus); every other model, and every render when it is
+	// unset, stays on kie. Never in development: there every render is
+	// mocked through kie's client, and a real key there would bill.
+	router := &byteplus.Router{Kie: kieClient, Log: logger}
+	if cfg.BytePlusAPIKey != "" && !cfg.IsDev() {
+		router.BytePlus = byteplus.NewClient(cfg.BytePlusAPIKey, cfg.BytePlusModel, nil)
+		router.Route = cfg.BytePlusRoute
+		router.MaxInflight = cfg.BytePlusMaxInflight
+		router.Inflight = func(ctx context.Context) (int, error) {
+			return st.RenderingWithTaskPrefix(ctx, kie.BytePlusTaskPrefix)
+		}
+		if router.Route {
+			logger.Info("BYTEPLUS_API_KEY is set: Seedance 2.5 renders go to BytePlus ModelArk (overflow and refusals to kie), every other model to kie",
+				slog.Int("byteplus_max_inflight", router.MaxInflight))
+		} else {
+			logger.Info("BYTEPLUS_ROUTE=0: no new renders go to BytePlus; tasks already there are still polled")
+		}
+	}
+
 	deps := loop.Deps{
 		Store:  st,
 		Config: cfg,
 		Logger: logger,
 		Media:  mediaRunner,
-		Kie:    kieClient,
+		Kie:    router,
 		// One gate for the process, shared by every dispatch tick — `deps`
 		// is captured by value in the loop closures below, so this has to be
 		// a pointer or each tick would get a fresh, always-open copy.

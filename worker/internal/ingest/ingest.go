@@ -78,9 +78,9 @@ type Deps struct {
 // resolved Model carried only a compile-time DEFAULT vendor, and the
 // caller (which knew structurally, from which webhook route fired, or from
 // the routing decision it had already resolved) was the only trustworthy
-// source. With one vendor that whole class of bug is gone: runs.vendor is
-// unconditionally kie.Vendor below, the same constant every other package
-// in this worker writes. See internal/http/webhook_kie.go and
+// source. Today runs.vendor is read off the persisted task id itself
+// (kie.VendorOf): kie, or BytePlus for a Seedance 2.5 render routed there —
+// a fact the id carries, so no caller has to pass it. See internal/http/webhook_kie.go and
 // internal/loop/reconcile.go's ingest call sites, neither of which passes
 // anything here any more.
 func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Result) error {
@@ -96,6 +96,10 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 	if err != nil {
 		return err
 	}
+	vendor := kie.Vendor
+	if scene.KieTaskID != nil {
+		vendor = kie.VendorOf(*scene.KieTaskID)
+	}
 
 	durationSeconds := result.DurationSeconds
 	if durationSeconds <= 0 {
@@ -103,12 +107,13 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 	}
 	cost, costKnown := kie.EstimateCost(model, durationSeconds)
 	// A vendor-reported charge beats our own estimate whenever one exists —
-	// see kie.Result.ActualCostUSD's doc comment (types.go). kie.Client.Result
-	// sets this from recordInfo's creditsConsumed whenever the response
-	// carries one.
+	// see kie.Result.ActualCostUSD's doc comment (types.go). kie.Client reads
+	// its creditsConsumed field; BytePlus.Router computes from completion_tokens.
 	if result.ActualCostUSD != nil {
 		cost = *result.ActualCostUSD
 		costKnown = true
+	} else if vendor == kie.BytePlusVendor {
+		costKnown = false
 	}
 	// A mocked render reached no vendor and was billed nothing, so the
 	// ledger must say nothing — not the estimate it would have cost.
@@ -124,18 +129,25 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 		costKnown = true
 	}
 	if !costKnown {
-		// Should be unreachable — see kie.EstimateCost's own doc comment.
-		// Logged loudly and left costPtr nil below rather than writing a
-		// fabricated number: unknown must never become zero or a guess
-		// outside of the deliberate MODE=development override above.
-		deps.Logger.Error("ingest: cost estimate unavailable; no rate for this model at this audio tier",
-			slog.String("scene_id", scene.ID),
-			slog.Bool("has_audio", model.HasAudio),
-			slog.String("reason", kie.MissingRateReason(model)))
+		if vendor == kie.BytePlusVendor {
+			deps.Logger.Error("ingest: BytePlus omitted completion_tokens; charge is unknown", slog.String("scene_id", scene.ID))
+		} else {
+			// Logged loudly and left costPtr nil rather than writing a
+			// fabricated number: unknown must never become zero or a guess.
+			deps.Logger.Error("ingest: cost estimate unavailable; no rate for this model at this audio tier",
+				slog.String("scene_id", scene.ID),
+				slog.Bool("has_audio", model.HasAudio),
+				slog.String("reason", kie.MissingRateReason(model)))
+		}
 	}
 	var costPtr *float64
 	if costKnown {
 		costPtr = &cost
+	}
+	var runError *string
+	if vendor == kie.BytePlusVendor && !costKnown {
+		msg := store.BillingUnknownPrefix + "BytePlus completed the render without reporting completion_tokens"
+		runError = &msg
 	}
 
 	var latencyMS int
@@ -204,10 +216,11 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 		// being ingested, so this is the immutable per-attempt id that belongs
 		// beside the cost below, not a later lookup after a retry.
 		KieTaskID: scene.KieTaskID,
-		Vendor:    kie.Vendor,
+		Vendor:    vendor,
 		Model:     model.KieModelID,
 		CostUSD:   costPtr,
 		LatencyMS: &latencyMS,
+		Error:     runError,
 		// InferenceMS is left nil on every kie render — see kie.Result's own
 		// doc comment (types.go) for why kie has no equivalent of fal's
 		// metrics.inference_time.

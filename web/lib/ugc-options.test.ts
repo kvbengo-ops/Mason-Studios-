@@ -19,6 +19,9 @@ describe("ugcOptions(true) — the sound picker", () => {
       "seedance-2.5/480p",
       "seedance-2.5/720p",
       "seedance-2.5/1080p",
+      "seedance-2.5-byteplus/480p",
+      "seedance-2.5-byteplus/720p",
+      "seedance-2.5-byteplus/1080p",
       "seedance-2/480p",
       "seedance-2/720p",
       "seedance-2/1080p",
@@ -43,10 +46,13 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("prices videoCreditsPerSecond off videoRateFor, null where no video receipt exists", () => {
     // Each model's first (cheapest) tier: the one the bar opens on.
-    const firsts = options.filter((o, i) => options.findIndex((x) => x.modelId === o.modelId) === i);
+    const firsts = options.filter(
+      (o, i) => options.findIndex((x) => x.modelId === o.modelId) === i,
+    );
     const bySecond = Object.fromEntries(firsts.map((o) => [o.modelId, o.videoCreditsPerSecond]));
     expect(bySecond).toEqual({
       "seedance-2.5": 17,
+      "seedance-2.5-byteplus": 12.2976,
       "seedance-2": null,
       "seedance-2-fast": null,
       "seedance-2-mini": null,
@@ -148,6 +154,9 @@ describe("ugcOptions(false) — the silent picker", () => {
       "seedance-2.5/480p/28",
       "seedance-2.5/720p/63",
       "seedance-2.5/1080p/158",
+      "seedance-2.5-byteplus/480p/20.56005",
+      "seedance-2.5-byteplus/720p/46.224",
+      "seedance-2.5-byteplus/1080p/113.724",
       "kling-3.0-pro/720p/14",
       "kling-3.0-pro/1080p/18",
       "kling-4.0/720p/28.5",
@@ -162,9 +171,7 @@ describe("ugcOptions(false) — the silent picker", () => {
   });
 
   it("offers seedance-2.5 at 720p because its silent price has a receipt", () => {
-    expect(options.some((o) => o.modelId === "seedance-2.5" && o.resolution === "720p")).toBe(
-      true,
-    );
+    expect(options.some((o) => o.modelId === "seedance-2.5" && o.resolution === "720p")).toBe(true);
   });
 
   it("each model starts at its cheapest offerable tier", () => {
@@ -185,6 +192,7 @@ describe("ugcOptions(false) — the silent picker", () => {
 function cheapestResolutionFor(modelId: string, _withSound: boolean): string {
   switch (modelId) {
     case "seedance-2.5":
+    case "seedance-2.5-byteplus":
     case "seedance-2":
     case "seedance-2-fast":
     case "seedance-2-mini":

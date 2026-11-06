@@ -72,25 +72,19 @@ type Deps struct {
 	// loop.Every-driven loop.
 	Media *media.Runner
 
-	// Kie submits/polls renders on kie.ai — the only video vendor this
-	// worker speaks to; fal.ai is decommissioned. Always non-nil in a real
-	// Deps (cmd/worker/main.go constructs it unconditionally, since
-	// KieAPIKey is now a required config var — see config.Config.KieAPIKey).
-	// Kept as the VideoVendor interface below, not *kie.Client, purely so
-	// tests can hand dispatch/reconcile a fake without a real kie.Client.
+	// Kie submits/polls renders through the configured video vendor router.
+	// The field keeps its name for existing loop callers; cmd/worker/main.go
+	// wraps kie with BytePlus routing when configured. Always non-nil in a
+	// real Deps, and an interface so tests can use a fake vendor.
 	Kie VideoVendor
 }
 
-// VideoVendor is the seam between loop's dispatch/reconcile and
-// internal/kie's HTTP client: submit a render, poll its status, fetch its
-// completed result. Expressed in terms of kie.SubmitRequest/kie.Status/
-// kie.Result — types that live in package kie because kie is the only
-// vendor this worker has ever needed to describe a render request to.
+// VideoVendor is the seam between dispatch/reconcile and the configured
+// video vendors: submit, poll, fetch a completed result, and read its bill.
+// The shared request/result types live in internal/kie.
 //
-// This interface exists purely for tests: dispatch_test.go and
-// reconcile_test.go hand it a fake VideoVendor instead of a real
-// *kie.Client, the same reason Store above is an interface. There is only
-// one real implementation — see the pin below.
+// Tests use a fake; production uses byteplus.Router, which delegates to kie
+// unless a request is routed to BytePlus.
 type VideoVendor interface {
 	Submit(ctx context.Context, req kie.SubmitRequest) (string, error)
 	Status(ctx context.Context, requestID string) (kie.Status, error)
@@ -98,9 +92,6 @@ type VideoVendor interface {
 	BilledUSD(ctx context.Context, requestID string) (*float64, error)
 }
 
-// _ pins that *kie.Client satisfies VideoVendor — Deps.Kie is passed to
-// dispatch.go/reconcile.go exactly as it is, with no wrapper type, so a
-// signature drift on kie.Client's Submit/Status/Result would otherwise only
-// surface as a confusing error at whatever call site uses deps.Kie rather
-// than here.
+// _ pins that kie.Client remains usable as a VideoVendor in tests and
+// fallback paths.
 var _ VideoVendor = (*kie.Client)(nil)

@@ -75,28 +75,35 @@ describe("published prices are sold on /ugc", () => {
         "ugc-column.tsx's unpaid warning reads correctly for it:\n  " +
         published.join("\n  "),
     ).toEqual(
-    // Every published rate is sold since 2026-10-30 (offerable.ts's header),
-    // so this pins exactly which tiers are on kie's word alone.
-    [
-      "gemini-omni-video 1080p (sound=false)",
-      "gemini-omni-video 1080p (sound=true)",
-      "gemini-omni-video 4k (sound=false)",
-      "gemini-omni-video 4k (sound=true)",
-      "kling-4.0 1080p (sound=false)",
-      "kling-4.0 1080p (sound=true)",
-      "kling-4.0-reference 1080p (sound=false)",
-      "kling-4.0-reference 1080p (sound=true)",
-      "seedance-2 1080p (sound=true)",
-      "seedance-2 720p (sound=true)",
-      "seedance-2-fast 720p (sound=true)",
-      "seedance-2-mini 480p (sound=true)",
-      "seedance-2-mini 720p (sound=true)",
-      "seedance-2.5 1080p (sound=false)",
-      "seedance-2.5 1080p (sound=true)",
-      "seedance-2.5 720p (sound=true)",
-      "wan-3.0 1080P (sound=true)",
-      "wan-3.0 720P (sound=true)",
-    ],
+      // Every published rate is sold since 2026-10-30 (offerable.ts's header),
+      // so this pins exactly which tiers are on kie's word alone.
+      [
+        "gemini-omni-video 1080p (sound=false)",
+        "gemini-omni-video 1080p (sound=true)",
+        "gemini-omni-video 4k (sound=false)",
+        "gemini-omni-video 4k (sound=true)",
+        "kling-4.0 1080p (sound=false)",
+        "kling-4.0 1080p (sound=true)",
+        "kling-4.0-reference 1080p (sound=false)",
+        "kling-4.0-reference 1080p (sound=true)",
+        "seedance-2 1080p (sound=true)",
+        "seedance-2 720p (sound=true)",
+        "seedance-2-fast 720p (sound=true)",
+        "seedance-2-mini 480p (sound=true)",
+        "seedance-2-mini 720p (sound=true)",
+        "seedance-2.5 1080p (sound=false)",
+        "seedance-2.5 1080p (sound=true)",
+        "seedance-2.5 720p (sound=true)",
+        // BytePlus ModelArk's published per-token price, 2026-11-06; no receipt yet.
+        "seedance-2.5-byteplus 1080p (sound=false)",
+        "seedance-2.5-byteplus 1080p (sound=true)",
+        "seedance-2.5-byteplus 480p (sound=false)",
+        "seedance-2.5-byteplus 480p (sound=true)",
+        "seedance-2.5-byteplus 720p (sound=false)",
+        "seedance-2.5-byteplus 720p (sound=true)",
+        "wan-3.0 1080P (sound=true)",
+        "wan-3.0 720P (sound=true)",
+      ],
     );
   });
 
@@ -171,6 +178,13 @@ describe("published prices are sold on /ugc", () => {
         "seedance-2-mini 720p sound=true",
         "wan-3.0 1080P sound=true",
         "wan-3.0 720P sound=true",
+        // BytePlus ModelArk's published per-token price, 2026-11-06.
+        "seedance-2.5-byteplus 480p sound=false",
+        "seedance-2.5-byteplus 480p sound=true",
+        "seedance-2.5-byteplus 720p sound=false",
+        "seedance-2.5-byteplus 720p sound=true",
+        "seedance-2.5-byteplus 1080p sound=false",
+        "seedance-2.5-byteplus 1080p sound=true",
       ].sort(),
     );
   });

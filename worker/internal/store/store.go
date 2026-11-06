@@ -170,9 +170,9 @@ type Run struct {
 }
 
 // BillingUnknownPrefix marks a run whose vendor charge cannot be decided
-// either way: kie may or may not have accepted and billed the submission
-// before the response was lost (kie.ErrSubmissionOutcomeUnknown). Such a run
-// keeps CostUSD nil — writing an estimate would fabricate a charge kie may
+// either way: the vendor may or may not have accepted and billed the submission
+// before a usable task id was received (kie.ErrSubmissionOutcomeUnknown). Such a run
+// keeps CostUSD nil — writing an estimate would fabricate a charge it may
 // never have made — so the prefix on Error is the only thing that separates
 // it from an ordinary unbilled failure. It exists as a constant because the
 // operational alert is a real query: select ... from runs where error like
@@ -663,6 +663,24 @@ WHERE s.status = 'rendering'
 		return nil, fmt.Errorf("store: stale rendering: %w", err)
 	}
 	return scenes, nil
+}
+
+// RenderingWithTaskPrefix counts this mode's scenes in 'rendering' whose
+// persisted task id starts with prefix — byteplus.Router's in-flight count
+// (kie.BytePlusTaskPrefix), which caps BytePlus at BYTEPLUS_MAX_INFLIGHT.
+func (s *Store) RenderingWithTaskPrefix(ctx context.Context, prefix string) (int, error) {
+	const q = `
+SELECT count(*)
+FROM scenes
+WHERE status = 'rendering'
+  AND dev = $2
+  AND kie_task_id LIKE $1 || '%'`
+
+	var n int64
+	if err := s.pool.QueryRow(ctx, q, prefix, s.dev).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: rendering with task prefix: %w", err)
+	}
+	return int(n), nil
 }
 
 // ---------------------------------------------------------------------------

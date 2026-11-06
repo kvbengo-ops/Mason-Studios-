@@ -63,11 +63,30 @@ func TestLoad_AllRequiredPresent_Defaults(t *testing.T) {
 	if cfg.AudioEnabled {
 		t.Errorf("AudioEnabled default = true, want false (audio off by default during testing)")
 	}
+	if !cfg.BytePlusRoute || cfg.BytePlusMaxInflight != 3 || cfg.BytePlusAPIKey != "" || cfg.BytePlusModel != "" {
+		t.Errorf("BytePlus defaults = route %v, max %d, key %q, model %q; want on, 3, unset, default model",
+			cfg.BytePlusRoute, cfg.BytePlusMaxInflight, cfg.BytePlusAPIKey, cfg.BytePlusModel)
+	}
 	if cfg.ReconcileGiveUpAfter != 30*time.Minute {
 		t.Errorf("ReconcileGiveUpAfter default = %v, want %v", cfg.ReconcileGiveUpAfter, 30*time.Minute)
 	}
 	if len(cfg.Warnings) != 0 {
 		t.Errorf("Warnings = %v, want none (fullEnv sets KIE_WEBHOOK_SECRET)", cfg.Warnings)
+	}
+}
+
+func TestLoad_BytePlusOverrides(t *testing.T) {
+	env := fullEnv()
+	env["BYTEPLUS_API_KEY"] = "ark-key"
+	env["BYTEPLUS_MODEL"] = "ep-123"
+	env["BYTEPLUS_ROUTE"] = "0"
+	env["BYTEPLUS_MAX_INFLIGHT"] = "10"
+	cfg, err := load(env)
+	if err != nil {
+		t.Fatalf("load() unexpected error: %v", err)
+	}
+	if cfg.BytePlusAPIKey != "ark-key" || cfg.BytePlusModel != "ep-123" || cfg.BytePlusRoute || cfg.BytePlusMaxInflight != 10 {
+		t.Errorf("BytePlus config = key %q, model %q, route %v, max %d", cfg.BytePlusAPIKey, cfg.BytePlusModel, cfg.BytePlusRoute, cfg.BytePlusMaxInflight)
 	}
 }
 

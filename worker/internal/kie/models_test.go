@@ -61,6 +61,11 @@ func TestDescriptorByKieModelID_Unknown_Refuses(t *testing.T) {
 
 func TestDescriptorByKieModelID_RoundTrips(t *testing.T) {
 	for _, d := range Descriptors {
+		// BytePlus's Seedance 2.5 shares kie's wire id on purpose: kie is its
+		// fallback, and the lookup only feeds kie's request builder.
+		if d.ID == BytePlusSeedance25ID {
+			continue
+		}
 		got, ok := DescriptorByKieModelID(d.KieModelID)
 		if !ok {
 			t.Errorf("DescriptorByKieModelID(%q) ok = false, want true", d.KieModelID)
