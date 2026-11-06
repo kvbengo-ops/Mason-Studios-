@@ -719,12 +719,16 @@ export default async function AccountsControlPage({
           sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
-        {/* ponytail: spend only — BytePlus's balance API needs a separate AK/SK with billing read. */}
         <Stat
           icon={Wallet}
-          label="BytePlus spend"
-          value={formatUsd(overview.bytePlusRangeUsd)}
-          sub={`Last ${overview.windowDays} days · balance not connected`}
+          label="BytePlus balance"
+          value={
+            overview.bytePlusBalanceUsd !== null
+              ? formatUsd(overview.bytePlusBalanceUsd)
+              : "Unavailable"
+          }
+          sub={`${formatUsd(overview.bytePlusRangeUsd)} spent last ${overview.windowDays} days`}
+          alert={overview.bytePlusBalanceUsd !== null && overview.bytePlusBalanceUsd <= 0}
         />
         <GlobalSpendCapControl
           settings={overview.globalSpendCap}

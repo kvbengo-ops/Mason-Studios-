@@ -16,6 +16,7 @@ import {
   type SpendCategoryTotals,
   type UserSpendCategoryTotal,
 } from "@/lib/db-aggregates";
+import { getBytePlusBalanceUsd } from "@/lib/byteplus-balance";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
 import { KIE_MODELS } from "@/lib/kie/models";
 import { COMPILER_MODELS, getModel, IMAGE_MODELS, mergeRenderSettings } from "@/lib/models";
@@ -71,6 +72,8 @@ export interface AccountsControlOverview {
   kieBalanceUsd: number | null;
   /** BytePlus ModelArk render spend in the selected window, from runs.vendor. */
   bytePlusRangeUsd: number;
+  /** BytePlus available balance (lib/byteplus-balance.ts); null = unreadable, never 0. */
+  bytePlusBalanceUsd: number | null;
   runwayEstimate: RunwayEstimate;
   rangeCategoryTotals: SpendCategoryTotals;
   dailySeries: DailySpendPoint[];
@@ -285,6 +288,7 @@ export async function loadAccountsControlOverview(
     rangeCategoryTotals,
     userCategoryTotals,
     kieBalanceUsd,
+    bytePlusBalanceUsd,
     { data: directoryData, error: directoryError },
   ] = await Promise.all([
     getSpendTotalUsd(supabase, todayStart.toISOString(), tomorrowStart.toISOString()),
@@ -294,6 +298,7 @@ export async function loadAccountsControlOverview(
     getSpendCategoryTotals(supabase, windowStart.toISOString(), tomorrowStart.toISOString()),
     getSpendCategoryTotalsByUser(supabase, windowStart.toISOString(), tomorrowStart.toISOString()),
     getKieAccountBalanceUsd(),
+    getBytePlusBalanceUsd(),
     supabase
       .from("user_directory")
       .select("id, email, username, role, status, created_at, project_count, spend_usd")
@@ -351,6 +356,7 @@ export async function loadAccountsControlOverview(
     bytePlusRangeUsd: windowRuns
       .filter((run) => run.vendor === "byteplus")
       .reduce((sum, run) => sum + (run.cost_usd ?? 0), 0),
+    bytePlusBalanceUsd,
     runwayEstimate,
     rangeCategoryTotals,
     dailySeries,

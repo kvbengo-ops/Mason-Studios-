@@ -110,6 +110,13 @@ services:
       # account's balance than the one ugc-worker actually spends from.
       - key: KIE_API_KEY
         sync: false
+      # BytePlus IAM AK/SK (BillingCenterReadOnlyAccess) for the Accounts
+      # Control balance tile only (lib/byteplus-balance.ts). Optional: unset
+      # shows "Unavailable". Not BYTEPLUS_API_KEY, which the worker renders with.
+      - key: BYTEPLUS_ACCESS_KEY_ID
+        sync: false
+      - key: BYTEPLUS_SECRET_ACCESS_KEY
+        sync: false
       # All seven *_CAP_USD values below must be a bare non-negative number
       # as a string — "20", not "$20" or "20 USD". web/lib/spend.ts parses
       # each one through parseCapEnvUsd, which THROWS at process startup on
