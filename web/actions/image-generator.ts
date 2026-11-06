@@ -379,7 +379,8 @@ const BLOCKED_MESSAGES = {
   global: "The company-wide image budget is used up.",
   weekly: "You have reached your weekly allowance. Request more from the sidebar to keep going.",
   daily: "You have reached today's limit. It resets at midnight Manila time.",
-  hourly: "You have reached your hourly image limit. Earlier spend will free up over the next hour.",
+  hourly:
+    "You have reached your hourly image limit. Earlier spend will free up over the next hour.",
 } as const;
 
 /**
@@ -946,10 +947,7 @@ export async function generateProjectImage(
     return { error: LOCKED_MESSAGE };
   }
 
-  return generateImageFor(
-    { userId: user.id, profile, projectId },
-    formData,
-  );
+  return generateImageFor({ userId: user.id, profile, projectId }, formData);
 }
 
 /**
@@ -972,11 +970,7 @@ export async function generatePersonalImage(
   formData: FormData,
 ): Promise<GenerateProjectImageResult> {
   const { user, profile } = await requireUser();
-  return generateImageFor(
-    { userId: user.id, profile, projectId: null },
-    formData,
-    true,
-  );
+  return generateImageFor({ userId: user.id, profile, projectId: null }, formData, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -1375,7 +1369,9 @@ export async function loadPersonalImageAttempts(): Promise<ImageAttempt[]> {
  * no row here ever carries a task id to check.
  */
 export async function reconcilePersonalImageAttempt(runId: string): Promise<ImageAttempt> {
-  const { user } = await requireUser();
+  // Not rate-limited: the image panel polls this every 5s per unfinished image,
+  // and it is an owner-scoped read that spends nothing.
+  const { user } = await requireUser({ rateLimit: false });
 
   const parsedRunId = runIdSchema.safeParse(runId);
   if (!parsedRunId.success) throw new Error("Invalid image attempt.");
