@@ -516,7 +516,7 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		billedRun := store.Run{
 			ProjectID: scene.ProjectID,
 			KieTaskID: &requestID,
-			Vendor:    kie.Vendor,
+			Vendor:    kie.VendorOf(requestID),
 			Model:     model.KieModelID,
 			// Same rule as ingest.FromResult: a mocked submission was billed
 			// nothing, so a failure on that path costs nothing either.

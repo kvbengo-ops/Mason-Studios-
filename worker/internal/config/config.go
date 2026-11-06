@@ -41,6 +41,11 @@ type Config struct {
 	// — degraded (see Warnings below), not a misconfiguration to refuse to
 	// boot on.
 	KieWebhookSecret string
+	// BytePlusAPIKey (BYTEPLUS_API_KEY) sends Seedance 2.5 renders to BytePlus
+	// ModelArk instead of kie — see internal/byteplus. Optional: unset keeps
+	// every render on kie, which is today's behaviour. Ignored in
+	// MODE=development, where every render is mocked through kie's client.
+	BytePlusAPIKey string
 	// AppBaseURL is this worker's own publicly-reachable base URL (e.g.
 	// https://worker.example.com), used to build the webhook callback
 	// URL ({AppBaseURL}/webhooks/kie) passed on every render submission.
@@ -275,6 +280,8 @@ func load(env map[string]string) (*Config, error) {
 		// comment for why an unset secret is a legitimate (if degraded)
 		// state rather than a reason to refuse to boot.
 		KieWebhookSecret: env["KIE_WEBHOOK_SECRET"],
+		// Optional; see BytePlusAPIKey's doc comment.
+		BytePlusAPIKey: strings.TrimSpace(env["BYTEPLUS_API_KEY"]),
 	}
 
 	if cfg.KieWebhookSecret == "" {

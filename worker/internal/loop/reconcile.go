@@ -293,6 +293,7 @@ func markFailedRun(ctx context.Context, deps Deps, logger *slog.Logger, scene st
 		Error:  &reason,
 	}
 	if scene.KieTaskID != nil && *scene.KieTaskID != "" {
+		run.Vendor = kie.VendorOf(*scene.KieTaskID)
 		settings, settingsErr := kie.ParseRenderSettings(scene.RenderSettings)
 		model, modelErr := kie.PickModel(scene.IsTalkingHead, deps.Config.AudioEnabled, settings)
 		// This number is FINAL for a failed render (nothing overwrites it

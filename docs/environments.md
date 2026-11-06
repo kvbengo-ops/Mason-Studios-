@@ -114,6 +114,12 @@ make tunnel           # cloudflared public URL → localhost:8080
 Then point `APP_BASE_URL` at that URL and set `KIE_WEBHOOK_SECRET` to a `webhookHmacKey`
 generated in kie's settings. Unset means every callback is rejected.
 
+`BYTEPLUS_API_KEY` (worker only, optional) sends Seedance 2.5 to BytePlus ModelArk instead
+of kie; every other model stays on kie. It is ignored under `MODE=development`. BytePlus
+renders have no webhook (its callback is unsigned) — completion arrives through the reconcile
+poll. An Individual BytePlus account runs 3 tasks at once; extra submissions are refused,
+unbilled.
+
 Put the env files back afterwards. A stale `MODE=production` is the shape that costs
 money exactly once.
 
