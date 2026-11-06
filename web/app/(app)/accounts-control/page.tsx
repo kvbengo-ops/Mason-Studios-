@@ -1,7 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { JSX, ReactNode } from "react";
-import { DownloadIcon, TriangleAlert } from "lucide-react";
+import {
+  ArrowUpRight,
+  BarChart3,
+  DownloadIcon,
+  History,
+  SlidersHorizontal,
+  TriangleAlert,
+  Users,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { requireAdmin } from "@/actions/guard";
 import { purgeDeletedScene, purgeDeletedVersion, reapExpiredBinEntries } from "@/actions/ugc";
 import { AccountStatusBadge } from "@/components/account-status-badge";
@@ -51,10 +61,10 @@ const WINDOW_OPTIONS: readonly AccountsControlWindowDays[] = [7, 14, 30];
 
 const RUNS_PAGE_SIZE = 50;
 
-const VIEWS: readonly { id: AccountsControlView; label: string }[] = [
-  { id: "spending", label: "Spending" },
-  { id: "accounts", label: "Accounts" },
-  { id: "runs", label: "Runs" },
+const VIEWS: readonly { id: AccountsControlView; label: string; icon: LucideIcon }[] = [
+  { id: "spending", label: "Spending", icon: BarChart3 },
+  { id: "accounts", label: "Accounts", icon: Users },
+  { id: "runs", label: "Runs", icon: History },
 ];
 
 const TABS: readonly { id: AccountsControlTab; label: string }[] = [
@@ -65,12 +75,13 @@ const TABS: readonly { id: AccountsControlTab; label: string }[] = [
 
 // The Create page's segmented switch (components/create-mode-switch.tsx),
 // so every Image | Video, window and tab choice in the app reads the same.
-const SEGMENTED = "flex shrink-0 gap-1 rounded-xl border border-border bg-background/80 p-1";
+const SEGMENTED =
+  "flex max-w-full shrink-0 gap-1 rounded-xl border border-border/70 bg-muted/40 p-1";
 const SEGMENT =
-  "inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium transition-colors";
-const SEGMENT_ON = "bg-muted text-foreground shadow-sm";
+  "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+const SEGMENT_ON = "bg-card text-foreground shadow-sm";
 const SEGMENT_OFF = "text-muted-foreground hover:text-foreground";
-const PANEL = "rounded-2xl border border-border bg-card";
+const PANEL = "min-w-0 rounded-2xl border border-border/70 bg-card";
 
 function parseView(raw: string | string[] | undefined): AccountsControlView {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -162,20 +173,20 @@ function ViewPanel({
 }): JSX.Element {
   return (
     <section aria-labelledby={id} className={PANEL}>
-      <div className="flex items-center justify-between gap-4 px-5 py-4">
-        <h2 id={id} className="text-lg font-medium">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-5 py-5 sm:px-6">
+        <h2 id={id} className="text-base font-semibold tracking-tight">
           {title}
         </h2>
         <span className="text-xs tabular-nums text-muted-foreground">{meta}</span>
       </div>
-      <div className="border-t border-border px-5 py-5">{children}</div>
+      <div className="border-t border-border/60 px-5 py-5 sm:px-6 sm:py-6">{children}</div>
     </section>
   );
 }
 
 function EmptyState({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <p className="rounded-2xl border border-dashed border-border px-6 py-12 text-center text-sm text-muted-foreground">
+    <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center text-sm leading-relaxed text-muted-foreground">
       {children}
     </p>
   );
@@ -198,11 +209,9 @@ function MediaTile({
   action: ReactNode;
 }): JSX.Element {
   return (
-    <article className="flex min-w-0 flex-col gap-2">
-      <div className="relative aspect-[9/16] w-full overflow-hidden rounded-xl bg-muted">
-        {media}
-      </div>
-      <div className="flex flex-col gap-1 px-0.5">
+    <article className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card">
+      <div className="relative aspect-[9/16] w-full overflow-hidden bg-muted">{media}</div>
+      <div className="flex flex-1 flex-col gap-2 p-3">
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="truncate font-medium text-foreground">{label}</span>
           {cost !== null ? (
@@ -221,7 +230,7 @@ function MediaTile({
   );
 }
 
-const GRID = "grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 xl:grid-cols-4";
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(min(100%,11rem),1fr))] gap-4";
 
 function VideosSection({ clips }: { clips: readonly EditorVideoClip[] }): JSX.Element {
   return (
@@ -468,16 +477,34 @@ function Stat({
   value,
   sub,
   alert = false,
+  icon: Icon,
 }: {
   label: string;
   value: string;
   sub: string;
   alert?: boolean;
+  icon: LucideIcon;
 }): JSX.Element {
   return (
-    <div className="flex flex-col gap-1 bg-card px-5 py-4">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="text-2xl font-semibold tracking-tight tabular-nums">{value}</span>
+    <div
+      className={cn(
+        PANEL,
+        "relative flex flex-col gap-3 p-5 sm:p-6",
+        alert && "border-destructive/40",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+        <span
+          className={cn(
+            "grid size-9 place-items-center rounded-xl",
+            alert ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
+          )}
+        >
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
+      </div>
+      <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
       <span
         className={cn(
           "text-xs tabular-nums",
@@ -486,6 +513,80 @@ function Stat({
       >
         {sub}
       </span>
+    </div>
+  );
+}
+
+// Literal class names so Tailwind generates them; colours cycle past five.
+const DONUT_STROKES = [
+  "stroke-chart-1",
+  "stroke-chart-2",
+  "stroke-chart-3",
+  "stroke-chart-4",
+  "stroke-chart-5",
+];
+const DONUT_DOTS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
+
+/** Models used as a donut of credit share, total in the centre, legend beside it. */
+function ModelDonut({
+  usage,
+}: {
+  usage: readonly { label: string; runs: number; costUsd: number }[];
+}): JSX.Element {
+  const totalUsd = usage.reduce((sum, m) => sum + m.costUsd, 0);
+  const totalRuns = usage.reduce((sum, m) => sum + m.runs, 0);
+  const shares = usage.map((m) => (totalUsd > 0 ? (m.costUsd / totalUsd) * 100 : 0));
+  return (
+    <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
+      {/* r = 15.915 makes the circumference 100, so a dash length is a percentage. */}
+      <div className="relative size-48 shrink-0">
+        <svg aria-hidden="true" viewBox="0 0 42 42" className="size-full -rotate-90">
+          <circle cx={21} cy={21} r={15.915} fill="none" strokeWidth={6} className="stroke-muted" />
+          {usage.map((m, i) => {
+            const share = shares[i] ?? 0;
+            // ponytail: O(n²) prefix sum, n is a handful of models.
+            const offset = -shares.slice(0, i).reduce((sum, s) => sum + s, 0);
+            return share > 0 ? (
+              <circle
+                key={m.label}
+                cx={21}
+                cy={21}
+                r={15.915}
+                fill="none"
+                strokeWidth={6}
+                strokeDasharray={`${share} ${100 - share}`}
+                strokeDashoffset={offset}
+                className={DONUT_STROKES[i % DONUT_STROKES.length]}
+              />
+            ) : null;
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <span className="text-2xl font-semibold tracking-tight tabular-nums">
+            {formatCredits(totalUsd)}
+          </span>
+          <span className="text-xs text-muted-foreground">{totalRuns} runs</span>
+        </div>
+      </div>
+      <ul className="grid w-full grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+        {usage.map((m, i) => (
+          <li key={m.label} className="flex min-w-0 flex-col gap-1">
+            <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+              <span
+                aria-hidden="true"
+                className={cn("size-2 shrink-0 rounded-full", DONUT_DOTS[i % DONUT_DOTS.length])}
+              />
+              <span className="truncate" title={m.label}>
+                {m.label}
+              </span>
+            </span>
+            <span className="text-base font-semibold tabular-nums">{formatCredits(m.costUsd)}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {m.runs} run{m.runs === 1 ? "" : "s"}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -560,30 +661,27 @@ export default async function AccountsControlPage({
   if (runLog && requestedPage > totalPages && runLog.total > 0) redirect(hrefFor(totalPages));
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-3xl font-semibold tracking-tight">Accounts and Spending Control</h1>
-          <p className="text-sm text-muted-foreground">
-            Team spend, vendor balances, and everything each account has made.
+    <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:gap-8 md:px-8 md:py-10">
+      <header className="flex flex-wrap items-end justify-between gap-5">
+        <div className="flex max-w-2xl flex-col gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+            Administration
+          </span>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Accounts and Spending Control
+          </h1>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            Understand your team’s spending. Set limits. Review what gets made.
           </p>
         </div>
-
-        <nav aria-label="Spending window" className={SEGMENTED}>
-          {WINDOW_OPTIONS.map((days) => {
-            const active = windowDays === days;
-            return (
-              <Link
-                key={days}
-                href={buildAccountsControlHref({ view, days, user, tab })}
-                aria-current={active ? "page" : undefined}
-                className={cn(SEGMENT, active ? SEGMENT_ON : SEGMENT_OFF)}
-              >
-                {days} days
-              </Link>
-            );
-          })}
-        </nav>
+        <Link
+          href="/users"
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <SlidersHorizontal aria-hidden="true" className="size-4" />
+          Manage accounts
+          <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground" />
+        </Link>
       </header>
 
       {kieEmpty || runwayShort ? (
@@ -601,22 +699,24 @@ export default async function AccountsControlPage({
         </div>
       ) : null}
 
-      {/* gap-px over a border-coloured grid: hairline dividers at any width. */}
       <section
         aria-label="Credit consumption summary"
-        className={cn(PANEL, "grid gap-px overflow-hidden bg-border sm:grid-cols-3")}
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
       >
         <Stat
+          icon={BarChart3}
           label="Today (UTC)"
           value={formatCredits(overview.todaySpendUsd)}
           sub={formatUsd(overview.todaySpendUsd)}
         />
         <Stat
+          icon={History}
           label="This month"
           value={formatCredits(overview.monthSpendUsd)}
           sub={`${formatUsd(overview.monthSpendUsd)} · ${formatUsd(overview.weekSpendUsd)} last 7 days`}
         />
         <Stat
+          icon={Wallet}
           label="Kie balance"
           value={
             overview.kieBalanceUsd !== null ? formatCredits(overview.kieBalanceUsd) : "Unavailable"
@@ -624,32 +724,53 @@ export default async function AccountsControlPage({
           sub={`${overview.kieBalanceUsd !== null ? `${formatUsd(overview.kieBalanceUsd)} · ` : ""}Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
+        <GlobalSpendCapControl
+          settings={overview.globalSpendCap}
+          spentUsd={overview.teamGlobalSpendUsd}
+        />
       </section>
 
-      <nav aria-label="Sections" className={cn(SEGMENTED, "self-start")}>
-        {VIEWS.map((entry) => {
-          const active = view === entry.id;
-          return (
-            <Link
-              key={entry.id}
-              href={buildAccountsControlHref({ view: entry.id, days: windowDays, user, tab })}
-              aria-current={active ? "page" : undefined}
-              scroll={false}
-              className={cn(SEGMENT, "px-4", active ? SEGMENT_ON : SEGMENT_OFF)}
-            >
-              {entry.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
+        <nav aria-label="Sections" className={SEGMENTED}>
+          {VIEWS.map((entry) => {
+            const active = view === entry.id;
+            const Icon = entry.icon;
+            return (
+              <Link
+                key={entry.id}
+                href={buildAccountsControlHref({ view: entry.id, days: windowDays, user, tab })}
+                aria-current={active ? "page" : undefined}
+                scroll={false}
+                className={cn(SEGMENT, "sm:px-5", active ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                <Icon aria-hidden="true" className="hidden size-4 sm:block" />
+                {entry.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-muted-foreground">Reporting window · UTC</span>
+          <nav aria-label="Spending window" className={SEGMENTED}>
+            {WINDOW_OPTIONS.map((days) => (
+              <Link
+                key={days}
+                href={buildAccountsControlHref({ view, days, user, tab })}
+                aria-current={windowDays === days ? "page" : undefined}
+                scroll={false}
+                className={cn(SEGMENT, windowDays === days ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                {days} days
+              </Link>
+            ))}
+          </nav>
+        </div>
+      </div>
 
       {view === "spending" ? (
-        <>
-          <GlobalSpendCapControl
-            settings={overview.globalSpendCap}
-            spentUsd={overview.teamGlobalSpendUsd}
-          />
-
+        // Wide graph column, narrow side column: Daily spend | Top accounts,
+        // then Models used | Your team.
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <ViewPanel
             id="accounts-control-spending-heading"
             title="Daily spend"
@@ -678,10 +799,14 @@ export default async function AccountsControlPage({
               </div>
 
               <TabsContent value="bars">
+                <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
+                  <span>Credits spent</span>
+                  <span>Peak day · {formatCredits(maxDailyUsd)}</span>
+                </div>
                 <div
                   role="img"
                   aria-label={`Daily credit consumption over the last ${windowDays} days`}
-                  className="flex h-52 items-end gap-1 border-b border-border"
+                  className="flex h-64 items-end gap-1 rounded-t-lg border-b border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] pt-4 sm:h-72 sm:gap-2"
                 >
                   {series.map((point) => {
                     const totalPct = maxDailyUsd > 0 ? (point.totalUsd / maxDailyUsd) * 100 : 0;
@@ -696,11 +821,9 @@ export default async function AccountsControlPage({
                         className="group flex h-full flex-1 items-end justify-center"
                       >
                         {point.totalUsd > 0 ? (
-                          // <=24px wide, 4px rounded data-end, square at the baseline,
-                          // 2px surface gap between the stacked segments.
                           <div
-                            className="flex w-full max-w-6 flex-col gap-0.5 overflow-hidden rounded-t-[4px] transition-opacity group-hover:opacity-80"
-                            style={{ height: `${Math.max(totalPct, 6)}%` }}
+                            className="flex w-full max-w-8 flex-col overflow-hidden rounded-t-md transition-opacity group-hover:opacity-80"
+                            style={{ height: `${totalPct}%`, minHeight: 2 }}
                           >
                             {iteratePct > 0 ? (
                               <div
@@ -729,7 +852,7 @@ export default async function AccountsControlPage({
                 <div
                   role="img"
                   aria-label={`Daily credit consumption over the last ${windowDays} days`}
-                  className="relative h-52 border-y border-border"
+                  className="relative h-64 border-y border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] sm:h-72"
                 >
                   {maxLineUsd > 0 ? (
                     <span className="absolute bottom-full right-0 text-[11px] tabular-nums text-muted-foreground">
@@ -742,6 +865,27 @@ export default async function AccountsControlPage({
                     preserveAspectRatio="none"
                     className="absolute inset-0 size-full overflow-visible"
                   >
+                    {[
+                      { stroke: "stroke-chart-4", values: series.map((p) => p.iterateUsd) },
+                      { stroke: "stroke-chart-1", values: series.map((p) => p.renderUsd) },
+                    ]
+                      .filter(({ values }) => values.length > 0)
+                      .map(({ stroke, values }) => (
+                        <polyline
+                          key={`${stroke}-area`}
+                          // The reference's soft fill: the line closed down to the baseline.
+                          points={`${(0.5 / values.length) * 100},100 ${values
+                            .map(
+                              (usd, i) =>
+                                `${((i + 0.5) / values.length) * 100},${100 - pctOfMaxLine(usd)}`,
+                            )
+                            .join(" ")} ${((values.length - 0.5) / values.length) * 100},100`}
+                          stroke="none"
+                          className={
+                            stroke === "stroke-chart-1" ? "fill-chart-1/15" : "fill-chart-4/10"
+                          }
+                        />
+                      ))}
                     {[
                       { stroke: "stroke-chart-4", values: series.map((p) => p.iterateUsd) },
                       { stroke: "stroke-chart-1", values: series.map((p) => p.renderUsd) },
@@ -763,8 +907,7 @@ export default async function AccountsControlPage({
                       />
                     ))}
                   </svg>
-                  {/* ponytail: CSS hover keeps this a server component; no keyboard
-                    tooltip, the sr-only table below carries the same numbers. */}
+                  {/* Daily totals below make the same figures available without hovering. */}
                   <div className="absolute inset-0 flex">
                     {series.map((point, i) => (
                       <div key={point.date} className="group relative h-full flex-1">
@@ -802,27 +945,6 @@ export default async function AccountsControlPage({
                     ))}
                   </div>
                 </div>
-                <table className="sr-only">
-                  <caption>Daily spend</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Day</th>
-                      <th scope="col">Video</th>
-                      <th scope="col">Images</th>
-                      <th scope="col">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {series.map((point) => (
-                      <tr key={point.date}>
-                        <th scope="row">{point.label}</th>
-                        <td>{formatCredits(point.renderUsd)}</td>
-                        <td>{formatCredits(point.iterateUsd)}</td>
-                        <td>{formatDual(point.totalUsd)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </TabsContent>
               <div className="flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
                 <span>{series[0]?.label ?? ""}</span>
@@ -832,6 +954,102 @@ export default async function AccountsControlPage({
                 <span>{series[series.length - 1]?.label ?? ""}</span>
               </div>
             </Tabs>
+            <details className="mt-5 border-t border-border/60 pt-4">
+              <summary className="cursor-pointer rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                View daily totals
+              </summary>
+              <div className="mt-4">
+                <Table>
+                  <caption className="sr-only">Daily spend</caption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead scope="col">Day</TableHead>
+                      <TableHead scope="col" numeric>
+                        Video
+                      </TableHead>
+                      <TableHead scope="col" numeric>
+                        Images
+                      </TableHead>
+                      <TableHead scope="col" numeric>
+                        Total
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {series.map((point) => (
+                      <TableRow key={point.date}>
+                        <TableHead scope="row">{point.label}</TableHead>
+                        <TableCell numeric>{formatCredits(point.renderUsd)}</TableCell>
+                        <TableCell numeric>{formatCredits(point.iterateUsd)}</TableCell>
+                        <TableCell numeric>{formatDual(point.totalUsd)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </details>
+          </ViewPanel>
+
+          <ViewPanel
+            id="accounts-control-top-accounts-heading"
+            title="Top accounts"
+            meta={`Spend · ${windowDays} days`}
+          >
+            {overview.accounts.length === 0 ? (
+              <EmptyState>No accounts found.</EmptyState>
+            ) : (
+              <div className="-mx-5 sm:-mx-6">
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="pl-5 sm:pl-6">Name</TableHead>
+                      <TableHead numeric className="w-24 pr-5 sm:pr-6">
+                        Spend
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* ponytail: top 8 here, the full list lives on the Accounts view. */}
+                    {[...overview.accounts]
+                      .sort((a, b) => b.rangeTotalUsd - a.rangeTotalUsd)
+                      .slice(0, 8)
+                      .map((account) => (
+                        <TableRow key={account.id}>
+                          <TableCell className="py-3 pl-5 sm:pl-6">
+                            <Link
+                              href={buildAccountsControlHref({
+                                view: "accounts",
+                                days: windowDays,
+                                user: account.id,
+                                tab,
+                              })}
+                              className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <span
+                                aria-hidden="true"
+                                className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-semibold uppercase text-primary"
+                              >
+                                {account.username.slice(0, 2)}
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">
+                                  {account.username}
+                                </span>
+                                <span className="block truncate text-[11px] text-muted-foreground">
+                                  {account.email}
+                                </span>
+                              </span>
+                            </Link>
+                          </TableCell>
+                          <TableCell numeric className="py-3 pr-5 font-medium sm:pr-6">
+                            {formatCredits(account.rangeTotalUsd)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
           </ViewPanel>
 
           <ViewPanel
@@ -842,38 +1060,16 @@ export default async function AccountsControlPage({
             {overview.modelUsage.length === 0 ? (
               <EmptyState>No billed runs in this window.</EmptyState>
             ) : (
-              <ul className="flex flex-col gap-3">
-                {overview.modelUsage.map((usage) => (
-                  <li
-                    key={usage.label}
-                    className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto]"
-                  >
-                    <span className="truncate" title={usage.label}>
-                      {usage.label}
-                    </span>
-                    <div className="h-2">
-                      <div
-                        className="h-full min-w-1 rounded-r-[4px] bg-chart-1"
-                        style={{
-                          width: `${(usage.runs / (overview.modelUsage[0]?.runs ?? 1)) * 100}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="text-xs tabular-nums text-muted-foreground">
-                      {`${usage.runs} run${usage.runs === 1 ? "" : "s"} · ${formatCredits(usage.costUsd)}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <ModelDonut usage={overview.modelUsage} />
             )}
           </ViewPanel>
 
           {claudeSpend?.status === "ok" ? (
-            <p className="text-xs tabular-nums text-muted-foreground">
+            <p className="text-xs tabular-nums text-muted-foreground xl:col-span-2">
               Claude API this month: {formatUsd(claudeSpend.usd)}
             </p>
           ) : null}
-        </>
+        </div>
       ) : null}
 
       {view === "accounts" ? (
@@ -882,16 +1078,20 @@ export default async function AccountsControlPage({
           title="Accounts"
           meta={`${overview.accounts.length} account${overview.accounts.length === 1 ? "" : "s"}`}
         >
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
             {/* ONE account picker: the per-account ranking is also the selector,
                 so there is no second strip of the same names to keep in sync. */}
-            <aside className="flex flex-col gap-1 rounded-xl bg-muted/40 p-1.5 lg:sticky lg:top-6">
+            <aside className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 lg:sticky lg:top-6">
+              <div className="flex items-center justify-between px-1 py-1 text-xs text-muted-foreground">
+                <span className="font-medium">Team directory</span>
+                <span>Spend · {windowDays} days</span>
+              </div>
               {overview.accounts.length === 0 ? (
                 <p className="px-3 py-6 text-sm text-muted-foreground">No accounts found.</p>
               ) : (
                 <nav
                   aria-label="Select account"
-                  className="flex max-h-[28rem] flex-col gap-0.5 overflow-y-auto"
+                  className="flex max-h-[22rem] flex-col gap-2 overflow-y-auto lg:max-h-[36rem]"
                 >
                   {overview.accounts.map((account) => {
                     const active = selectedAccount?.id === account.id;
@@ -915,13 +1115,33 @@ export default async function AccountsControlPage({
                         aria-current={active ? "true" : undefined}
                         scroll={false}
                         className={cn(
-                          "flex flex-col gap-2 rounded-xl px-3 py-2.5 transition-colors",
-                          active ? "bg-card shadow-sm" : "hover:bg-card/60",
+                          "flex flex-col gap-3 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          active
+                            ? "border-primary/40 bg-card shadow-sm"
+                            : "border-transparent hover:border-border hover:bg-card/60",
                         )}
                       >
                         <span className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
-                            {account.username}
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold uppercase",
+                                active
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {account.username.slice(0, 2)}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium text-foreground">
+                                {account.username}
+                              </span>
+                              <span className="block truncate text-[11px] text-muted-foreground">
+                                {account.email}
+                              </span>
+                            </span>
                           </span>
                           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                             {formatCredits(account.rangeTotalUsd)}
@@ -947,7 +1167,7 @@ export default async function AccountsControlPage({
               )}
               <Link
                 href="/users"
-                className="mt-1 rounded-xl px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
+                className="rounded-lg border-t border-border/60 px-3 py-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Approvals &amp; allowances →
               </Link>
@@ -959,7 +1179,7 @@ export default async function AccountsControlPage({
             >
               {selectedAccount ? (
                 <>
-                  <div className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-5">
+                  <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="flex min-w-0 flex-col gap-1.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3
@@ -974,12 +1194,8 @@ export default async function AccountsControlPage({
                           status={selectedAccount.status}
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedAccount.email} ·{" "}
-                        <span className="tabular-nums">
-                          {windowDays} days {formatDual(selectedAccount.rangeTotalUsd)} · all-time{" "}
-                          {formatDual(selectedAccount.allTimeSpendUsd)}
-                        </span>
+                      <p className="break-all text-xs text-muted-foreground">
+                        {selectedAccount.email}
                       </p>
                     </div>
 
@@ -1007,6 +1223,24 @@ export default async function AccountsControlPage({
                     </nav>
                   </div>
 
+                  <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 xl:grid-cols-4">
+                    {[
+                      { label: `${windowDays}-day spend`, usd: selectedAccount.rangeTotalUsd },
+                      { label: "Video", usd: selectedAccount.rangeRenderUsd },
+                      { label: "Images", usd: selectedAccount.rangeIterateUsd },
+                      { label: "All-time spend", usd: selectedAccount.allTimeSpendUsd },
+                    ].map((stat) => (
+                      <div key={stat.label} className="min-w-0 bg-card p-4">
+                        <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
+                        <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
+                          {formatCredits(stat.usd)}
+                        </dd>
+                        <dd className="mt-1 text-xs tabular-nums text-muted-foreground">
+                          {formatUsd(stat.usd)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
                   {inspectorContent}
                 </>
               ) : (
@@ -1032,30 +1266,53 @@ export default async function AccountsControlPage({
           {runLog.rows.length === 0 ? (
             <EmptyState>No runs in this window.</EmptyState>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-5">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Every recorded attempt across the team, including failures. Costs are shown in
+                credits and USD.
+              </p>
               <div className="overflow-hidden rounded-xl border border-border">
-                <Table>
-                  <TableHeader>
+                <Table className="min-w-[680px]">
+                  <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead className="whitespace-nowrap">Date</TableHead>
                       <TableHead>Project</TableHead>
                       <TableHead className="whitespace-nowrap">Model</TableHead>
                       <TableHead numeric>Cost</TableHead>
-                      <TableHead>Error</TableHead>
+                      <TableHead>Details</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {runLog.rows.map((run) => (
-                      <TableRow key={run.id}>
-                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                      <TableRow key={run.id} className="align-top">
+                        <TableCell className="whitespace-nowrap py-4 text-xs text-muted-foreground">
                           {dateTimeFormatter.format(new Date(run.createdAt))}
                         </TableCell>
-                        <TableCell>{run.projectTitle ?? "—"}</TableCell>
-                        <TableCell className="whitespace-nowrap">{run.model}</TableCell>
-                        <TableCell numeric>
-                          {run.costUsd !== null ? formatUsd(run.costUsd) : "Not billed"}
+                        <TableCell className="min-w-36 py-4 font-medium">
+                          {run.projectTitle ?? "—"}
                         </TableCell>
-                        <TableCell className="text-destructive">{run.error ?? ""}</TableCell>
+                        <TableCell className="max-w-64 break-words py-4 text-xs">
+                          <span className="inline-block rounded-md bg-muted px-2 py-1">
+                            {run.model}
+                          </span>
+                        </TableCell>
+                        <TableCell numeric className="py-4">
+                          {run.costUsd !== null ? (
+                            <>
+                              <span className="block font-medium">
+                                {formatCredits(run.costUsd)}
+                              </span>
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                {formatUsd(run.costUsd)}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Not billed</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-sm break-words py-4 text-xs leading-relaxed text-destructive">
+                          {run.error ?? "—"}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
