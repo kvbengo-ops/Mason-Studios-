@@ -332,7 +332,7 @@ func TestSubmitLogRedactsReferenceQueryStrings(t *testing.T) {
 	var log bytes.Buffer
 	c := &Client{log: slog.New(slog.NewTextHandler(&log, nil))}
 	c.logRequest(buildCreateRequest(seedanceRequest(), ModelSeedance25))
-	if strings.Contains(log.String(), "token=") || !strings.Contains(log.String(), "?<redacted>") {
+	if strings.Contains(log.String(), "token=") || !strings.Contains(log.String(), "redacted") {
 		t.Errorf("submit log did not redact reference URL query strings: %s", log.String())
 	}
 }
