@@ -1,4 +1,5 @@
 "use client";
+import { formatUsd } from "@/lib/format-usd";
 
 // The avatar menu's pending-request cancel control (web/components/
 // account-menu.tsx). requestAllowance's own returned message
@@ -30,22 +31,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { PendingButton } from "@/components/pending-button";
 import { cancelAllowanceRequest } from "@/actions/allowance";
-import { formatAllowanceAmount } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
 
 export function CancelAllowanceRequestDialog({
   open,
   onOpenChange,
   requestId,
   requestedUsd,
-  displayUnit = "usd",
 }: {
   /** Controlled by account-menu.tsx — see this file's header for why. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
   requestId: string;
   requestedUsd: number;
-  displayUnit?: AllowanceDisplayUnit;
 }): JSX.Element {
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -76,9 +73,9 @@ export function CancelAllowanceRequestDialog({
         <DialogHeader>
           <DialogTitle>Cancel allowance request?</DialogTitle>
           <DialogDescription>
-            Withdraws your pending request for {formatAllowanceAmount(requestedUsd, displayUnit)}.
-            You can submit a new one right away — this only clears the way for that, it does not
-            change your current allowance.
+            Withdraws your pending request for {formatUsd(requestedUsd)}. You can submit a new one
+            right away — this only clears the way for that, it does not change your current
+            allowance.
           </DialogDescription>
         </DialogHeader>
 

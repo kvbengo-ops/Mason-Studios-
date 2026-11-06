@@ -1,4 +1,5 @@
 "use client";
+import { formatUsd } from "@/lib/format-usd";
 
 import { useEffect, useState, useTransition } from "react";
 import type { FormEvent, JSX } from "react";
@@ -14,7 +15,6 @@ import { findElementByTag, type ElementTag } from "@/lib/elements";
 import { tagsInOrder } from "@/lib/element-tags";
 import { unknownPromptTags, unknownTagsWarning } from "@/lib/unknown-tags";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
-import { formatAllowanceAmount } from "@/lib/format-usd";
 import { imageCostUsd, type ImageModelDescriptor } from "@/lib/models";
 import type { ImageResolutionId } from "@/lib/image-resolutions";
 import type { ImageAspectRatio } from "@/lib/image-aspect-ratios";
@@ -67,7 +67,6 @@ export interface ImageGeneratorFormProps {
    * shown here and the price the reservation holds come from one source.
    */
   models: readonly ImageModelDescriptor[];
-  displayUnit: "credits" | "dual";
   disabledReason: string | null;
   /**
    * Scopes the picker's uploads, exactly as it does on /ugc — or null on the
@@ -110,7 +109,6 @@ type SettledResult = Exclude<GenerateProjectImageResult, { pendingRunId: string 
 export function ImageGeneratorForm({
   action,
   models,
-  displayUnit,
   disabledReason: unavailableReason,
   projectId,
   elements,
@@ -204,13 +202,11 @@ export function ImageGeneratorForm({
   const selectedResolution = selectedModel.resolutions?.includes(resolution) ? resolution : "1K";
   const selectedCostUsd = imageCostUsd(selectedModel, selectedResolution);
   const costLabel =
-    selectedCostUsd === null
-      ? "Pricing verification pending"
-      : formatAllowanceAmount(selectedCostUsd, displayUnit);
+    selectedCostUsd === null ? "Pricing verification pending" : formatUsd(selectedCostUsd);
   const batchCostLabel =
     selectedCostUsd === null
       ? "Pricing verification pending"
-      : formatAllowanceAmount(selectedCostUsd * imageCount, displayUnit);
+      : formatUsd(selectedCostUsd * imageCount);
 
   // ---------------------------------------------------------------------
   // DRAFT PERSISTENCE (0088)
@@ -653,7 +649,7 @@ export function ImageGeneratorForm({
                               <span className="truncate text-xs text-muted-foreground">
                                 {m.costUsd === null
                                   ? "Pricing verification pending"
-                                  : `${formatAllowanceAmount(m.costUsd, displayUnit)} per image`}
+                                  : `${formatUsd(m.costUsd)} per image`}
                                 {m.editId === null
                                   ? m.referenceDisabledReason
                                     ? " · references temporarily unavailable"
@@ -738,9 +734,7 @@ export function ImageGeneratorForm({
                               >
                                 <span className="flex-1">{tier}</span>
                                 <span className="text-xs font-normal text-muted-foreground">
-                                  {cost === null
-                                    ? "Pricing pending"
-                                    : formatAllowanceAmount(cost, displayUnit)}
+                                  {cost === null ? "Pricing pending" : formatUsd(cost)}
                                 </span>
                                 {tier === selectedResolution ? (
                                   <Check aria-hidden="true" className="size-4 text-foreground" />

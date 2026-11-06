@@ -30,7 +30,6 @@ import { latestErrorsByScene } from "@/lib/render-error";
 import { UgcLiveRefresh } from "@/components/ugc-live-refresh";
 import { Spinner } from "@/components/spinner";
 import { filenameForClip } from "@/lib/manifest";
-import { CREDITS_PER_USD } from "@/lib/kie/rates";
 import { ugcOptions } from "@/lib/ugc-options";
 import { UgcColumn, type UgcOption } from "@/components/ugc-column";
 import { UgcTitle } from "@/components/ugc-title";
@@ -426,7 +425,7 @@ export default async function UgcPage({
             const key = posterByScene.get(row.id);
             return key ? await signedUrl(key, RESULT_SIGNED_URL_TTL_SECONDS) : null;
           })(),
-          creditsBilled: usdBilled === undefined ? null : Math.round(usdBilled * CREDITS_PER_USD),
+          usdBilled: usdBilled ?? null,
         };
       }),
     );

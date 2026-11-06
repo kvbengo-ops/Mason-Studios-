@@ -78,10 +78,7 @@ export function TopBar({
         },
         (payload): void => {
           const notification = notificationFromRealtime(payload.new as NotificationRow);
-          if (
-            notification.kind === "image_queued" ||
-            notification.kind === "image_generating"
-          ) {
+          if (notification.kind === "image_queued" || notification.kind === "image_generating") {
             return;
           }
           setNotificationCount((count) => (count ?? 0) + 1);
@@ -174,11 +171,13 @@ export function TopBar({
                   aria-label="Filter notifications"
                   className="mt-3 flex gap-1 rounded-lg bg-muted/60 p-1"
                 >
-                  {([
-                    ["all", "All"],
-                    ["activity", "Activity"],
-                    ["credits", "Credits"],
-                  ] as const).map(([value, label]) => (
+                  {(
+                    [
+                      ["all", "All"],
+                      ["activity", "Activity"],
+                      ["credits", "Allowance"],
+                    ] as const
+                  ).map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
@@ -212,7 +211,7 @@ export function TopBar({
                             {notification.title}
                           </span>
                           <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                            {notification.kind.startsWith("credit_") ? "Credits" : "Activity"}
+                            {notification.kind.startsWith("credit_") ? "Allowance" : "Activity"}
                           </span>
                         </span>
                         <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">
@@ -225,7 +224,7 @@ export function TopBar({
               ) : (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">
                   {filter === "credits"
-                    ? "No credit notifications yet."
+                    ? "No allowance notifications yet."
                     : filter === "activity"
                       ? "No activity notifications yet."
                       : "No notifications yet."}

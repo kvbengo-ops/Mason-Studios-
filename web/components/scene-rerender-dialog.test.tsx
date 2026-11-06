@@ -217,7 +217,6 @@ describe("SceneRerenderDialog — the settings behind the price", () => {
         sceneId="scene-1"
         sceneLabel="Scene 4"
         costUsd={0.56}
-        credits={112}
         settingsLabel="Seedance 2.5 · 480p · 4s"
         budget={BUDGET}
       />,
@@ -226,7 +225,6 @@ describe("SceneRerenderDialog — the settings behind the price", () => {
     await user.click(screen.getByRole("button", { name: /^re-render/i }));
     const dialog = await screen.findByRole("dialog");
 
-    expect(dialog.textContent).toContain("112 credits");
     expect(dialog.textContent).toContain("$0.56");
     expect(dialog.textContent).toContain("Seedance 2.5 · 480p · 4s");
   });

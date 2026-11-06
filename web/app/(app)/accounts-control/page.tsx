@@ -48,7 +48,7 @@ import {
 import { getAnthropicMonthlySpend } from "@/lib/anthropic-spend";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { asAttachment } from "@/lib/download-url";
-import { formatCredits, formatDual, formatUsd } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { pageRange, parsePage, totalPageCount } from "@/lib/pagination";
 import { formatRunwayDays, isRunwayShort } from "@/lib/runway";
 import { extFromFilename } from "@/lib/storage";
@@ -215,9 +215,7 @@ function MediaTile({
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="truncate font-medium text-foreground">{label}</span>
           {cost !== null ? (
-            <span className="shrink-0 tabular-nums text-muted-foreground">
-              {formatCredits(cost)}
-            </span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{formatUsd(cost)}</span>
           ) : null}
         </div>
         <p className="line-clamp-2 break-words text-sm leading-snug">{prompt}</p>
@@ -563,7 +561,7 @@ function ModelDonut({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="text-2xl font-semibold tracking-tight tabular-nums">
-            {formatCredits(totalUsd)}
+            {formatUsd(totalUsd)}
           </span>
           <span className="text-xs text-muted-foreground">{totalRuns} runs</span>
         </div>
@@ -580,7 +578,7 @@ function ModelDonut({
                 {m.label}
               </span>
             </span>
-            <span className="text-base font-semibold tabular-nums">{formatCredits(m.costUsd)}</span>
+            <span className="text-base font-semibold tabular-nums">{formatUsd(m.costUsd)}</span>
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {m.runs} run{m.runs === 1 ? "" : "s"}
             </span>
@@ -692,36 +690,33 @@ export default async function AccountsControlPage({
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <p>
             <span className="font-medium">
-              {kieEmpty ? "Kie account is out of credits." : "Kie credits are running low."}
+              {kieEmpty ? "Kie account is out of funds." : "Kie funds are running low."}
             </span>{" "}
             Fund the Kie account before starting more paid renders.
           </p>
         </div>
       ) : null}
 
-      <section
-        aria-label="Credit consumption summary"
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
-      >
+      <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat
           icon={BarChart3}
           label="Today (UTC)"
-          value={formatCredits(overview.todaySpendUsd)}
-          sub={formatUsd(overview.todaySpendUsd)}
+          value={formatUsd(overview.todaySpendUsd)}
+          sub="So far today"
         />
         <Stat
           icon={History}
           label="This month"
-          value={formatCredits(overview.monthSpendUsd)}
-          sub={`${formatUsd(overview.monthSpendUsd)} · ${formatUsd(overview.weekSpendUsd)} last 7 days`}
+          value={formatUsd(overview.monthSpendUsd)}
+          sub={`${formatUsd(overview.weekSpendUsd)} last 7 days`}
         />
         <Stat
           icon={Wallet}
           label="Kie balance"
           value={
-            overview.kieBalanceUsd !== null ? formatCredits(overview.kieBalanceUsd) : "Unavailable"
+            overview.kieBalanceUsd !== null ? formatUsd(overview.kieBalanceUsd) : "Unavailable"
           }
-          sub={`${overview.kieBalanceUsd !== null ? `${formatUsd(overview.kieBalanceUsd)} · ` : ""}Runway ${formatRunwayDays(overview.runwayEstimate)}`}
+          sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
         {/* ponytail: spend only — BytePlus's balance API needs a separate AK/SK with billing read. */}
@@ -781,18 +776,18 @@ export default async function AccountsControlPage({
           <ViewPanel
             id="accounts-control-spending-heading"
             title="Daily spend"
-            meta={`${formatDual(overview.rangeCategoryTotals.totalUsd)} in ${windowDays} days`}
+            meta={`${formatUsd(overview.rangeCategoryTotals.totalUsd)} in ${windowDays} days`}
           >
             <Tabs defaultValue="bars" className="gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
-                    Video {formatCredits(overview.rangeCategoryTotals.renderUsd)}
+                    Video {formatUsd(overview.rangeCategoryTotals.renderUsd)}
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
-                    Images {formatCredits(overview.rangeCategoryTotals.iterateUsd)}
+                    Images {formatUsd(overview.rangeCategoryTotals.iterateUsd)}
                   </span>
                 </div>
                 <TabsList aria-label="Chart type">
@@ -807,12 +802,12 @@ export default async function AccountsControlPage({
 
               <TabsContent value="bars">
                 <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
-                  <span>Credits spent</span>
-                  <span>Peak day · {formatCredits(maxDailyUsd)}</span>
+                  <span>Spent</span>
+                  <span>Peak day · {formatUsd(maxDailyUsd)}</span>
                 </div>
                 <div
                   role="img"
-                  aria-label={`Daily credit consumption over the last ${windowDays} days`}
+                  aria-label={`Daily spend over the last ${windowDays} days`}
                   className="flex h-64 items-end gap-1 rounded-t-lg border-b border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] pt-4 sm:h-72 sm:gap-2"
                 >
                   {series.map((point) => {
@@ -824,7 +819,7 @@ export default async function AccountsControlPage({
                     return (
                       <div
                         key={point.date}
-                        title={`${point.label} (${point.date}): ${formatDual(point.totalUsd)} — Video: ${formatCredits(point.renderUsd)}, Images: ${formatCredits(point.iterateUsd)}`}
+                        title={`${point.label} (${point.date}): ${formatUsd(point.totalUsd)} — Video: ${formatUsd(point.renderUsd)}, Images: ${formatUsd(point.iterateUsd)}`}
                         className="group flex h-full flex-1 items-end justify-center"
                       >
                         {point.totalUsd > 0 ? (
@@ -858,12 +853,12 @@ export default async function AccountsControlPage({
                 {/* The top border is the peak day, the bottom border is zero. */}
                 <div
                   role="img"
-                  aria-label={`Daily credit consumption over the last ${windowDays} days`}
+                  aria-label={`Daily spend over the last ${windowDays} days`}
                   className="relative h-64 border-y border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] sm:h-72"
                 >
                   {maxLineUsd > 0 ? (
                     <span className="absolute bottom-full right-0 text-[11px] tabular-nums text-muted-foreground">
-                      {formatCredits(maxLineUsd)}
+                      {formatUsd(maxLineUsd)}
                     </span>
                   ) : null}
                   <svg
@@ -937,14 +932,14 @@ export default async function AccountsControlPage({
                             )}
                           >
                             <span className="text-muted-foreground">{point.label}</span>
-                            <span className="font-medium">{formatDual(point.totalUsd)}</span>
+                            <span className="font-medium">{formatUsd(point.totalUsd)}</span>
                             <span className="inline-flex items-center gap-1.5">
                               <span className="size-2 rounded-full bg-chart-1" />
-                              {formatCredits(point.renderUsd)} Video
+                              {formatUsd(point.renderUsd)} Video
                             </span>
                             <span className="inline-flex items-center gap-1.5">
                               <span className="size-2 rounded-full bg-chart-4" />
-                              {formatCredits(point.iterateUsd)} Images
+                              {formatUsd(point.iterateUsd)} Images
                             </span>
                           </div>
                         </div>
@@ -986,9 +981,9 @@ export default async function AccountsControlPage({
                     {series.map((point) => (
                       <TableRow key={point.date}>
                         <TableHead scope="row">{point.label}</TableHead>
-                        <TableCell numeric>{formatCredits(point.renderUsd)}</TableCell>
-                        <TableCell numeric>{formatCredits(point.iterateUsd)}</TableCell>
-                        <TableCell numeric>{formatDual(point.totalUsd)}</TableCell>
+                        <TableCell numeric>{formatUsd(point.renderUsd)}</TableCell>
+                        <TableCell numeric>{formatUsd(point.iterateUsd)}</TableCell>
+                        <TableCell numeric>{formatUsd(point.totalUsd)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -1049,7 +1044,7 @@ export default async function AccountsControlPage({
                             </Link>
                           </TableCell>
                           <TableCell numeric className="py-3 pr-5 font-medium sm:pr-6">
-                            {formatCredits(account.rangeTotalUsd)}
+                            {formatUsd(account.rangeTotalUsd)}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -1151,7 +1146,7 @@ export default async function AccountsControlPage({
                             </span>
                           </span>
                           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                            {formatCredits(account.rangeTotalUsd)}
+                            {formatUsd(account.rangeTotalUsd)}
                           </span>
                         </span>
                         <span className="h-1 w-full overflow-hidden rounded-full bg-border/60">
@@ -1240,7 +1235,7 @@ export default async function AccountsControlPage({
                       <div key={stat.label} className="min-w-0 bg-card p-4">
                         <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
                         <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
-                          {formatCredits(stat.usd)}
+                          {formatUsd(stat.usd)}
                         </dd>
                         <dd className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {formatUsd(stat.usd)}
@@ -1306,9 +1301,7 @@ export default async function AccountsControlPage({
                         <TableCell numeric className="py-4">
                           {run.costUsd !== null ? (
                             <>
-                              <span className="block font-medium">
-                                {formatCredits(run.costUsd)}
-                              </span>
+                              <span className="block font-medium">{formatUsd(run.costUsd)}</span>
                               <span className="mt-1 block text-xs text-muted-foreground">
                                 {formatUsd(run.costUsd)}
                               </span>

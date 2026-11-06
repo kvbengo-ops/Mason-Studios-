@@ -41,7 +41,7 @@ describe("WeeklyAllowanceDialog", () => {
 
     await user.click(screen.getByRole("button", { name: /allowance.*editor@example\.com/i }));
     const dialog = screen.getByRole("dialog");
-    const input = within(dialog).getByLabelText("Credits per week") as HTMLInputElement;
+    const input = within(dialog).getByLabelText("USD per week") as HTMLInputElement;
 
     expect(input.min).toBe("0");
     // The copy has to state the grant consequence, because zero is the one
@@ -84,9 +84,9 @@ describe("WeeklyAllowanceDialog", () => {
 
     await user.click(screen.getByRole("button", { name: /allowance.*editor@example\.com/i }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).queryByLabelText("Credits per day")).toBeNull();
-    const hourlyInput = within(dialog).getByLabelText("Credits per rolling hour");
-    await user.type(hourlyInput, "1000");
+    expect(within(dialog).queryByLabelText("USD per day")).toBeNull();
+    const hourlyInput = within(dialog).getByLabelText("USD per rolling hour");
+    await user.type(hourlyInput, "5");
     await user.click(within(dialog).getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(setWeeklyCapOverride).toHaveBeenCalledWith("editor-1", 10));

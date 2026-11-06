@@ -50,7 +50,7 @@ import {
   weeklyCapOverrideError,
   type BulkAllowanceScope,
 } from "@/lib/allowance";
-import { creditsToUsd, formatCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
 
 function Toggle({
@@ -116,11 +116,11 @@ export function AllEditorsAllowanceDialog({
   hourlyCapInUse?: boolean;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
-  const [credits, setCredits] = useState("2000");
+  const [credits, setCredits] = useState("10");
   const [dailyOn, setDailyOn] = useState(dailyCapEnabled);
-  const [dailyCredits, setDailyCredits] = useState("400");
+  const [dailyCredits, setDailyCredits] = useState("2");
   const [hourlyOn, setHourlyOn] = useState(hourlyCapInUse);
-  const [hourlyCredits, setHourlyCredits] = useState("100");
+  const [hourlyCredits, setHourlyCredits] = useState("0.5");
   // "all" is the default because it is what this control did before scopes
   // existed — an admin who opens it and clicks straight through gets the
   // behaviour they already knew.
@@ -199,10 +199,10 @@ export function AllEditorsAllowanceDialog({
   function handleSave(): void {
     const entered = Number(credits);
     if (!Number.isFinite(entered) || entered <= 0) {
-      setErrorMessage("Enter a positive number of credits.");
+      setErrorMessage("Enter a positive dollar amount.");
       return;
     }
-    const weeklyCapUsd = creditsToUsd(entered);
+    const weeklyCapUsd = entered;
     const error = weeklyCapOverrideError(weeklyCapUsd, maxWeeklyCapUsd);
     if (error) {
       setErrorMessage(error);
@@ -218,7 +218,7 @@ export function AllEditorsAllowanceDialog({
         setErrorMessage("Enter zero or a positive daily cap.");
         return;
       }
-      dailyCapUsd = creditsToUsd(enteredDaily);
+      dailyCapUsd = enteredDaily;
       const dailyError = dailyCapOverrideError(dailyCapUsd, maxDailyCapUsd);
       if (dailyError) {
         setErrorMessage(dailyError);
@@ -235,7 +235,7 @@ export function AllEditorsAllowanceDialog({
         setErrorMessage("Enter zero or a positive hourly cap.");
         return;
       }
-      hourlyCapUsd = creditsToUsd(enteredHourly);
+      hourlyCapUsd = enteredHourly;
     }
 
     submit(weeklyCapUsd, dailyOn, dailyCapUsd, hourlyCapUsd);
@@ -292,19 +292,19 @@ export function AllEditorsAllowanceDialog({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="all-editors-allowance-credits">Credits per week</Label>
+          <Label htmlFor="all-editors-allowance-credits">USD per week</Label>
           <Input
             id="all-editors-allowance-credits"
             type="number"
             min={1}
-            step={100}
+            step={0.01}
             value={credits}
             onChange={(event) => setCredits(event.target.value)}
             disabled={isPending}
           />
           <p className="text-xs text-muted-foreground">
-            Up to {formatCredits(maxWeeklyCapUsd)}. This is not the role default — it sets a value
-            on the accounts that exist today. Someone who signs up later starts on the role default
+            Up to {formatUsd(maxWeeklyCapUsd)}. This is not the role default — it sets a value on
+            the accounts that exist today. Someone who signs up later starts on the role default
             until you run this again. &ldquo;Use role defaults&rdquo; clears it for everyone.
           </p>
         </div>
@@ -326,19 +326,19 @@ export function AllEditorsAllowanceDialog({
           </div>
           {dailyOn ? (
             <div className="grid gap-2">
-              <Label htmlFor="all-editors-daily-credits">Credits per day</Label>
+              <Label htmlFor="all-editors-daily-credits">USD per day</Label>
               <Input
                 id="all-editors-daily-credits"
                 type="number"
                 min={0}
-                step={100}
+                step={0.01}
                 value={dailyCredits}
                 onChange={(event) => setDailyCredits(event.target.value)}
                 disabled={isPending}
               />
               <p className="text-xs text-muted-foreground">
-                Anything at or over the weekly amount never fires. Up to{" "}
-                {formatCredits(maxDailyCapUsd)}.
+                Anything at or over the weekly amount never fires. Up to {formatUsd(maxDailyCapUsd)}
+                .
               </p>
             </div>
           ) : null}
@@ -380,12 +380,12 @@ export function AllEditorsAllowanceDialog({
           </div>
           {hourlyOn ? (
             <div className="grid gap-2">
-              <Label htmlFor="all-editors-hourly-credits">Credits per hour</Label>
+              <Label htmlFor="all-editors-hourly-credits">USD per hour</Label>
               <Input
                 id="all-editors-hourly-credits"
                 type="number"
                 min={0}
-                step={10}
+                step={0.01}
                 value={hourlyCredits}
                 onChange={(event) => setHourlyCredits(event.target.value)}
                 disabled={isPending}

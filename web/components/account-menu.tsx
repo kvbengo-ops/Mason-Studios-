@@ -50,8 +50,7 @@ import {
 import type { MeterWindow } from "@/components/sidebar-budget";
 import type { SidebarBudget } from "@/lib/sidebar-budget";
 import { cn } from "@/lib/utils";
-import { formatAllowanceAmount, remainingForDisplayUsd } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { budgetTier } from "@/lib/budget-tier";
 import type { BudgetTier } from "@/lib/budget-tier";
 
@@ -61,7 +60,6 @@ const usdFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
 });
 
-const UNIT_STORAGE_KEY = "credits-display-unit";
 const RING_RADIUS = 18;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
@@ -267,29 +265,6 @@ export function AccountMenu({
   const [passDialogOpen, setPassDialogOpen] = useState(false);
   const canPass = budget?.role === "editor" || budget?.role === "trusted_editor";
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  // cr | $ — the viewer's choice, remembered per browser. Admins start on
-  // dollars, everyone else on credits. Read after mount: the server can't see
-  // localStorage, and a different first paint would break hydration.
-  const [unitChoice, setUnitChoice] = useState<AllowanceDisplayUnit | null>(null);
-  const allowanceDisplayUnit: AllowanceDisplayUnit = unitChoice ?? (isAdmin ? "usd" : "credits");
-  /* eslint-disable react-hooks/set-state-in-effect -- see the note above */
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(UNIT_STORAGE_KEY);
-      if (saved === "usd" || saved === "credits") setUnitChoice(saved);
-    } catch {
-      // Blocked site data: the role default stands.
-    }
-  }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
-  function chooseUnit(unit: AllowanceDisplayUnit): void {
-    setUnitChoice(unit);
-    try {
-      window.localStorage.setItem(UNIT_STORAGE_KEY, unit);
-    } catch {
-      // Not remembered; this view still switches.
-    }
-  }
 
   let binding: MeterWindow | null = null;
   let others: MeterWindow[] = [];
@@ -335,9 +310,7 @@ export function AccountMenu({
   const ring = binding
     ? {
         ratio:
-          binding.capUsd > 0
-            ? Math.min(Math.max(binding.remainingUsd / binding.capUsd, 0), 1)
-            : 0,
+          binding.capUsd > 0 ? Math.min(Math.max(binding.remainingUsd / binding.capUsd, 0), 1) : 0,
         tier: budgetTier(binding.remainingUsd, binding.capUsd),
       }
     : null;
@@ -421,12 +394,10 @@ export function AccountMenu({
             <div className="flex flex-col gap-1.5 px-2 py-1.5">
               <BudgetMeter
                 window={binding}
-                displayUnit={allowanceDisplayUnit}
-                onDisplayUnitChange={chooseUnit}
                 grantBreakdown={binding.period === "this week" ? budget : undefined}
               />
               {others.map((window) => (
-                <BudgetSmallLine key={window.period} window={window} displayUnit={allowanceDisplayUnit} />
+                <BudgetSmallLine key={window.period} window={window} />
               ))}
               <AccountFundsNote underfunded={budget.accountUnderfunded} />
               {isAdmin &&
@@ -480,8 +451,7 @@ export function AccountMenu({
                     setCancelDialogOpen(true);
                   }}
                 >
-                  Allowance request pending:{" "}
-                  {formatAllowanceAmount(budget.pendingRequestUsd, allowanceDisplayUnit)} — Cancel
+                  Allowance request pending: {formatUsd(budget.pendingRequestUsd)} — Cancel
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem
@@ -501,7 +471,7 @@ export function AccountMenu({
                       setPassDialogOpen(true);
                     }}
                   >
-                    Pass credits
+                    Pass allowance
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/allowances">Passes this week</Link>
@@ -550,7 +520,6 @@ export function AccountMenu({
             state={budget.requestDialogState}
             weeklyRemainingUsd={budget.remainingWeeklyUsd}
             weeklyCapUsd={budget.weeklyCapUsd}
-            displayUnit={allowanceDisplayUnit}
           />
           {canPass ? (
             <PassCreditsDialog
@@ -568,7 +537,6 @@ export function AccountMenu({
               onOpenChange={setCancelDialogOpen}
               requestId={budget.pendingRequestId}
               requestedUsd={budget.pendingRequestUsd}
-              displayUnit={allowanceDisplayUnit}
             />
           ) : null}
         </>

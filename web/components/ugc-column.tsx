@@ -75,15 +75,9 @@ import {
   resolveGeneratePending,
 } from "@/lib/ugc-generate-pending-store";
 
-/** BytePlus bills in USD per token, so its picker prices read in dollars, not kie credits. */
-function isUsdPricedModel(modelId: string): boolean {
-  return modelId === "seedance-2.5-byteplus";
-}
-
-function rateLabel(modelId: string, creditsPerSecond: number): string {
-  return isUsdPricedModel(modelId)
-    ? `$${(creditsPerSecond / 200).toFixed(3)}/s`
-    : `${creditsPerSecond} cr/s`;
+/** A per-second rate in dollars; the rate tables store kie credits (200 per $1). */
+function rateLabel(creditsPerSecond: number): string {
+  return `$${(creditsPerSecond / 200).toFixed(3)}/s`;
 }
 
 export interface UgcOption {
@@ -1029,7 +1023,6 @@ export function UgcColumn({
               taggedVideoDurationsS.reduce<number>((sum, d) => sum + Math.floor(d ?? 0), 0)))
         : (exactCredits ?? option.creditsPerSecond * activeDuration);
   const usd = credits === null ? null : credits / 200;
-  const usdOnly = isUsdPricedModel(option.modelId);
   // The three values that decide the number above, named on the confirm so
   // the price can be checked against something rather than taken on trust.
   // ugcTierLabel, not option.resolution raw — display only; the hidden
@@ -1712,8 +1705,7 @@ export function UgcColumn({
                           {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label}
                         </span>
                         <span className="truncate text-xs text-muted-foreground">
-                          {rateLabel(o.modelId, o.creditsPerSecond)} ·{" "}
-                          {ugcTierLabel(o.modelId, o.resolution)}
+                          {rateLabel(o.creditsPerSecond)} · {ugcTierLabel(o.modelId, o.resolution)}
                         </span>
                       </span>
                       {modelMenuId(o.modelId) === modelMenuId(option.modelId) ? (
@@ -1986,7 +1978,7 @@ export function UgcColumn({
                         {tier
                           ? rate == null
                             ? "Price unavailable"
-                            : rateLabel(option.modelId, rate)
+                            : rateLabel(rate)
                           : "Price unverified"}
                       </span>
                       {resolution === option.resolution ? (
@@ -2041,8 +2033,7 @@ export function UgcColumn({
               // ml-auto pushes it to the far end; the pill skin above is
               // cancelled so it reads as text, like the image bar's cost.
               <p className="ml-auto whitespace-nowrap !border-0 !bg-transparent pr-1 text-xs text-muted-foreground">
-                {usdOnly ? `$${usd?.toFixed(2)}` : `${credits} cr ($${usd?.toFixed(2)})`} per{" "}
-                {activeDuration}s clip
+                ${usd?.toFixed(2)} per {activeDuration}s clip
               </p>
             ) : null}
           </div>
@@ -2112,7 +2103,6 @@ export function UgcColumn({
                 // scene's own references, prices those.
                 costUsd={regenerateUsd}
                 notice={unknownTagsNotice}
-                credits={regenerateCredits}
                 unpaidRate={option.unpaid}
                 vendor={vendor}
                 budget={budget}
@@ -2141,7 +2131,7 @@ export function UgcColumn({
                   >
                     {geminiSourceVideoUnavailable
                       ? "Gemini source-video regeneration unavailable"
-                      : `Regenerate scene ${selectedScene.idx} · ${regenerateCredits} credits`}
+                      : `Regenerate scene ${selectedScene.idx} · $${regenerateUsd.toFixed(2)}`}
                   </Button>
                 }
                 // Not rerenderScene directly: the prompt in the field may have
@@ -2234,7 +2224,6 @@ export function UgcColumn({
                 // Non-null here: the trigger below is disabled whenever the
                 // price is unknown, so the dialog cannot be opened without one.
                 costUsd={usd ?? 0}
-                credits={credits ?? 0}
                 settingsLabel={settingsLabel}
                 notice={unknownTagsNotice}
                 unpaidRate={option.unpaid}
@@ -2268,13 +2257,11 @@ export function UgcColumn({
                       <>
                         <span>Generate</span>
                         <span className="text-[10px] font-semibold normal-case opacity-90">
-                          {usdOnly ? `$${usd?.toFixed(2)}` : `${credits} cr ($${usd?.toFixed(2)})`}
+                          ${usd?.toFixed(2)}
                         </span>
                       </>
-                    ) : usdOnly ? (
-                      `Generate · $${usd?.toFixed(2)}`
                     ) : (
-                      `Generate · ${credits} credits`
+                      `Generate · $${usd?.toFixed(2)}`
                     )}
                   </Button>
                 }
@@ -2366,8 +2353,9 @@ export function UgcColumn({
           option.fixedVideoCredits !== null &&
           taggedVideoDurationsS.length > 0 ? (
             <p className="text-xs text-muted-foreground">
-              Gemini source-video renders cost a fixed {option.fixedVideoCredits} credits; Kie
-              ignores the selected output duration when a source video is attached.
+              Gemini source-video renders cost a fixed $
+              {(option.fixedVideoCredits / 200).toFixed(2)}; Kie ignores the selected output
+              duration when a source video is attached.
             </p>
           ) : null}
         </div>

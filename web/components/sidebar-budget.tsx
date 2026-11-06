@@ -13,8 +13,7 @@ import { ChevronRight, CircleHelp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { budgetPressure, budgetTier, selectBindingMeter } from "@/lib/budget-tier";
 import type { BudgetPressure, MeterWindow } from "@/lib/budget-tier";
-import { formatAllowanceAmount, remainingForDisplayUsd } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { weekdayFormatter } from "@/lib/datetime";
 import { DotMeter } from "@/components/dot-meter";
 
@@ -35,42 +34,6 @@ export function budgetClassName(remainingUsd: number, capUsd: number): string {
   if (tier === "critical") return "font-semibold text-destructive";
   if (tier === "warning") return "text-warning";
   return "text-sidebar-foreground";
-}
-
-/** cr | $ — which unit every figure in the menu is shown in. */
-function UnitToggle({
-  unit,
-  onChange,
-}: {
-  unit: AllowanceDisplayUnit;
-  onChange: (unit: AllowanceDisplayUnit) => void;
-}): JSX.Element {
-  return (
-    <div className="flex rounded-md bg-sidebar-border/60 p-0.5 text-[10px] font-medium leading-none">
-      {(
-        [
-          ["credits", "cr"],
-          ["usd", "$"],
-        ] as const
-      ).map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          aria-pressed={unit === value}
-          aria-label={value === "usd" ? "Show in dollars" : "Show in credits"}
-          onClick={() => onChange(value)}
-          className={cn(
-            "rounded px-1.5 py-1 transition-colors",
-            unit === value
-              ? "bg-sidebar-primary text-sidebar-primary-foreground"
-              : "text-muted-foreground hover:text-sidebar-foreground",
-          )}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 /**
@@ -100,14 +63,9 @@ function UnitToggle({
  */
 export function BudgetMeter({
   window: w,
-  displayUnit = "usd",
-  onDisplayUnitChange,
   grantBreakdown,
 }: {
   window: MeterWindow;
-  displayUnit?: AllowanceDisplayUnit;
-  /** Given, the card shows a cr | $ switch. */
-  onDisplayUnitChange?: (unit: AllowanceDisplayUnit) => void;
   /** Weekly grant components from the server snapshot; passed-out is positive. */
   grantBreakdown?: { grantedInUsd: number; receivedUsd: number; passedOutUsd: number };
 }): JSX.Element | null {
@@ -125,15 +83,8 @@ export function BudgetMeter({
   if (capUsd <= 0 && !grantBreakdown?.passedOutUsd) {
     return (
       <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-xs capitalize text-muted-foreground">{period}</span>
-          {onDisplayUnitChange ? (
-            <UnitToggle unit={displayUnit} onChange={onDisplayUnitChange} />
-          ) : null}
-        </div>
-        <span className="text-sm tabular-nums text-destructive">
-          {formatAllowanceAmount(0, displayUnit)}
-        </span>
+        <span className="truncate text-xs capitalize text-muted-foreground">{period}</span>
+        <span className="text-sm tabular-nums text-destructive">{formatUsd(0)}</span>
         <span className="text-xs text-muted-foreground">
           No allowance yet — ask an admin to grant one.
         </span>
@@ -165,14 +116,14 @@ export function BudgetMeter({
   // this component still degrades gracefully for any future caller that
   // hasn't threaded allowanceUsd/usedUsd through.
   const hasBreakdown = allowanceUsd !== undefined && usedUsd !== undefined;
-  const left = formatAllowanceAmount(Math.max(remainingUsd, 0), displayUnit);
+  const left = formatUsd(Math.max(remainingUsd, 0));
   return (
-    // The Credits card: "Credits (?)" and "N left >" over a dot meter, then the
+    // The Allowance card: "Allowance (?)" and "$N left >" over a dot meter, then the
     // arithmetic. The chevron folds the arithmetic away; open by default.
     <div className="flex flex-col gap-2.5 rounded-xl bg-sidebar-accent/40 p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-sidebar-foreground">
-          Credits
+          Allowance
           <CircleHelp aria-hidden="true" className="size-3.5 text-muted-foreground" />
         </span>
         {hasBreakdown ? (
@@ -188,7 +139,10 @@ export function BudgetMeter({
             <span>{left} left</span>
             <ChevronRight
               aria-hidden="true"
-              className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")}
+              className={cn(
+                "size-4 text-muted-foreground transition-transform",
+                open && "rotate-90",
+              )}
             />
           </button>
         ) : null}
@@ -201,29 +155,22 @@ export function BudgetMeter({
         offClassName="bg-sidebar-border"
         label={`${Math.round(ratio * 100)}% of the ${period} allowance left`}
       />
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs capitalize text-muted-foreground">{period}</span>
-        {onDisplayUnitChange ? (
-          <UnitToggle unit={displayUnit} onChange={onDisplayUnitChange} />
-        ) : null}
-      </div>
+      <span className="truncate text-xs capitalize text-muted-foreground">{period}</span>
       {hasBreakdown && open ? (
         <div className="flex flex-col text-xs tabular-nums text-muted-foreground">
-          {allowanceUsd !== 0 ? (
-            <span>{formatAllowanceAmount(allowanceUsd, displayUnit)} allowance</span>
-          ) : null}
+          {allowanceUsd !== 0 ? <span>{formatUsd(allowanceUsd)} allowance</span> : null}
           {incomingUsd > 0 ? (
             <span>
-              +{formatAllowanceAmount(incomingUsd, displayUnit)} {grantLabel}
+              +{formatUsd(incomingUsd)} {grantLabel}
               {grantExpiresAt
                 ? ` (expires ${weekdayFormatter.format(new Date(grantExpiresAt))})`
                 : ""}
             </span>
           ) : null}
           {grantBreakdown && grantBreakdown.passedOutUsd > 0 ? (
-            <span>−{formatAllowanceAmount(grantBreakdown.passedOutUsd, displayUnit)} passed</span>
+            <span>−{formatUsd(grantBreakdown.passedOutUsd)} passed</span>
           ) : null}
-          <span>-{formatAllowanceAmount(usedUsd, displayUnit)} used</span>
+          <span>-{formatUsd(usedUsd)} used</span>
           {/* Held, not spent: the estimate for renders sitting in
               queued/rendering. Its own line rather than folded into "used"
               because the two are different promises — used is billed and
@@ -231,13 +178,12 @@ export function BudgetMeter({
               when there is something in flight, so the ordinary breakdown
               is unchanged. */}
           {heldUsd !== undefined && heldUsd > 0 ? (
-            <span>-{formatAllowanceAmount(heldUsd, displayUnit)} on hold (rendering)</span>
+            <span>-{formatUsd(heldUsd)} on hold (rendering)</span>
           ) : null}
         </div>
       ) : !hasBreakdown ? (
         <span className={cn("text-sm tabular-nums", budgetClassName(remainingUsd, capUsd))}>
-          {formatAllowanceAmount(Math.max(remainingUsd, 0), displayUnit)} of{" "}
-          {formatAllowanceAmount(capUsd, displayUnit)} left
+          {formatUsd(Math.max(remainingUsd, 0))} of {formatUsd(capUsd)} left
         </span>
       ) : null}
       <PressureNote pressure={pressure} audience="own" />
@@ -279,19 +225,13 @@ export function AccountFundsNote({ underfunded }: { underfunded: boolean }): JSX
  * an exhausted daily one should read as plain text, it only means daily
  * doesn't ALSO get a bar.
  */
-export function BudgetSmallLine({
-  window: w,
-  displayUnit = "usd",
-}: {
-  window: MeterWindow;
-  displayUnit?: AllowanceDisplayUnit;
-}): JSX.Element {
+export function BudgetSmallLine({ window: w }: { window: MeterWindow }): JSX.Element {
   // Same "no usedUsd, no note" fallback as BudgetMeter above.
   const pressure = w.usedUsd !== undefined ? budgetPressure(w.usedUsd, w.capUsd) : "normal";
   return (
     <span className="truncate text-xs text-muted-foreground">
       <span className={cn("tabular-nums", budgetClassName(w.remainingUsd, w.capUsd))}>
-        {formatAllowanceAmount(remainingForDisplayUsd(w.remainingUsd), displayUnit)}
+        {formatUsd(remainingForDisplayUsd(w.remainingUsd))}
       </span>{" "}
       left {w.period}
       {pressure !== "normal" ? (

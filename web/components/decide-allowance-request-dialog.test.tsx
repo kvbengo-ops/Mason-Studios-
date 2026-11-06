@@ -116,18 +116,17 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         usedThisWeekUsd={10}
         accountFundsUsd={null}
         outstandingAllowanceUsd={null}
-        displayUnit="credits"
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Approve" }));
     const dialog = screen.getByRole("dialog");
-    const amount = within(dialog).getByLabelText("Grant amount (credits)") as HTMLInputElement;
+    const amount = within(dialog).getByLabelText("Grant amount (USD)") as HTMLInputElement;
 
-    expect(amount.value).toBe("6000");
-    expect(amount.max).toBe("6000");
-    expect(within(dialog).getByText(/requested 6,000 cr/i)).toBeTruthy();
-    expect(within(dialog).getByText(/current allowance:/i).textContent).toContain("15,000 cr");
+    expect(amount.value).toBe("30");
+    expect(amount.max).toBe("30");
+    expect(within(dialog).getByText(/requested \$30\.00/i)).toBeTruthy();
+    expect(within(dialog).getByText(/current allowance:/i).textContent).toContain("$75.00");
 
     await user.click(within(dialog).getByRole("button", { name: "Approve & grant" }));
 
@@ -138,7 +137,7 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
     );
   });
 
-  it("shows admins both units while accepting the grant in credits", async () => {
+  it("shows admins dollars and accepts the grant in dollars", async () => {
     const user = userEvent.setup();
     vi.mocked(decideAllowanceRequest).mockResolvedValue(undefined);
     render(
@@ -153,19 +152,16 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         usedThisWeekUsd={10}
         accountFundsUsd={100}
         outstandingAllowanceUsd={80}
-        displayUnit="dual"
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Approve" }));
     const dialog = screen.getByRole("dialog");
-    const amount = within(dialog).getByLabelText("Grant amount (credits)") as HTMLInputElement;
+    const amount = within(dialog).getByLabelText("Grant amount (USD)") as HTMLInputElement;
 
-    expect(amount.value).toBe("6000");
-    expect(within(dialog).getByText(/requested 6,000 cr \(\$30\.00\)/i)).toBeTruthy();
-    expect(within(dialog).getByText(/account funds:/i).textContent).toContain(
-      "20,000 cr ($100.00)",
-    );
+    expect(amount.value).toBe("30");
+    expect(within(dialog).getByText(/requested \$30\.00/i)).toBeTruthy();
+    expect(within(dialog).getByText(/account funds:/i).textContent).toContain("$100.00");
 
     await user.click(within(dialog).getByRole("button", { name: "Approve & grant" }));
 

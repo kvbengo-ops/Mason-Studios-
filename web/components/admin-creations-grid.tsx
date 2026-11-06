@@ -10,7 +10,7 @@ import type {
   EditorVideoClip,
 } from "@/lib/admin-creations";
 import { dateTimeFormatter } from "@/lib/datetime";
-import { formatCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import type { ImageAttemptStatus } from "@/lib/image-attempt";
 import { cn } from "@/lib/utils";
 
@@ -104,7 +104,7 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                       ) : null}
                       {image.costUsd !== null ? (
                         <span className="font-mono text-xs font-medium tabular-nums text-foreground">
-                          {formatCredits(image.costUsd)}
+                          {formatUsd(image.costUsd)}
                         </span>
                       ) : null}
                     </div>
@@ -149,7 +149,7 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                       {IMAGE_RUN_STATUS_LABEL[run.status]}
                     </span>
                     <span className="font-mono text-sm font-medium tabular-nums">
-                      {run.costUsd !== null ? formatCredits(run.costUsd) : "Not billed"}
+                      {run.costUsd !== null ? formatUsd(run.costUsd) : "Not billed"}
                     </span>
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -207,7 +207,7 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                       </div>
                       {clip.costUsd !== null ? (
                         <span className="font-mono text-xs font-medium tabular-nums text-foreground">
-                          {formatCredits(clip.costUsd)}
+                          {formatUsd(clip.costUsd)}
                         </span>
                       ) : null}
                     </div>
@@ -254,7 +254,7 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                       </span>
                       {run.costUsd !== null || !inFlight ? (
                         <span className="font-mono text-sm font-medium tabular-nums">
-                          {run.costUsd !== null ? formatCredits(run.costUsd) : "Not billed"}
+                          {run.costUsd !== null ? formatUsd(run.costUsd) : "Not billed"}
                         </span>
                       ) : null}
                     </div>
@@ -437,7 +437,7 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                     <Badge variant="secondary">{image.modelLabel ?? "Image"}</Badge>
                     {image.costUsd !== null ? (
                       <span className="font-mono text-xs font-medium tabular-nums text-foreground">
-                        {formatCredits(image.costUsd)}
+                        {formatUsd(image.costUsd)}
                       </span>
                     ) : null}
                   </div>

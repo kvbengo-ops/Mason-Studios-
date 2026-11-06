@@ -21,7 +21,7 @@
 // documents its own client-safety at its line 20.
 
 import type { ProfileRole } from "@/types/db";
-import { formatCredits, remainingForDisplayUsd } from "@/lib/format-usd";
+import { formatUsd, remainingForDisplayUsd } from "@/lib/format-usd";
 
 /**
  * The `profiles.role` values that may be either end of a pass.
@@ -45,7 +45,7 @@ export const PASS_ROLES: readonly ProfileRole[] = ["editor", "trusted_editor"];
  * build a PassEligibility from. One string, two callers, no copy.
  */
 export const NOT_A_PASSER =
-  "Only an editor or a trusted editor can pass credits — admins raise an allowance instead.";
+  "Only an editor or a trusted editor can pass allowance — admins raise an allowance instead.";
 
 export interface PassEligibility {
   /** The would-be sender's role. */
@@ -118,7 +118,7 @@ export function passBlockReason({
   }
 
   if (senderId === recipientId) {
-    return "You can't pass credits to yourself — pick a teammate.";
+    return "You can't pass allowance to yourself — pick a teammate.";
   }
 
   if (!PASS_ROLES.includes(senderRole)) {
@@ -126,7 +126,7 @@ export function passBlockReason({
   }
 
   if (!PASS_ROLES.includes(recipientRole)) {
-    return "You can only pass credits to another editor or trusted editor.";
+    return "You can only pass allowance to another editor or trusted editor.";
   }
 
   // NOTHING TO PASS is its own refusal, ahead of the comparison below.
@@ -146,7 +146,7 @@ export function passBlockReason({
     // "-400 cr" is a number nobody can act on. Clamped at DISPLAY only; the
     // condition above tests the real value.
     return (
-      `Insufficient funds — you have ${formatCredits(remainingForDisplayUsd(headroomUsd))} ` +
+      `Insufficient funds — you have ${formatUsd(remainingForDisplayUsd(headroomUsd))} ` +
       "left to pass this week."
     );
   }
@@ -156,7 +156,7 @@ export function passBlockReason({
     // "that is more than you have" and can say so without also having to
     // cover the empty case.
     return (
-      `You only have ${formatCredits(remainingForDisplayUsd(headroomUsd))} left this week — ` +
+      `You only have ${formatUsd(remainingForDisplayUsd(headroomUsd))} left this week — ` +
       "you can't pass more than that."
     );
   }

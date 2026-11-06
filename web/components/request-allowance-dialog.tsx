@@ -41,8 +41,7 @@ import { requestAllowance } from "@/actions/allowance";
 // bundle. Only the string-union shape crosses, same as any other plain
 // prop type.
 import type { AllowanceDialogState } from "@/lib/spend";
-import { remainingForDisplayUsd, creditsToUsd, formatAllowanceAmount } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 
 /**
  * The three honest states this dialog can be in, per the task that added
@@ -59,7 +58,6 @@ export function requestAllowanceDescription(
   state: AllowanceDialogState,
   weeklyRemainingUsd: number,
   weeklyCapUsd: number,
-  displayUnit: AllowanceDisplayUnit = "usd",
   globalCapPeriod: "daily" | "weekly" = "daily",
 ): string {
   switch (state) {
@@ -70,7 +68,7 @@ export function requestAllowanceDescription(
       );
     case "headroom":
       return (
-        `You have ${formatAllowanceAmount(remainingForDisplayUsd(weeklyRemainingUsd), displayUnit)} of ${formatAllowanceAmount(weeklyCapUsd, displayUnit)} ` +
+        `You have ${formatUsd(remainingForDisplayUsd(weeklyRemainingUsd))} of ${formatUsd(weeklyCapUsd)} ` +
         "left this week. You can still ask, and an admin can approve ahead of time — useful if " +
         "you know a big render is coming."
       );
@@ -107,7 +105,6 @@ export function RequestAllowanceDialog({
   weeklyRemainingUsd,
   weeklyCapUsd,
   globalCapPeriod = "daily",
-  displayUnit = "usd",
 }: {
   /** Controlled by account-menu.tsx — see this file's header for why. */
   open: boolean;
@@ -118,9 +115,8 @@ export function RequestAllowanceDialog({
   weeklyRemainingUsd: number;
   weeklyCapUsd: number;
   globalCapPeriod?: "daily" | "weekly";
-  displayUnit?: AllowanceDisplayUnit;
 }): JSX.Element {
-  const [amount, setAmount] = useState(displayUnit === "credits" ? "2000" : "10");
+  const [amount, setAmount] = useState("10");
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -129,14 +125,10 @@ export function RequestAllowanceDialog({
     setErrorMessage(null);
     const enteredAmount = Number(amount);
     if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
-      setErrorMessage(
-        displayUnit === "credits"
-          ? "Enter a positive number of credits."
-          : "Enter a positive dollar amount.",
-      );
+      setErrorMessage("Enter a positive dollar amount.");
       return;
     }
-    const amountUsd = displayUnit === "credits" ? creditsToUsd(enteredAmount) : enteredAmount;
+    const amountUsd = enteredAmount;
 
     startTransition(async () => {
       try {
@@ -164,21 +156,13 @@ export function RequestAllowanceDialog({
         <DialogHeader>
           <DialogTitle>Request more allowance</DialogTitle>
           <DialogDescription>
-            {requestAllowanceDescription(
-              state,
-              weeklyRemainingUsd,
-              weeklyCapUsd,
-              displayUnit,
-              globalCapPeriod,
-            )}
+            {requestAllowanceDescription(state, weeklyRemainingUsd, weeklyCapUsd, globalCapPeriod)}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="allowance-amount">
-              Amount ({displayUnit === "credits" ? "credits" : "USD"})
-            </Label>
+            <Label htmlFor="allowance-amount">Amount (USD)</Label>
             <Input
               id="allowance-amount"
               type="number"

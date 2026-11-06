@@ -61,29 +61,51 @@ afterEach(() => {
 describe("NotificationsList", () => {
   it("links image progress to its generator and formats sent credits", () => {
     const base = NOTIFICATIONS[0]!;
-    render(<NotificationsList currentUserId="owner-1" displayUnit="credits"
-      initialNotifications={[
-        { ...base, id: "image-personal", kind: "image_generating", title: "Generating image", metadata: { run_id: "run-1" } },
-        { ...base, id: "image-project", kind: "image_completed", title: "Image ready", metadata: { run_id: "run-2", project_id: "image-project" } },
-        { ...base, id: "credits-sent", kind: "credit_sent", title: "Credits sent", metadata: { amount_usd: 5 } },
-      ]} />);
-    expect(screen.getByRole("link", { name: /Generating image/ }).getAttribute("href")).toBe("/image-generator");
-    expect(screen.getByRole("link", { name: /Image ready/ }).getAttribute("href")).toBe("/images/image-project");
-    expect(screen.getByRole("link", { name: /Credits sent/ }).getAttribute("href")).toBe("/profile");
-    expect(screen.getByText("1,000 cr passed to a teammate.")).toBeTruthy();
+    render(
+      <NotificationsList
+        currentUserId="owner-1"
+        initialNotifications={[
+          {
+            ...base,
+            id: "image-personal",
+            kind: "image_generating",
+            title: "Generating image",
+            metadata: { run_id: "run-1" },
+          },
+          {
+            ...base,
+            id: "image-project",
+            kind: "image_completed",
+            title: "Image ready",
+            metadata: { run_id: "run-2", project_id: "image-project" },
+          },
+          {
+            ...base,
+            id: "credits-sent",
+            kind: "credit_sent",
+            title: "Credits sent",
+            metadata: { amount_usd: 5 },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /Generating image/ }).getAttribute("href")).toBe(
+      "/image-generator",
+    );
+    expect(screen.getByRole("link", { name: /Image ready/ }).getAttribute("href")).toBe(
+      "/images/image-project",
+    );
+    expect(screen.getByRole("link", { name: /Credits sent/ }).getAttribute("href")).toBe(
+      "/profile",
+    );
+    expect(screen.getByText("$5.00 passed to a teammate.")).toBeTruthy();
   });
 
   it("shows weekly credits and deep-links a completed scene", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationsList
-        initialNotifications={NOTIFICATIONS}
-        displayUnit="credits"
-        currentUserId="owner-1"
-      />,
-    );
+    render(<NotificationsList initialNotifications={NOTIFICATIONS} currentUserId="owner-1" />);
 
-    expect(screen.getByText("1,000 cr added to your weekly allowance by a teammate.")).toBeTruthy();
+    expect(screen.getByText("$5.00 added to your weekly allowance by a teammate.")).toBeTruthy();
     const sceneLink = screen.getByRole("link", { name: /Scene completed/ });
     expect(sceneLink.getAttribute("href")).toBe("/create?tab=video&scene=scene-1");
     await user.click(sceneLink);
@@ -106,15 +128,14 @@ describe("NotificationsList", () => {
             read_at: null,
           },
         ]}
-        displayUnit="credits"
         currentUserId="owner-1"
       />,
     );
 
     expect(screen.getByText("Weekly credit period reset")).toBeTruthy();
-    expect(screen.getByRole("link", { name: /Weekly credit period reset/ }).getAttribute("href")).toBe(
-      "/profile",
-    );
+    expect(
+      screen.getByRole("link", { name: /Weekly credit period reset/ }).getAttribute("href"),
+    ).toBe("/profile");
   });
 
   // Existing task notifications remain visible, with the deleted destination
@@ -146,7 +167,6 @@ describe("NotificationsList", () => {
             read_at: null,
           },
         ]}
-        displayUnit="credits"
         currentUserId="owner-1"
       />,
     );
@@ -161,13 +181,7 @@ describe("NotificationsList", () => {
 
   it("filters to unread and marks every remaining item read", async () => {
     const user = userEvent.setup();
-    render(
-      <NotificationsList
-        initialNotifications={NOTIFICATIONS}
-        displayUnit="credits"
-        currentUserId="owner-1"
-      />,
-    );
+    render(<NotificationsList initialNotifications={NOTIFICATIONS} currentUserId="owner-1" />);
 
     await user.click(screen.getByRole("button", { name: "Unread (1)" }));
     expect(screen.getByText("Scene completed")).toBeTruthy();

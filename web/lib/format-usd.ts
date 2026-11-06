@@ -40,14 +40,6 @@ export function formatUsd(amountUsd: number): string {
 }
 
 /**
- * The display conversion used by kie and by the editor-facing allowance UI.
- * Persistence and spend-cap arithmetic stay in USD; conversion happens only
- * where a person reads or enters a value.
- */
-export const USD_PER_CREDIT = 0.005;
-export const CREDITS_PER_USD = 1 / USD_PER_CREDIT;
-
-/**
  * A remaining-allowance figure as a PERSON should read it: never below zero.
  *
  * Every remaining figure in this app is a plain subtraction (cap - spent,
@@ -74,41 +66,9 @@ export function remainingForDisplayUsd(amountUsd: number): number {
 }
 
 export function estimatedGenerations(remainingUsd: number, costUsd: number): number {
-  if (!Number.isFinite(costUsd) || costUsd <= 0) throw new Error("Generation cost must be positive");
+  if (!Number.isFinite(costUsd) || costUsd <= 0)
+    throw new Error("Generation cost must be positive");
   return Math.floor(remainingForDisplayUsd(remainingUsd) / costUsd);
-}
-
-export type AllowanceDisplayUnit = "usd" | "credits" | "dual";
-
-const creditFormatter = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 0,
-});
-
-export function usdToCredits(amountUsd: number): number {
-  return amountUsd * CREDITS_PER_USD;
-}
-
-export function creditsToUsd(credits: number): number {
-  return credits * USD_PER_CREDIT;
-}
-
-/** A USD-backed amount shown in kie's credit unit: `6,000 cr`. */
-export function formatCredits(amountUsd: number): string {
-  return `${creditFormatter.format(Math.round(usdToCredits(amountUsd)))} cr`;
-}
-
-/** An admin-facing amount with kie credits first and its USD equivalent. */
-export function formatDual(amountUsd: number): string {
-  return `${formatCredits(amountUsd)} (${formatUsd(amountUsd)})`;
-}
-
-export function formatAllowanceAmount(
-  amountUsd: number,
-  displayUnit: AllowanceDisplayUnit,
-): string {
-  if (displayUnit === "credits") return formatCredits(amountUsd);
-  if (displayUnit === "dual") return formatDual(amountUsd);
-  return formatUsd(amountUsd);
 }
 
 /**

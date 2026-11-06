@@ -20,13 +20,12 @@ describe("passed allowance breakdown", () => {
           usedUsd: 0,
           grantUsd: -3,
         },
-        displayUnit: "credits",
         grantBreakdown: { grantedInUsd: 0, receivedUsd: 1, passedOutUsd: 4 },
       }),
     );
-    expect(html).toContain("+200 cr");
+    expect(html).toContain("+$1.00");
     expect(html).toContain("grant (received)");
-    expect(html).toContain("−800 cr passed");
+    expect(html).toContain("−$4.00 passed");
     expect(html).not.toMatch(/\+[−-]/);
   });
 
@@ -41,11 +40,10 @@ describe("passed allowance breakdown", () => {
           usedUsd: 0,
           grantUsd: -10,
         },
-        displayUnit: "credits",
         grantBreakdown: { grantedInUsd: 0, receivedUsd: 0, passedOutUsd: 10 },
       }),
     );
-    expect(html).toContain("−2,000 cr passed");
+    expect(html).toContain("−$10.00 passed");
     expect(html).not.toContain("No allowance yet");
   });
 });

@@ -8,10 +8,10 @@ technicality — it is the design, and almost every confusion about this system 
 once it lands.
 
 There is exactly one pot of money (the kie account) and a set of speed limits (allowances).
-Editors and trusted editors read those limits in credits at **1 credit = $0.005**. That is a
-display conversion only: the database and enforcement still use USD, and the displayed
-credits are never a wallet owned by the user. Admin allowance and account-funds surfaces show
-both units, for example `6,000 cr ($30.00)`.
+Everyone reads those limits in **US dollars** (since 2026-11-06; before that, editors saw kie
+credits at 1 credit = $0.005). The database and enforcement were always in USD, and the
+displayed amounts are never a wallet owned by the user. kie's own credits still exist inside
+its price tables (`web/lib/kie/rates.ts`), but nothing shown to a person uses them.
 
 ---
 

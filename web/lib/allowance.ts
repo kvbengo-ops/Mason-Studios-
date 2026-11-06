@@ -16,7 +16,7 @@
 // client-safety at its line 20.
 
 import type { ProfileRole } from "@/types/db";
-import { formatCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 
 /**
  * The amount an approver's dialog pre-fills: WHAT WAS ASKED FOR.
@@ -211,7 +211,7 @@ export function decisionBlockReason({
 
   if (requestedUsd > peerMaxGrantUsd) {
     return (
-      `This request is over your ${formatCredits(peerMaxGrantUsd)} approval limit — ` +
+      `This request is over your ${formatUsd(peerMaxGrantUsd)} approval limit — ` +
       "an admin has to decide it."
     );
   }
@@ -241,7 +241,7 @@ export function peerGrantAmountError(amountUsd: number, peerMaxGrantUsd: number)
   }
   if (amountUsd > peerMaxGrantUsd) {
     return (
-      `You can approve up to ${formatCredits(peerMaxGrantUsd)} — ` +
+      `You can approve up to ${formatUsd(peerMaxGrantUsd)} — ` +
       "an admin has to decide anything larger."
     );
   }
@@ -285,7 +285,7 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
   }
   if (amountUsd > maxUsd) {
     return (
-      `${formatCredits(maxUsd)} is the highest allowance any role gets — ` +
+      `${formatUsd(maxUsd)} is the highest allowance any role gets — ` +
       "raise the cap env vars if someone genuinely needs more than that."
     );
   }
@@ -359,7 +359,7 @@ export function dailyCapOverrideError(amountUsd: number, maxUsd: number): string
   }
   if (amountUsd > maxUsd) {
     return (
-      `${formatCredits(maxUsd)} is the highest daily guard any role gets — ` +
+      `${formatUsd(maxUsd)} is the highest daily guard any role gets — ` +
       "raise the cap env vars if someone genuinely needs more than that."
     );
   }

@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { RunsTrigger } from "@/components/runs-trigger";
 import { Spinner } from "@/components/spinner";
 import { dateTimeFormatter } from "@/lib/datetime";
-import { formatCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
 
 /**
@@ -190,8 +190,8 @@ export function ImageAttemptPanel({
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
           <DialogTitle>Recent image runs</DialogTitle>
           <DialogDescription>
-            Every image attempt for this account and the credits it spent, including work that
-            finished after you left.
+            Every image attempt for this account and what it spent, including work that finished
+            after you left.
           </DialogDescription>
           {attempts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No runs yet.</p>
@@ -221,7 +221,7 @@ export function ImageAttemptPanel({
                     </span>
                     {showCost ? (
                       <span className="text-sm font-medium tabular-nums">
-                        {attempt.costUsd !== null ? formatCredits(attempt.costUsd) : "Not billed"}
+                        {attempt.costUsd !== null ? formatUsd(attempt.costUsd) : "Not billed"}
                       </span>
                     ) : null}
                   </div>
@@ -280,7 +280,7 @@ export function ImageAttemptPanel({
                       role="status"
                       className="self-start rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
                     >
-                      Not charged — the credits went back to your allowance.
+                      Not charged — the amount went back to your allowance.
                     </span>
                   ) : null}
                 </li>

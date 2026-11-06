@@ -26,14 +26,13 @@ describe("RequestAllowanceDialog credit display", () => {
         state="headroom"
         weeklyRemainingUsd={10}
         weeklyCapUsd={30}
-        displayUnit="credits"
       />,
     );
 
-    expect(screen.getByText(/2,000 cr of 6,000 cr left this week/i)).toBeTruthy();
-    const amount = screen.getByLabelText("Amount (credits)");
+    expect(screen.getByText(/\$10\.00 of \$30\.00 left this week/i)).toBeTruthy();
+    const amount = screen.getByLabelText("Amount (USD)");
     await user.clear(amount);
-    await user.type(amount, "6000");
+    await user.type(amount, "30");
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
     expect(requestAllowance).toHaveBeenCalledWith(30, null);

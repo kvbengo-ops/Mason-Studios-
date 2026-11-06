@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { RunsTrigger } from "@/components/runs-trigger";
 import { Spinner } from "@/components/spinner";
 import { dateTimeFormatter } from "@/lib/datetime";
-import { formatCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
 
 export interface VideoRun {
@@ -80,7 +80,7 @@ export function VideoRunsPanel({ runs }: { runs: readonly VideoRun[] }): JSX.Ele
                     in-flight row has no cost to show yet. */}
                 {run.costUsd !== null || !inFlight(run) ? (
                   <span className="text-sm font-medium tabular-nums">
-                    {run.costUsd !== null ? formatCredits(run.costUsd) : "Not billed"}
+                    {run.costUsd !== null ? formatUsd(run.costUsd) : "Not billed"}
                   </span>
                 ) : null}
               </div>
@@ -99,8 +99,8 @@ export function VideoRunsPanel({ runs }: { runs: readonly VideoRun[] }): JSX.Ele
                   className="self-start rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
                 >
                   {run.returnedUsd !== null
-                    ? `+${formatCredits(run.returnedUsd)} returned — not charged, back in your allowance.`
-                    : "Not charged — the credits went back to your allowance."}
+                    ? `+${formatUsd(run.returnedUsd)} returned — not charged, back in your allowance.`
+                    : "Not charged — the amount went back to your allowance."}
                 </span>
               ) : null}
             </li>

@@ -32,7 +32,7 @@ import { Label } from "@/components/ui/label";
 import { PendingButton } from "@/components/pending-button";
 import { setDailyCapOverride, setHourlyCapOverride, setWeeklyCapOverride } from "@/actions/account";
 import { dailyCapOverrideError, weeklyCapOverrideError } from "@/lib/allowance";
-import { creditsToUsd, formatCredits, usdToCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 
 // ponytail: still named WeeklyAllowanceDialog though it now edits both
 // windows. Renaming means touching /users and this file's test while
@@ -97,12 +97,10 @@ export function WeeklyAllowanceDialog({
     if (isControlled) onOpenChange?.(next);
     else setUncontrolledOpen(next);
   };
-  const [credits, setCredits] = useState(String(Math.round(usdToCredits(effectiveWeeklyCapUsd))));
-  const [dailyCredits, setDailyCredits] = useState(
-    String(Math.round(usdToCredits(effectiveDailyCapUsd))),
-  );
+  const [credits, setCredits] = useState(String(effectiveWeeklyCapUsd));
+  const [dailyCredits, setDailyCredits] = useState(String(effectiveDailyCapUsd));
   const [hourlyCredits, setHourlyCredits] = useState(
-    effectiveHourlyCapUsd === null ? "" : String(Math.round(usdToCredits(effectiveHourlyCapUsd))),
+    effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd),
   );
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -161,13 +159,13 @@ export function WeeklyAllowanceDialog({
   function handleSave(): void {
     const entered = Number(credits);
     if (!Number.isFinite(entered) || entered < 0) {
-      setErrorMessage("Enter zero or a positive number of credits.");
+      setErrorMessage("Enter zero or a positive dollar amount.");
       return;
     }
     // Convert once, then validate in the unit the rule is written in — the
     // same functions the Server Actions re-run, so the dialog can never
     // accept something the server then refuses.
-    const weeklyCapUsd = creditsToUsd(entered);
+    const weeklyCapUsd = entered;
     const error = weeklyCapOverrideError(weeklyCapUsd, maxWeeklyCapUsd);
     if (error) {
       setErrorMessage(error);
@@ -180,7 +178,7 @@ export function WeeklyAllowanceDialog({
         setErrorMessage("Enter zero or a positive daily guard.");
         return;
       }
-      dailyCapUsd = creditsToUsd(enteredDaily);
+      dailyCapUsd = enteredDaily;
       const dailyError = dailyCapOverrideError(dailyCapUsd, maxDailyCapUsd);
       if (dailyError) {
         setErrorMessage(dailyError);
@@ -192,7 +190,7 @@ export function WeeklyAllowanceDialog({
       setErrorMessage("Enter zero or a positive hourly cap, or leave it blank for no cap.");
       return;
     }
-    submit(weeklyCapUsd, dailyCapUsd, enteredHourly === null ? null : creditsToUsd(enteredHourly));
+    submit(weeklyCapUsd, dailyCapUsd, enteredHourly === null ? null : enteredHourly);
   }
 
   return (
@@ -216,21 +214,21 @@ export function WeeklyAllowanceDialog({
         </DialogHeader>
 
         <div className="grid gap-2">
-          <Label htmlFor="weekly-allowance-credits">Credits per week</Label>
+          <Label htmlFor="weekly-allowance-credits">USD per week</Label>
           <Input
             id="weekly-allowance-credits"
             type="number"
             min={0}
-            step={100}
+            step={0.01}
             value={credits}
             onChange={(event) => setCredits(event.target.value)}
             disabled={isPending}
           />
           <p className="text-xs text-muted-foreground">
             {hasOverride
-              ? `Currently ${formatCredits(effectiveWeeklyCapUsd)}, set on this account.`
-              : `Currently ${formatCredits(effectiveWeeklyCapUsd)}, from their role.`}{" "}
-            Up to {formatCredits(maxWeeklyCapUsd)}.
+              ? `Currently ${formatUsd(effectiveWeeklyCapUsd)}, set on this account.`
+              : `Currently ${formatUsd(effectiveWeeklyCapUsd)}, from their role.`}{" "}
+            Up to {formatUsd(maxWeeklyCapUsd)}.
           </p>
         </div>
 
@@ -243,34 +241,34 @@ export function WeeklyAllowanceDialog({
             it limits how much of the week can go in one day, and a figure at
             or above the weekly allowance simply never fires. */}
             <div className="grid gap-2">
-              <Label htmlFor="daily-allowance-credits">Credits per day</Label>
+              <Label htmlFor="daily-allowance-credits">USD per day</Label>
               <Input
                 id="daily-allowance-credits"
                 type="number"
                 min={0}
-                step={100}
+                step={0.01}
                 value={dailyCredits}
                 onChange={(event) => setDailyCredits(event.target.value)}
                 disabled={isPending}
               />
               <p className="text-xs text-muted-foreground">
                 {hasDailyOverride
-                  ? `Currently ${formatCredits(effectiveDailyCapUsd)}, set on this account.`
-                  : `Currently ${formatCredits(effectiveDailyCapUsd)}, from their role.`}{" "}
+                  ? `Currently ${formatUsd(effectiveDailyCapUsd)}, set on this account.`
+                  : `Currently ${formatUsd(effectiveDailyCapUsd)}, from their role.`}{" "}
                 A burst guard, not a second budget — it is capped at the weekly figure above, so
-                anything larger has no effect. Up to {formatCredits(maxDailyCapUsd)}.
+                anything larger has no effect. Up to {formatUsd(maxDailyCapUsd)}.
               </p>
             </div>
           </>
         ) : null}
 
         <div className="grid gap-2">
-          <Label htmlFor="hourly-allowance-credits">Credits per rolling hour</Label>
+          <Label htmlFor="hourly-allowance-credits">USD per rolling hour</Label>
           <Input
             id="hourly-allowance-credits"
             type="number"
             min={0}
-            step={100}
+            step={0.01}
             value={hourlyCredits}
             onChange={(event) => setHourlyCredits(event.target.value)}
             disabled={isPending}
@@ -278,7 +276,7 @@ export function WeeklyAllowanceDialog({
           />
           <p className="text-xs text-muted-foreground">
             {hasHourlyOverride
-              ? `Currently ${formatCredits(effectiveHourlyCapUsd ?? 0)}, set on this account.`
+              ? `Currently ${formatUsd(effectiveHourlyCapUsd ?? 0)}, set on this account.`
               : "Optional per-account limit; usage rolls off after 60 minutes."}
           </p>
         </div>

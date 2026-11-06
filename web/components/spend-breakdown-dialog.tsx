@@ -1,4 +1,5 @@
 "use client";
+import { formatUsd } from "@/lib/format-usd";
 
 // Click the allowance box → the caller's own spending, run by run. Defaults to
 // this allowance week (Monday 00:00 Manila, the window the box counts), so the
@@ -6,11 +7,7 @@
 
 import type { JSX, ReactNode } from "react";
 import { useEffect, useState } from "react";
-import {
-  loadMySpendBreakdown,
-  type SpendKind,
-  type SpendRow,
-} from "@/actions/spend-breakdown";
+import { loadMySpendBreakdown, type SpendKind, type SpendRow } from "@/actions/spend-breakdown";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/spinner";
 import { dateTimeFormatter } from "@/lib/datetime";
-import { formatAllowanceAmount, type AllowanceDisplayUnit } from "@/lib/format-usd";
 
 type Period = "week" | "last-week" | "30d" | "custom";
 
@@ -34,12 +30,10 @@ function manilaDay(date: string, plusDays = 0): string {
 export function SpendBreakdownDialog({
   children,
   weekStartIso,
-  unit,
 }: {
   children: ReactNode;
   /** Start of this allowance week, from the server (startOfManilaWeekIso). */
   weekStartIso: string;
-  unit: AllowanceDisplayUnit;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   // "Last 30 days" is measured from when the dialog opened, so the range (and
@@ -60,7 +54,10 @@ export function SpendBreakdownDialog({
       : period === "last-week"
         ? [new Date(weekStart - 7 * DAY_MS).toISOString(), weekStartIso]
         : period === "30d"
-          ? [new Date(openedAt - 30 * DAY_MS).toISOString(), new Date(openedAt + DAY_MS).toISOString()]
+          ? [
+              new Date(openedAt - 30 * DAY_MS).toISOString(),
+              new Date(openedAt + DAY_MS).toISOString(),
+            ]
           : customFrom && customTo && customFrom <= customTo
             ? [manilaDay(customFrom), manilaDay(customTo, 1)]
             : null;
@@ -81,7 +78,7 @@ export function SpendBreakdownDialog({
   }, [open, fromIso, toIso]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const money = (usd: number): string => formatAllowanceAmount(usd, unit);
+  const money = (usd: number): string => formatUsd(usd);
   const rows = (result?.rows ?? []).filter(
     (row) => (kind === "all" || row.kind === kind) && (model === "all" || row.model === model),
   );
@@ -119,10 +116,18 @@ export function SpendBreakdownDialog({
             onChange={(e) => setPeriod(e.target.value as Period)}
             aria-label="Period"
           >
-            <option value="week" className="bg-popover text-popover-foreground">This week</option>
-            <option value="last-week" className="bg-popover text-popover-foreground">Last week</option>
-            <option value="30d" className="bg-popover text-popover-foreground">Last 30 days</option>
-            <option value="custom" className="bg-popover text-popover-foreground">Custom dates</option>
+            <option value="week" className="bg-popover text-popover-foreground">
+              This week
+            </option>
+            <option value="last-week" className="bg-popover text-popover-foreground">
+              Last week
+            </option>
+            <option value="30d" className="bg-popover text-popover-foreground">
+              Last 30 days
+            </option>
+            <option value="custom" className="bg-popover text-popover-foreground">
+              Custom dates
+            </option>
           </select>
           {period === "custom" ? (
             <>
@@ -148,10 +153,18 @@ export function SpendBreakdownDialog({
             onChange={(e) => setKind(e.target.value as SpendKind | "all")}
             aria-label="Type"
           >
-            <option value="all" className="bg-popover text-popover-foreground">All types</option>
-            <option value="image" className="bg-popover text-popover-foreground">Images</option>
-            <option value="video" className="bg-popover text-popover-foreground">Videos</option>
-            <option value="other" className="bg-popover text-popover-foreground">Other</option>
+            <option value="all" className="bg-popover text-popover-foreground">
+              All types
+            </option>
+            <option value="image" className="bg-popover text-popover-foreground">
+              Images
+            </option>
+            <option value="video" className="bg-popover text-popover-foreground">
+              Videos
+            </option>
+            <option value="other" className="bg-popover text-popover-foreground">
+              Other
+            </option>
           </select>
           <select
             className={`${select} text-foreground`}
@@ -159,7 +172,9 @@ export function SpendBreakdownDialog({
             onChange={(e) => setModel(e.target.value)}
             aria-label="Model"
           >
-            <option value="all" className="bg-popover text-popover-foreground">All models</option>
+            <option value="all" className="bg-popover text-popover-foreground">
+              All models
+            </option>
             {models.map((m) => (
               <option key={m} value={m} className="bg-popover text-popover-foreground">
                 {m}

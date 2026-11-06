@@ -38,7 +38,7 @@ const SCENE: UgcScene = {
   downloadUrl: "https://storage.test/clip.mp4",
   filename: "clip.mp4",
   posterUrl: null,
-  creditsBilled: null,
+  usdBilled: null,
 };
 
 describe("UgcTitle in a read-only view", () => {
