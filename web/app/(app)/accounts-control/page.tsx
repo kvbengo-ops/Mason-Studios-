@@ -719,12 +719,16 @@ export default async function AccountsControlPage({
           sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
-        {/* ponytail: spend only — BytePlus's balance API needs a separate AK/SK with billing read. */}
         <Stat
           icon={Wallet}
-          label="BytePlus spend"
-          value={formatUsd(overview.bytePlusRangeUsd)}
-          sub={`Last ${overview.windowDays} days · balance not connected`}
+          label="BytePlus balance"
+          value={
+            overview.bytePlusBalanceUsd !== null
+              ? formatUsd(overview.bytePlusBalanceUsd)
+              : "Unavailable"
+          }
+          sub={`${formatUsd(overview.bytePlusRangeUsd)} spent last ${overview.windowDays} days`}
+          alert={overview.bytePlusBalanceUsd !== null && overview.bytePlusBalanceUsd <= 0}
         />
         <GlobalSpendCapControl
           settings={overview.globalSpendCap}
@@ -1237,9 +1241,6 @@ export default async function AccountsControlPage({
                         <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
                           {formatUsd(stat.usd)}
                         </dd>
-                        <dd className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {formatUsd(stat.usd)}
-                        </dd>
                       </div>
                     ))}
                   </dl>
@@ -1270,8 +1271,7 @@ export default async function AccountsControlPage({
           ) : (
             <div className="flex flex-col gap-5">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Every recorded attempt across the team, including failures. Costs are shown in
-                credits and USD.
+                Every recorded attempt across the team, including failures. Costs are in USD.
               </p>
               <div className="overflow-hidden rounded-xl border border-border">
                 <Table className="min-w-[680px]">
@@ -1300,12 +1300,7 @@ export default async function AccountsControlPage({
                         </TableCell>
                         <TableCell numeric className="py-4">
                           {run.costUsd !== null ? (
-                            <>
-                              <span className="block font-medium">{formatUsd(run.costUsd)}</span>
-                              <span className="mt-1 block text-xs text-muted-foreground">
-                                {formatUsd(run.costUsd)}
-                              </span>
-                            </>
+                            <span className="block font-medium">{formatUsd(run.costUsd)}</span>
                           ) : (
                             <span className="text-xs text-muted-foreground">Not billed</span>
                           )}
