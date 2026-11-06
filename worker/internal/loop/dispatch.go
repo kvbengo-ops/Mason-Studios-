@@ -380,8 +380,9 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	webhookURL := webhookBaseURL + "/webhooks/kie"
 
 	requestID, err := deps.Kie.Submit(ctx, kie.SubmitRequest{
-		KieModelID: model.KieModelID,
-		Prompt:     promptForScene(scene, refs, withSpeech(scene, model), model),
+		SelectedModelID: model.ID,
+		KieModelID:      model.KieModelID,
+		Prompt:          promptForScene(scene, refs, withSpeech(scene, model), model),
 		// BytePlus only (see kie.SubmitRequest.ReferencePrompt); kie ignores it.
 		ReferencePrompt: referencePrompt(scene, refs, withSpeech(scene, model)),
 		ImageURL:        refURL,

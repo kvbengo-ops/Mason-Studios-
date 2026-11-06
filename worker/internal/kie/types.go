@@ -69,6 +69,9 @@ const (
 // the field name by the caller), so carrying them forward would be dead
 // weight with no reader.
 type SubmitRequest struct {
+	// SelectedModelID is the product model selection. It distinguishes
+	// provider variants that share a KieModelID for Kie fallback.
+	SelectedModelID string
 	// KieModelID is the string kie itself expects in createTask's "model"
 	// field, and the key Client.Submit looks up a Descriptor's BuildInput
 	// by — see DescriptorByKieModelID. Descriptor.KieModelID is the only

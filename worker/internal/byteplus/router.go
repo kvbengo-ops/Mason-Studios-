@@ -92,7 +92,7 @@ func (r *Router) logger() *slog.Logger {
 
 // Submit sends a render to its vendor and returns the id to persist.
 func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, error) {
-	if r.BytePlus == nil || !r.Route || req.KieModelID != KieSeedance25 {
+	if r.BytePlus == nil || !r.Route || req.SelectedModelID != kie.BytePlusSeedance25ID {
 		return r.Kie.Submit(ctx, req)
 	}
 	id, toKie, err := r.submitBytePlus(ctx, req)

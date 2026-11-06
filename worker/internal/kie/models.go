@@ -116,6 +116,8 @@ type ModelRates struct {
 
 const (
 	measuredDate = "2026-08-31"
+	// BytePlus ModelArk published token prices, read 2026-11-06.
+	bytePlusPublished = "2026-11-06"
 	// The first /ugc clip that actually rendered and billed.
 	firstClipDate = "2026-09-02"
 	// Read off kie.ai's own model page, not billed. See the note on
@@ -177,6 +179,23 @@ var geminiOmniVideoCredits = map[string]float64{
 // Fifteen rate points across five models, matching the web table exactly:
 // that is genuinely everything kie has been asked for or has published.
 var Rates = map[string]ModelRates{
+	"seedance-2.5-byteplus": {
+		Sound: map[string]RatePoint{
+			"480p":  {CreditsPerSecond: 20.56005, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"720p":  {CreditsPerSecond: 46.224, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"1080p": {CreditsPerSecond: 113.724, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $11.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+		},
+		Silent: map[string]RatePoint{
+			"480p":  {CreditsPerSecond: 20.56005, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"720p":  {CreditsPerSecond: 46.224, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $10.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"1080p": {CreditsPerSecond: 113.724, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $11.70/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+		},
+		Video: map[string]RatePoint{
+			"480p":  {CreditsPerSecond: 12.2976, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
+			"720p":  {CreditsPerSecond: 27.648, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
+			"1080p": {CreditsPerSecond: 68.04, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $7.00/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
+		},
+	},
 	"gemini-omni-video": {
 		// Gate/provenance marker only. EstimateCostWithVideo resolves the
 		// documented exact job-price tables above; these synthetic values are
@@ -720,6 +739,15 @@ var seedance25 = Descriptor{
 	BuildInput:             seedanceInput,
 }
 
+const BytePlusSeedance25ID = "seedance-2.5-byteplus"
+
+var seedance25BytePlus = func() Descriptor {
+	d := seedance25
+	d.ID = BytePlusSeedance25ID
+	d.Label = "Seedance 2.5 (BytePlus ModelArk)"
+	return d
+}()
+
 // seedance2Fast is the cheap tier of ByteDance's 2.0 line, added because the
 // editors asked for the same clip for less money rather than for anything new.
 //
@@ -902,7 +930,7 @@ var wan3 = Descriptor{
 // (docs read 2026-10-27); media.Normalize crops to the matching frame.
 var VideoAspectRatios = []string{"9:16", "16:9", "1:1"}
 
-var Descriptors = []Descriptor{seedance25, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo}
+var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo}
 
 // DefaultModelID is the model a project gets when render_settings says
 // nothing: the general-purpose, non-native-audio default, same role

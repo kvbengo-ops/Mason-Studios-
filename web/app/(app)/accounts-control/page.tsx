@@ -701,7 +701,7 @@ export default async function AccountsControlPage({
 
       <section
         aria-label="Credit consumption summary"
-        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"
       >
         <Stat
           icon={BarChart3}
@@ -723,6 +723,13 @@ export default async function AccountsControlPage({
           }
           sub={`${overview.kieBalanceUsd !== null ? `${formatUsd(overview.kieBalanceUsd)} · ` : ""}Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
+        />
+        {/* ponytail: spend only — BytePlus's balance API needs a separate AK/SK with billing read. */}
+        <Stat
+          icon={Wallet}
+          label="BytePlus spend"
+          value={formatUsd(overview.bytePlusRangeUsd)}
+          sub={`Last ${overview.windowDays} days · balance not connected`}
         />
         <GlobalSpendCapControl
           settings={overview.globalSpendCap}

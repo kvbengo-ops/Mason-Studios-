@@ -92,6 +92,7 @@ func router(k Vendor, c *Client) *Router {
 func seedanceRequest() kie.SubmitRequest {
 	audio := true
 	return kie.SubmitRequest{
+		SelectedModelID: kie.BytePlusSeedance25ID,
 		KieModelID:      KieSeedance25,
 		Prompt:          "a figure walks down a neon street, @image1 in front",
 		ReferencePrompt: "@Video 1 walks down a neon street with @Image 1",
@@ -211,13 +212,18 @@ func TestRouterKeepsOtherModelsOnKie(t *testing.T) {
 	k := &fakeKie{}
 	r := router(k, ark.client(t))
 
-	req := seedanceRequest()
-	req.KieModelID = "kling-3.0/video"
-	if _, err := r.Submit(context.Background(), req); err != nil {
-		t.Fatalf("Submit: %v", err)
+	kling := seedanceRequest()
+	kling.SelectedModelID, kling.KieModelID = "kling-3.0-pro", "kling-3.0/video"
+	// kie's own Seedance 2.5 shares BytePlus's wire id; only the picked model routes.
+	kieSeedance := seedanceRequest()
+	kieSeedance.SelectedModelID = "seedance-2.5"
+	for _, req := range []kie.SubmitRequest{kling, kieSeedance} {
+		if _, err := r.Submit(context.Background(), req); err != nil {
+			t.Fatalf("Submit %s: %v", req.SelectedModelID, err)
+		}
 	}
-	if len(ark.created) != 0 || len(k.submitted) != 1 {
-		t.Errorf("BytePlus creates %d, kie submits %v; want the Kling render on kie only", len(ark.created), k.submitted)
+	if len(ark.created) != 0 || len(k.submitted) != 2 {
+		t.Errorf("BytePlus creates %d, kie submits %v; want Kling and kie's Seedance 2.5 on kie only", len(ark.created), k.submitted)
 	}
 }
 

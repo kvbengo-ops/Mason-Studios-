@@ -22,7 +22,8 @@ import { KIE_RATES, canRenderWithSound, type Resolution } from "@/lib/kie/rates"
 export const VIDEO_ASPECT_RATIOS = ["9:16", "16:9", "1:1"] as const;
 export type VideoAspectRatio = (typeof VIDEO_ASPECT_RATIOS)[number];
 
-const seconds = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+const seconds = (from: number, to: number) =>
+  Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 export interface KieModel {
   /** This product's id. Kept identical to lib/models.ts's ids so a scene row written by either side is readable by both during the transition. */
@@ -159,6 +160,13 @@ export const SEEDANCE_2_5: KieModel = {
   longestRenderedS: 30,
 };
 
+export const SEEDANCE_2_5_BYTEPLUS: KieModel = {
+  ...SEEDANCE_2_5,
+  id: "seedance-2.5-byteplus",
+  label: "Seedance 2.5 · BytePlus ModelArk",
+  note: "Direct BytePlus ModelArk pricing estimate; the existing Seedance 2.5 option remains on kie.",
+};
+
 /**
  * The cheap tier of ByteDance's 2.0 line, and the answer to "same clip, less
  * money": 11.7 cr/s at 480p against 2.5's measured 28, for the same 4s 9:16
@@ -273,6 +281,7 @@ const WAN_3: KieModel = {
 /** Every model kie serves, in the order a picker should show them. */
 export const KIE_MODELS: readonly KieModel[] = [
   SEEDANCE_2_5,
+  SEEDANCE_2_5_BYTEPLUS,
   SEEDANCE_2,
   SEEDANCE_2_FAST,
   SEEDANCE_2_MINI,

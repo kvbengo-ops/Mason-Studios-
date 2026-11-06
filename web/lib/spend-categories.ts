@@ -3,8 +3,7 @@
 // reasoning (why 'render' is a LIKE on "-to-video" rather than an enumerated
 // endpoint list, and why the real aggregation happens in SQL, never here).
 //
-// fal is decommissioned; kie is the only vendor a video render can ever
-// write. `runs.model` for a video render is worker/internal/kie/models.go's
+// fal is decommissioned; kie and BytePlus are the video vendors. `runs.model` for a video render is worker/internal/kie/models.go's
 // Model.KieModelID — the WIRE string kie itself expects ("kling-3.0/video",
 // not this product's own "kling-3.0-pro" id) — mirrored on the web side by
 // lib/kie/models.ts's KieModel.kieModelName. Every image generation
@@ -51,5 +50,7 @@ const VIDEO_MODEL_WIRE_IDS: ReadonlySet<string> = new Set(KIE_MODELS.map((m) => 
  * tests against this codebase's actual vendor/model strings.
  */
 export function categorizeRun(vendor: string, model: string): SpendCategory {
-  return vendor === "kie" && VIDEO_MODEL_WIRE_IDS.has(model) ? "render" : "iterate";
+  return (vendor === "kie" || vendor === "byteplus") && VIDEO_MODEL_WIRE_IDS.has(model)
+    ? "render"
+    : "iterate";
 }
