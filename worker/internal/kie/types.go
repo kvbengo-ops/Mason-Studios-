@@ -1,6 +1,9 @@
 package kie
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // This file holds the vendor-neutral vocabulary that used to live in
 // internal/fal/client.go: Status, SubmitRequest, Result, and
@@ -20,6 +23,26 @@ import "errors"
 // reason CREDITS_PER_USD in web/lib/kie/rates.ts is a named export rather
 // than a repeated 200.
 const Vendor = "kie"
+
+// BytePlusTaskPrefix marks a task id that belongs to BytePlus ModelArk, not
+// kie (internal/byteplus). Seedance 2.5 goes there when BYTEPLUS_API_KEY is
+// set; its ids are stored in the same scenes.kie_task_id / runs.kie_task_id
+// columns with this prefix, which WE write, so routing a status poll back to
+// the right vendor needs no migration and no guess at either vendor's id
+// format.
+const BytePlusTaskPrefix = "byteplus:"
+
+// BytePlusVendor is runs.vendor for a render BytePlus ran.
+const BytePlusVendor = "byteplus"
+
+// VendorOf is the runs.vendor value for a persisted task id: BytePlusVendor
+// for a BytePlusTaskPrefix id, Vendor for everything else.
+func VendorOf(taskID string) string {
+	if strings.HasPrefix(taskID, BytePlusTaskPrefix) {
+		return BytePlusVendor
+	}
+	return Vendor
+}
 
 // Status is a video render's lifecycle state, translated from kie's own
 // vocabulary by statusFromState in client.go. StatusFailed is not one of

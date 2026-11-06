@@ -312,6 +312,13 @@ services:
       # 45-90s slower completion via the reconcile poll instead).
       - key: KIE_WEBHOOK_SECRET
         sync: false
+      # Optional. Set = Seedance 2.5 renders go to BytePlus ModelArk directly
+      # (worker/internal/byteplus); unset = everything stays on kie. An
+      # Individual BytePlus account runs 3 tasks at once — above that,
+      # submissions are refused (unbilled), so lower RENDER_CONCURRENCY or
+      # move to Enterprise (10).
+      - key: BYTEPLUS_API_KEY
+        sync: false
       - key: APP_BASE_URL
         sync: false # this service's own public URL — kie's webhook callback target; worker.internal/config.Load fails startup without it
       - key: RENDER_CONCURRENCY

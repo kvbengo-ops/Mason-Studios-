@@ -78,9 +78,9 @@ type Deps struct {
 // resolved Model carried only a compile-time DEFAULT vendor, and the
 // caller (which knew structurally, from which webhook route fired, or from
 // the routing decision it had already resolved) was the only trustworthy
-// source. With one vendor that whole class of bug is gone: runs.vendor is
-// unconditionally kie.Vendor below, the same constant every other package
-// in this worker writes. See internal/http/webhook_kie.go and
+// source. Today runs.vendor is read off the persisted task id itself
+// (kie.VendorOf): kie, or BytePlus for a Seedance 2.5 render routed there —
+// a fact the id carries, so no caller has to pass it. See internal/http/webhook_kie.go and
 // internal/loop/reconcile.go's ingest call sites, neither of which passes
 // anything here any more.
 func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Result) error {
@@ -199,12 +199,18 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 		DurationS:  &durationSeconds,
 		Bytes:      bytesOut,
 	}
+	vendor := kie.Vendor
+	if scene.KieTaskID != nil {
+		// A Seedance 2.5 render may have run on BytePlus — the persisted id's
+		// prefix says which (kie.VendorOf).
+		vendor = kie.VendorOf(*scene.KieTaskID)
+	}
 	run := store.Run{
 		// Both callers resolve this scene by the kie request whose result is
 		// being ingested, so this is the immutable per-attempt id that belongs
 		// beside the cost below, not a later lookup after a retry.
 		KieTaskID: scene.KieTaskID,
-		Vendor:    kie.Vendor,
+		Vendor:    vendor,
 		Model:     model.KieModelID,
 		CostUSD:   costPtr,
 		LatencyMS: &latencyMS,
