@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { requestAllowance, cancelAllowanceRequest, decideAllowanceRequest } from "./allowance";
 import { requireUser, requireApprover } from "@/actions/guard";
 import { TRUSTED_WEEKLY_CAP_USD, endOfManilaWeekIso } from "@/lib/spend";
-import { creditsToUsd, usdToCredits } from "@/lib/format-usd";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 // Same fakes-over-the-two-boundaries approach as actions/project.test.ts:
@@ -279,15 +278,13 @@ describe("decideAllowanceRequest", () => {
     );
   });
 
-  // The report this replaced a $5 round-up to fix, in the unit the approver
-  // reads: 200 cr is $1, and ceil(1/5)*5 was $5 — so the dialog opened at
-  // 1,000 cr on a 200 cr ask, and an approver clicking through the queue
-  // granted five times what was asked for.
-  it("a 200 cr ask grants 200 cr, not the 1,000 cr the old $5 grid rounded it to", async () => {
+  // The report this replaced a $5 round-up to fix: ceil(1/5)*5 was $5, so the
+  // dialog opened at $5 on a $1 ask, and an approver clicking through the
+  // queue granted five times what was asked for.
+  it("a $1 ask grants $1, not the $5 the old grid rounded it to", async () => {
     vi.mocked(requireApprover).mockResolvedValue({ user: ADMIN, profile: ADMIN_PROFILE });
-    const twoHundredCreditsUsd = creditsToUsd(200);
     const selectBuilder = fakeBuilder({
-      data: { id: "r1", user_id: USER.id, requested_usd: twoHundredCreditsUsd, status: "pending" },
+      data: { id: "r1", user_id: USER.id, requested_usd: 1, status: "pending" },
       error: null,
     });
     const rpc = vi.fn(() => Promise.resolve({ data: null, error: null }));
@@ -299,7 +296,7 @@ describe("decideAllowanceRequest", () => {
 
     expect(result).toBeUndefined();
     const [, args] = rpc.mock.calls[0] as unknown as [string, { grant_amount_usd: number }];
-    expect(usdToCredits(args.grant_amount_usd)).toBe(200);
+    expect(args.grant_amount_usd).toBe(1);
   });
 
   it("lets the admin grant a smaller amount than what was requested", async () => {

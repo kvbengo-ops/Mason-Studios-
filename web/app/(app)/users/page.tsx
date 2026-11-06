@@ -691,7 +691,7 @@ export default async function UsersPage({
                           <span className="inline-flex items-center justify-end gap-2">
                             {`${formatUsd(activeGrants.totalUsd)} (${activeGrants.count})`}
                             {activeGrants.latestTransferAmountUsd !== null ? (
-                              <Badge variant="secondary" title="Latest credit transfer">
+                              <Badge variant="secondary" title="Latest allowance transfer">
                                 {activeGrants.latestTransferAmountUsd < 0 ? "Passed" : "Received"}
                               </Badge>
                             ) : null}

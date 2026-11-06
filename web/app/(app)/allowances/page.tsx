@@ -15,8 +15,7 @@ import { buildIlikeOrFilter, sanitizeSearchTerm } from "@/lib/search-term";
 import { parseSort } from "@/lib/sort-params";
 import type { ParsedSort } from "@/lib/sort-params";
 import { decisionBlockReason, defaultGrantAmountUsd } from "@/lib/allowance";
-import { formatAllowanceAmount, formatCredits, formatDual } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { getKieAccountBalanceUsd, formatAccountFundsUsd } from "@/lib/kie-balance";
 import { getOutstandingAllowanceUsd, getUserActiveGrantsTotals } from "@/lib/db-aggregates";
 import { LiveSearch } from "@/components/live-search";
@@ -136,7 +135,7 @@ async function readPassHistory(userId: string): Promise<JSX.Element> {
               <TableHeader>
                 <TableRow>
                   <TableHead>Colleague</TableHead>
-                  <TableHead className="text-right">Credits</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Passed at</TableHead>
                   <TableHead>Note</TableHead>
                 </TableRow>
@@ -150,7 +149,7 @@ async function readPassHistory(userId: string): Promise<JSX.Element> {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {pass.amount_usd > 0 ? "+" : "−"}
-                      {formatCredits(Math.abs(pass.amount_usd))}
+                      {formatUsd(Math.abs(pass.amount_usd))}
                     </TableCell>
                     <TableCell>{dateTimeFormatter.format(new Date(pass.created_at))}</TableCell>
                     <TableCell>{pass.note || "—"}</TableCell>
@@ -197,7 +196,6 @@ export default async function AllowancesPage({
   }
   await requireApprover();
   const adminViewer = isAdmin(profile);
-  const allowanceDisplayUnit: AllowanceDisplayUnit = adminViewer ? "dual" : "credits";
 
   // Session client, same as /users: allowance_requests_select (0074) lets
   // approvers read the queue via can_approve_allowance(), so the database
@@ -389,7 +387,7 @@ export default async function AllowancesPage({
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-semibold text-foreground">
-                {kieBalanceUsd !== null ? formatDual(kieBalanceUsd) : formatAccountFundsUsd(null)}
+                {kieBalanceUsd !== null ? formatUsd(kieBalanceUsd) : formatAccountFundsUsd(null)}
               </p>
               <p className="text-xs text-muted-foreground">
                 kie&apos;s real credit balance and its USD equivalent.
@@ -402,9 +400,7 @@ export default async function AllowancesPage({
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-semibold text-foreground">
-                {outstandingAllowanceUsd !== null
-                  ? formatAllowanceAmount(outstandingAllowanceUsd, allowanceDisplayUnit)
-                  : "Unknown"}
+                {outstandingAllowanceUsd !== null ? formatUsd(outstandingAllowanceUsd) : "Unknown"}
               </p>
               <p className="text-xs text-muted-foreground">
                 What every editor and trusted editor could still spend this week if they used their
@@ -492,9 +488,7 @@ export default async function AllowancesPage({
                     <TableCell className="font-medium text-foreground">
                       {request.user_email}
                     </TableCell>
-                    <TableCell numeric>
-                      {formatAllowanceAmount(request.requested_usd, allowanceDisplayUnit)}
-                    </TableCell>
+                    <TableCell numeric>{formatUsd(request.requested_usd)}</TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">
                       {request.reason ?? "—"}
                     </TableCell>
@@ -564,7 +558,6 @@ export default async function AllowancesPage({
                                 usedThisWeekUsd={usedThisWeekUsd}
                                 accountFundsUsd={kieBalanceUsd}
                                 outstandingAllowanceUsd={outstandingAllowanceUsd}
-                                displayUnit={allowanceDisplayUnit}
                               />
                             );
                           })()

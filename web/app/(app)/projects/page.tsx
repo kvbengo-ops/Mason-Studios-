@@ -19,7 +19,7 @@ import { PaginationControls } from "@/components/pagination-controls";
 import { ProjectsTable } from "@/components/projects-table";
 import type { ProjectTableRow } from "@/components/projects-table";
 import { ProjectFilters } from "@/components/project-filters";
-import { formatCredits, formatUsd } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import { NewClipButton } from "@/components/new-clip-button";
 import { deriveProjectStatus } from "@/lib/project-status";
 import { RenderTimer } from "@/lib/perf-log";
@@ -572,7 +572,7 @@ export default async function ProjectsPage({
       readySceneCount: scenes.filter((scene) => scene.status === "done").length,
       thumbnailUrl: thumbnailUrls.get(project.id) ?? null,
       updatedAtLabel: dateTimeFormatter.format(new Date(project.updated_at)),
-      costLabel: formatCredits(project.total_cost_usd),
+      costLabel: formatUsd(project.total_cost_usd),
       costSecondaryLabel:
         showOwnerColumn && project.total_cost_usd > 0 ? formatUsd(project.total_cost_usd) : null,
       canDelete: project.user_id === user.id,

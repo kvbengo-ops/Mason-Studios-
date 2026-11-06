@@ -106,10 +106,10 @@ refuses any model missing from `spend_category_totals`'s render list.
 
 ## Spend caps
 
-A **spend-cap system with credits as the display unit** — no per-user balance is stored
+A **spend-cap system with USD as the display unit** — no per-user balance is stored
 or decremented. Read `docs/spend-model.md` before answering anything containing
 "credit". `runs.cost_usd` sums against ceilings each attempt (`assertWithinSpendCaps`),
-read by editors at `1 cr = $0.005` while enforcement stays in USD. **Never add a
+shown to everyone in dollars (credits were dropped from the UI on 2026-11-06). **Never add a
 per-user credit balance** — it's headroom under a ceiling, not money reserved.
 
 Role cap defaults live in `render.yaml`: regular editor `DAILY_CAP_USD`/`WEEKLY_CAP_USD` default to `0`, trusted `10`/`25`, and admin `100`/`700`. The optional global team cap is stored in `app_settings` and managed in Accounts Control; it defaults to enabled at $100 daily and can be disabled or set to daily/weekly. Per-account hourly overrides live in `profiles.hourly_cap_override_usd`. Whether the per-user daily guard is ENFORCED is a setting, not a deploy (`app_settings.user_daily_cap_enabled`, off by default). Boundaries are Asia/Manila; weeks reset Monday. Order: kie funds, optional global cap, weekly (cap plus grants), optional per-user hourly, optional per-user daily. Per-account overrides beat the role tier; role env vars move everyone.

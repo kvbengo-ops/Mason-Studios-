@@ -3,8 +3,7 @@ import { requireUser } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
-import { formatAllowanceAmount, remainingForDisplayUsd } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { UsernameForm } from "@/components/username-form";
 import { RoleBadge } from "@/components/role-badge";
@@ -43,9 +42,7 @@ type AllowanceRequestRow = Database["public"]["Tables"]["allowance_requests"]["R
 
 export default async function ProfilePage(): Promise<JSX.Element> {
   const { user, profile } = await requireUser();
-  const allowanceDisplayUnit: AllowanceDisplayUnit = profile.role === "admin" ? "usd" : "credits";
-  const formatAllowance = (amountUsd: number): string =>
-    formatAllowanceAmount(amountUsd, allowanceDisplayUnit);
+  const formatAllowance = (amountUsd: number): string => formatUsd(amountUsd);
 
   const avatarUrl = profile.avatar_storage_key
     ? await signedUrl(profile.avatar_storage_key, 3600, AVATAR_TRANSFORM)

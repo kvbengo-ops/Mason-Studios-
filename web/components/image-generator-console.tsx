@@ -1,5 +1,5 @@
 import type { JSX } from "react";
-import { isAdmin, requireUser } from "@/actions/guard";
+import { requireUser } from "@/actions/guard";
 import {
   generatePersonalImage,
   getPersonalImageDownloadUrl,
@@ -48,7 +48,7 @@ import { loadElementTags } from "@/lib/element-library";
 
 /** The personal image generator: gallery, recovery panel and prompt bar. /image-generator and /create share it. */
 export async function ImageGeneratorConsole(): Promise<JSX.Element> {
-  const { user, profile } = await requireUser();
+  const { user } = await requireUser();
   const supabase = await createClient();
   // CONCURRENT, not one after another: each load runs its own requireUser
   // plus a query, and in sequence they added up to about a second per visit.
@@ -107,7 +107,6 @@ export async function ImageGeneratorConsole(): Promise<JSX.Element> {
         <ImageGeneratorForm
           action={generatePersonalImage}
           models={IMAGE_MODELS}
-          displayUnit={isAdmin(profile) ? "dual" : "credits"}
           // Nothing to lock. `delivered` is a state a PROJECT reaches, and there
           // is no project here; an account is never done generating.
           disabledReason={null}

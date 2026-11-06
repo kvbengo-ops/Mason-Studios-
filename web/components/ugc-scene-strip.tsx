@@ -29,6 +29,7 @@ import { UgcNewSceneTile } from "@/components/ugc-new-scene-tile";
 import { deleteClipScene, deleteClipVersion } from "@/actions/ugc";
 import type { SceneStatus } from "@/types/db";
 import { cn } from "@/lib/utils";
+import { formatUsd } from "@/lib/format-usd";
 
 export interface UgcScene {
   id: string;
@@ -61,7 +62,7 @@ export interface UgcScene {
    * means nothing has been billed yet (never rendered, or every attempt
    * failed before a vendor call completed).
    */
-  creditsBilled: number | null;
+  usdBilled: number | null;
 }
 
 export function UgcSceneStrip({
@@ -92,14 +93,11 @@ export function UgcSceneStrip({
   readOnly?: boolean;
 }): JSX.Element {
   const totalSeconds = scenes.reduce((sum, scene) => sum + scene.duration_s, 0);
-  const creditsByScene = new Map<string, number>();
+  const usdByScene = new Map<string, number>();
   for (const scene of scenes) {
-    if (scene.creditsBilled !== null) creditsByScene.set(scene.id, scene.creditsBilled);
+    if (scene.usdBilled !== null) usdByScene.set(scene.id, scene.usdBilled);
   }
-  const totalCreditsBilled = [...creditsByScene.values()].reduce(
-    (sum, credits) => sum + credits,
-    0,
-  );
+  const totalUsdBilled = [...usdByScene.values()].reduce((sum, usd) => sum + usd, 0);
 
   return (
     <section
@@ -117,9 +115,7 @@ export function UgcSceneStrip({
             nearly invisible on the fill. */}
         <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
           {scenes.length} clip{scenes.length === 1 ? "" : "s"} · {totalSeconds}s
-          {totalCreditsBilled > 0
-            ? ` · ${totalCreditsBilled.toLocaleString("en-US")} cr billed`
-            : ""}
+          {totalUsdBilled > 0 ? ` · ${formatUsd(totalUsdBilled)} billed` : ""}
         </span>
       </div>
 

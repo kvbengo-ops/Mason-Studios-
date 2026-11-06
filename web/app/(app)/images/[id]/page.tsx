@@ -1,10 +1,7 @@
 import type { JSX } from "react";
 import { z } from "zod";
-import { isAdmin, requireProjectReadable } from "@/actions/guard";
-import {
-  generateProjectImage,
-  getProjectImageDetails,
-} from "@/actions/image-generator";
+import { requireProjectReadable } from "@/actions/guard";
+import { generateProjectImage, getProjectImageDetails } from "@/actions/image-generator";
 import { ImageGeneratorForm } from "@/components/image-generator-form";
 import { ImageGeneratorHistory } from "@/components/image-generator-history";
 import type { ImageHistoryCursor, ImageHistoryPage } from "@/components/image-generator-history";
@@ -114,7 +111,7 @@ export default async function ImageGeneratorPage({
   params: Promise<{ id: string }>;
 }): Promise<JSX.Element> {
   const { id } = await params;
-  const { project, profile, isOwner } = await requireProjectReadable(id);
+  const { project, isOwner } = await requireProjectReadable(id);
   const history = await loadImageHistory(id, null);
 
   // The PROJECT OWNER's @tag library, not the viewer's — see loadElementTags.
@@ -179,7 +176,6 @@ export default async function ImageGeneratorPage({
         // .bind, never awaited here — this page uses the READABLE guard and
         // both actions use the strict one. See lib/guard-seam.test.ts.
         models={IMAGE_MODELS}
-        displayUnit={isAdmin(profile) ? "dual" : "credits"}
         disabledReason={disabledReason}
         projectId={id}
         elements={elements}

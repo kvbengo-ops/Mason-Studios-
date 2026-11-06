@@ -72,7 +72,6 @@ export function SceneRerenderDialog({
   sceneId,
   sceneLabel,
   costUsd,
-  credits,
   settingsLabel,
   unpaidRate,
   vendor,
@@ -107,19 +106,6 @@ export function SceneRerenderDialog({
   /** e.g. "Scene 4" — echoed in the dialog title so a multi-scene page can't be misread as "render everything again". */
   sceneLabel: string;
   costUsd: number;
-  /**
-   * Credits, when the caller quotes in them.
-   *
-   * kie bills credits and derives dollars, and /ugc quotes credits on the
-   * button that opens this dialog — so a dialog that answered in dollars made
-   * the operator check two numbers against each other before spending. The
-   * scripted pipeline still quotes dollars, and passing nothing here keeps
-   * that: this is an addition to the dialog's vocabulary, not a replacement.
-   *
-   * Dollars are still shown underneath, because the spend caps are in dollars
-   * (DAILY_CAP_USD and friends) and the refusal message below quotes them.
-   */
-  credits?: number;
   /**
    * What this render will actually run as - "Seedance 2.5 · 480p · 4s".
    *
@@ -297,13 +283,9 @@ export function SceneRerenderDialog({
 
         <div className="flex flex-col items-center gap-1 rounded-lg border bg-muted/40 py-6">
           <span className="text-4xl font-semibold tabular-nums text-foreground">
-            {credits === undefined ? usdFormatter.format(costUsd) : `${credits} credits`}
+            {usdFormatter.format(costUsd)}
           </span>
-          <span className="text-sm text-muted-foreground">
-            {credits === undefined
-              ? "estimated cost for this scene"
-              : `estimated cost for this scene · ${usdFormatter.format(costUsd)}`}
-          </span>
+          <span className="text-sm text-muted-foreground">estimated cost for this scene</span>
           {/* The three values that DECIDE the number above them, on the same
               screen as the number - see settingsLabel's doc comment. */}
           {settingsLabel ? (
@@ -381,9 +363,7 @@ export function SceneRerenderDialog({
             Cancel
           </Button>
           <PendingButton onClick={handleConfirm} pending={isPending} disabled={overBudget}>
-            {credits === undefined
-              ? `Confirm — ${usdFormatter.format(costUsd)}`
-              : `Confirm — ${credits} credits`}
+            {`Confirm — ${usdFormatter.format(costUsd)}`}
           </PendingButton>
         </DialogFooter>
       </DialogContent>

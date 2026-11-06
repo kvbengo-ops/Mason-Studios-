@@ -1,4 +1,5 @@
 "use client";
+import { formatUsd } from "@/lib/format-usd";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import type { JSX } from "react";
@@ -18,7 +19,6 @@ import {
 import { markAllNotificationsRead, markNotificationRead } from "@/actions/notifications";
 import type { Notification } from "@/lib/notifications";
 import { notificationHref } from "@/lib/notification-href";
-import { formatAllowanceAmount, type AllowanceDisplayUnit } from "@/lib/format-usd";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -107,14 +107,14 @@ function metadataValue(notification: Notification, key: string): unknown {
   return notification.metadata[key];
 }
 
-function notificationBody(notification: Notification, displayUnit: AllowanceDisplayUnit): string {
+function notificationBody(notification: Notification): string {
   const amountUsd = metadataValue(
     notification,
     notification.kind === "credit_requested" ? "requested_usd" : "amount_usd",
   );
   if (typeof amountUsd !== "number") return notification.body;
 
-  const amount = formatAllowanceAmount(amountUsd, displayUnit);
+  const amount = formatUsd(amountUsd);
   if (notification.kind === "credit_requested") return `${amount} requested.`;
   if (notification.kind === "credit_approved") {
     return `${amount} added to your weekly allowance.`;
@@ -128,11 +128,9 @@ function notificationBody(notification: Notification, displayUnit: AllowanceDisp
 
 export function NotificationsList({
   initialNotifications,
-  displayUnit,
   currentUserId,
 }: {
   initialNotifications: Notification[];
-  displayUnit: AllowanceDisplayUnit;
   currentUserId: string;
 }): JSX.Element {
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -300,7 +298,7 @@ export function NotificationsList({
                           ) : null}
                         </span>
                         <span className="mt-0.5 block text-sm text-muted-foreground">
-                          {notificationBody(notification, displayUnit)}
+                          {notificationBody(notification)}
                         </span>
                         <span className="mt-1 block text-xs text-muted-foreground">
                           {timeFormatter.format(new Date(notification.created_at))}
@@ -320,7 +318,7 @@ export function NotificationsList({
             {filter === "unread" ? "You’re all caught up" : "No notifications yet"}
           </p>
           <p className="text-sm text-muted-foreground">
-            Updates about images, scenes, tasks and credits will appear here.
+            Updates about images, scenes, tasks and allowance will appear here.
           </p>
         </div>
       )}

@@ -66,7 +66,6 @@ describe("Image Generator background completion", () => {
       <ImageGeneratorForm
         action={action}
         models={[model]}
-        displayUnit="dual"
         disabledReason={null}
         projectId={null}
         elements={[]}
@@ -90,7 +89,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={action}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[]}
@@ -119,7 +117,6 @@ describe("Image Generator background completion", () => {
       <ImageGeneratorForm
         action={action}
         models={[model]}
-        displayUnit="dual"
         disabledReason={null}
         projectId={null}
         elements={[]}
@@ -149,7 +146,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[]}
@@ -179,7 +175,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[mara]}
@@ -208,7 +203,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[{ ...model, resolutions: ["1K", "2K", "4K"] }]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[]}
@@ -228,7 +222,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[]}
@@ -244,7 +237,6 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[]}
@@ -254,7 +246,9 @@ describe("Image Generator background completion", () => {
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "A fox by @ghost" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    expect(screen.getByRole("dialog").textContent).toContain("@ghost doesn't match any saved element");
+    expect(screen.getByRole("dialog").textContent).toContain(
+      "@ghost doesn't match any saved element",
+    );
     expect(
       (screen.getByRole("button", { name: "Confirm generation" }) as HTMLButtonElement).disabled,
     ).toBe(false);
@@ -273,14 +267,15 @@ describe("Image Generator background completion", () => {
         <ImageGeneratorForm
           action={vi.fn()}
           models={[model]}
-          displayUnit="dual"
           disabledReason={null}
           projectId={null}
           elements={[mara]}
         />
       </ImageAttemptPanel>,
     );
-    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "A fox with @mara_ref" } });
+    fireEvent.change(screen.getByLabelText("Prompt"), {
+      target: { value: "A fox with @mara_ref" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     expect(screen.getByRole("dialog").textContent).not.toContain("doesn't match");

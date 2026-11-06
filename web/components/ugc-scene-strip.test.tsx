@@ -45,7 +45,7 @@ function aScene(over: Partial<UgcScene> & { id: string; idx: number }): UgcScene
     downloadUrl: `https://example.test/${over.id}.mp4`,
     filename: `${over.id}.mp4`,
     posterUrl: `https://example.test/${over.id}.jpg`,
-    creditsBilled: 504,
+    usdBilled: 2.52,
     ...over,
   };
 }
@@ -95,21 +95,21 @@ describe("UgcSceneStrip takes", () => {
 });
 
 describe("UgcSceneStrip", () => {
-  it("totals billed credits once per scene across takes", () => {
+  it("totals billed dollars once per scene across takes", () => {
     render(
       <UgcSceneStrip
         projectId="proj-1"
         scenes={[
-          aScene({ id: "scene-1", idx: 1, creditsBilled: 504 }),
-          aScene({ id: "scene-1", idx: 1, versionId: "ver-2", take: 2, creditsBilled: 504 }),
-          aScene({ id: "scene-2", idx: 2, creditsBilled: 216 }),
-          aScene({ id: "scene-3", idx: 3, creditsBilled: null }),
+          aScene({ id: "scene-1", idx: 1, usdBilled: 2.52 }),
+          aScene({ id: "scene-1", idx: 1, versionId: "ver-2", take: 2, usdBilled: 2.52 }),
+          aScene({ id: "scene-2", idx: 2, usdBilled: 1.08 }),
+          aScene({ id: "scene-3", idx: 3, usdBilled: null }),
         ]}
         selectedSceneId={null}
       />,
     );
 
-    expect(screen.getByText(/720 cr billed/i)).toBeTruthy();
+    expect(screen.getByText(/\$3\.60 billed/i)).toBeTruthy();
   });
 
   it("keeps the action menu a SIBLING of the selecting link, never inside it", () => {
@@ -221,7 +221,7 @@ describe("UgcSceneStrip", () => {
             status: "rendering",
             downloadUrl: null,
             filename: null,
-            creditsBilled: null,
+            usdBilled: null,
           }),
         ]}
         selectedSceneId={null}

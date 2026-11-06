@@ -214,7 +214,7 @@ export function ProjectsTable({
             />
             <SortableTableHead
               column="cost"
-              label="Credits"
+              label="Spend"
               align="right"
               sort={sort}
               buildHref={buildHref}

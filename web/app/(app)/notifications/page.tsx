@@ -1,10 +1,10 @@
 import type { JSX } from "react";
-import { isAdmin, requireUser } from "@/actions/guard";
+import { requireUser } from "@/actions/guard";
 import { getNotifications } from "@/lib/notifications";
 import { NotificationsList } from "@/components/notifications-list";
 
 export default async function NotificationsPage(): Promise<JSX.Element> {
-  const { user, profile } = await requireUser();
+  const { user } = await requireUser();
   const notifications = await getNotifications(user.id);
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
@@ -14,11 +14,7 @@ export default async function NotificationsPage(): Promise<JSX.Element> {
           Updates about your scenes and weekly credits.
         </p>
       </div>
-      <NotificationsList
-        initialNotifications={notifications}
-        displayUnit={isAdmin(profile) ? "dual" : "credits"}
-        currentUserId={user.id}
-      />
+      <NotificationsList initialNotifications={notifications} currentUserId={user.id} />
     </div>
   );
 }

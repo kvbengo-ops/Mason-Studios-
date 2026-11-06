@@ -26,8 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { decideAllowanceRequest } from "@/actions/allowance";
 import { grantExpiryError, peerGrantAmountError } from "@/lib/allowance";
-import { creditsToUsd, formatAllowanceAmount, usdToCredits } from "@/lib/format-usd";
-import type { AllowanceDisplayUnit } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 
 /** Converts an ISO instant into the `datetime-local` input's expected local-time value — no timezone conversion beyond what the browser's own <input> already does for its display. */
 function toDatetimeLocalValue(iso: string): string {
@@ -47,7 +46,6 @@ export function DecideAllowanceRequestDialog({
   usedThisWeekUsd,
   accountFundsUsd,
   outstandingAllowanceUsd,
-  displayUnit = "usd",
 }: {
   requestId: string;
   requesterEmail: string;
@@ -66,8 +64,6 @@ export function DecideAllowanceRequestDialog({
   accountFundsUsd: number | null;
   /** Sum across every non-admin account, for the current Manila week, of max(0, effective weekly allowance - used) — lib/db-aggregates.ts's getOutstandingAllowanceUsd. Same accounts on every row of this page's table, computed once by the page. */
   outstandingAllowanceUsd: number | null;
-  /** Trusted editors use credits; admins can see credits and their USD equivalent. */
-  displayUnit?: AllowanceDisplayUnit;
 }): JSX.Element {
   const [approveOpen, setApproveOpen] = useState(false);
   const [denyOpen, setDenyOpen] = useState(false);
@@ -77,12 +73,7 @@ export function DecideAllowanceRequestDialog({
   // under that same ceiling. A min() here could never bind, and a clamp that
   // cannot fire is a clamp nobody can reason about later.
   const initialGrantAmountUsd = defaultGrantAmountUsd;
-  const amountInputUnit = displayUnit === "usd" ? "usd" : "credits";
-  const [amount, setAmount] = useState(
-    String(
-      amountInputUnit === "credits" ? usdToCredits(initialGrantAmountUsd) : initialGrantAmountUsd,
-    ),
-  );
+  const [amount, setAmount] = useState(String(initialGrantAmountUsd));
   const [expiresAt, setExpiresAt] = useState(toDatetimeLocalValue(defaultExpiresAtIso));
   const [note, setNote] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -92,14 +83,10 @@ export function DecideAllowanceRequestDialog({
     setErrorMessage(null);
     const enteredAmount = Number(amount);
     if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
-      setErrorMessage(
-        amountInputUnit === "credits"
-          ? "Enter a positive number of credits to grant."
-          : "Enter a positive dollar amount to grant.",
-      );
+      setErrorMessage("Enter a positive dollar amount to grant.");
       return;
     }
-    const amountUsd = amountInputUnit === "credits" ? creditsToUsd(enteredAmount) : enteredAmount;
+    const amountUsd = enteredAmount;
     if (peerMaxGrantUsd !== null) {
       const amountError = peerGrantAmountError(amountUsd, peerMaxGrantUsd);
       if (amountError) {
@@ -181,11 +168,11 @@ export function DecideAllowanceRequestDialog({
           <DialogHeader>
             <DialogTitle>Approve {requesterEmail}&apos;s request</DialogTitle>
             <DialogDescription>
-              Requested {formatAllowanceAmount(requestedUsd, displayUnit)}. This raises their WEEKLY
-              allowance only — it never changes their daily burst guard. You may grant a different
-              amount than what they asked for.
+              Requested {formatUsd(requestedUsd)}. This raises their WEEKLY allowance only — it
+              never changes their daily burst guard. You may grant a different amount than what they
+              asked for.
               {peerMaxGrantUsd !== null
-                ? ` Your approval limit is ${formatAllowanceAmount(peerMaxGrantUsd, displayUnit)}; the grant expires at the end of the current Manila week.`
+                ? ` Your approval limit is ${formatUsd(peerMaxGrantUsd)}; the grant expires at the end of the current Manila week.`
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -200,29 +187,21 @@ export function DecideAllowanceRequestDialog({
             <span>
               Current allowance:{" "}
               <span className="font-medium text-foreground">
-                {currentAllowanceUsd !== null
-                  ? formatAllowanceAmount(currentAllowanceUsd, displayUnit)
-                  : "—"}
+                {currentAllowanceUsd !== null ? formatUsd(currentAllowanceUsd) : "—"}
               </span>{" "}
               · Used this week:{" "}
               <span className="font-medium text-foreground">
-                {usedThisWeekUsd !== null
-                  ? formatAllowanceAmount(usedThisWeekUsd, displayUnit)
-                  : "—"}
+                {usedThisWeekUsd !== null ? formatUsd(usedThisWeekUsd) : "—"}
               </span>
             </span>
             <span>
               Account funds:{" "}
               <span className="font-medium text-foreground">
-                {accountFundsUsd !== null
-                  ? formatAllowanceAmount(accountFundsUsd, displayUnit)
-                  : "Unknown"}
+                {accountFundsUsd !== null ? formatUsd(accountFundsUsd) : "Unknown"}
               </span>{" "}
               · Outstanding allowance (all accounts):{" "}
               <span className="font-medium text-foreground">
-                {outstandingAllowanceUsd !== null
-                  ? formatAllowanceAmount(outstandingAllowanceUsd, displayUnit)
-                  : "—"}
+                {outstandingAllowanceUsd !== null ? formatUsd(outstandingAllowanceUsd) : "—"}
               </span>
             </span>
             {accountFundsUsd !== null &&
@@ -236,20 +215,12 @@ export function DecideAllowanceRequestDialog({
 
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`grant-amount-${requestId}`}>
-                Grant amount ({amountInputUnit === "credits" ? "credits" : "USD"})
-              </Label>
+              <Label htmlFor={`grant-amount-${requestId}`}>Grant amount (USD)</Label>
               <Input
                 id={`grant-amount-${requestId}`}
                 type="number"
                 min="1"
-                max={
-                  peerMaxGrantUsd === null
-                    ? undefined
-                    : amountInputUnit === "credits"
-                      ? usdToCredits(peerMaxGrantUsd)
-                      : peerMaxGrantUsd
-                }
+                max={peerMaxGrantUsd ?? undefined}
                 step="1"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
@@ -302,8 +273,8 @@ export function DecideAllowanceRequestDialog({
           <DialogHeader>
             <DialogTitle>Deny {requesterEmail}&apos;s request?</DialogTitle>
             <DialogDescription>
-              Requested {formatAllowanceAmount(requestedUsd, displayUnit)}. No grant is created —
-              their allowance stays exactly where it is.
+              Requested {formatUsd(requestedUsd)}. No grant is created — their allowance stays
+              exactly where it is.
             </DialogDescription>
           </DialogHeader>
 

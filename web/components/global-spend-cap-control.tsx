@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { creditsToUsd, formatCredits, usdToCredits } from "@/lib/format-usd";
+import { formatUsd } from "@/lib/format-usd";
 import type { GlobalSpendCapPeriod, GlobalSpendCapSettings } from "@/lib/spend";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +36,7 @@ export function GlobalSpendCapControl({
   const [open, setOpen] = useState(false);
   const [enabled, setEnabled] = useState(settings.enabled);
   const [period, setPeriod] = useState<GlobalSpendCapPeriod>(settings.period);
-  const [credits, setCredits] = useState(String(Math.round(usdToCredits(settings.capUsd))));
+  const [credits, setCredits] = useState(String(settings.capUsd));
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -44,13 +44,13 @@ export function GlobalSpendCapControl({
     setMessage(null);
     const amount = Number(credits);
     if (!Number.isFinite(amount) || amount < 0) {
-      setMessage("Enter zero or a positive credit limit.");
+      setMessage("Enter zero or a positive dollar limit.");
       return;
     }
 
     startTransition(async () => {
       try {
-        const result = await setGlobalSpendCap(enabled, creditsToUsd(amount), period);
+        const result = await setGlobalSpendCap(enabled, amount, period);
         if (result?.error) {
           setMessage(result.error);
           return;
@@ -105,8 +105,8 @@ export function GlobalSpendCapControl({
         )}
       >
         {settings.enabled
-          ? `${formatCredits(spentUsd)} of ${formatCredits(settings.capUsd)} ${periodLabel}`
-          : `Cap disabled · ${formatCredits(spentUsd)} ${periodLabel}`}
+          ? `${formatUsd(spentUsd)} of ${formatUsd(settings.capUsd)} ${periodLabel}`
+          : `Cap disabled · ${formatUsd(spentUsd)} ${periodLabel}`}
       </span>
 
       {/* Pinned to the tile's top-right band, beside the figure, so opening the
@@ -174,12 +174,12 @@ export function GlobalSpendCapControl({
             </Select>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="global-cap-credits">Global cap in credits</Label>
+            <Label htmlFor="global-cap-credits">Global cap in USD</Label>
             <Input
               id="global-cap-credits"
               type="number"
               min={0}
-              step={100}
+              step={0.01}
               value={credits}
               onChange={(event) => setCredits(event.target.value)}
               disabled={isPending}

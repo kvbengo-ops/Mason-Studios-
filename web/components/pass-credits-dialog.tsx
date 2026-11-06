@@ -5,7 +5,7 @@ import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { passAllowance } from "@/actions/transfer";
 import { passBlockReason } from "@/lib/transfer";
-import { creditsToUsd, formatCredits, remainingForDisplayUsd } from "@/lib/format-usd";
+import { formatUsd, remainingForDisplayUsd } from "@/lib/format-usd";
 import type { ProfileRole } from "@/types/db";
 import {
   Dialog,
@@ -52,7 +52,7 @@ export function PassCreditsDialog({
   const [note, setNote] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const amountUsd = creditsToUsd(Number(amount));
+  const amountUsd = Number(amount);
 
   function handlePass(): void {
     setErrorMessage(null);
@@ -86,7 +86,7 @@ export function PassCreditsDialog({
         onOpenChange(false);
       } catch (error) {
         unstable_rethrow(error);
-        setErrorMessage(error instanceof Error ? error.message : "Failed to pass credits.");
+        setErrorMessage(error instanceof Error ? error.message : "Failed to pass allowance.");
       }
     });
   }
@@ -95,7 +95,7 @@ export function PassCreditsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Pass credits</DialogTitle>
+          <DialogTitle>Pass allowance</DialogTitle>
           <DialogDescription>
             Pass part of your weekly allowance to a colleague. The pass expires at the end of this
             Manila week and is not returned. Unspent headroom for both of you stops existing on
@@ -134,30 +134,30 @@ export function PassCreditsDialog({
             ) : null}
           </div>
           <p className="text-sm tabular-nums">
-            Remaining this week: {formatCredits(remainingForDisplayUsd(headroomUsd))}
+            Remaining this week: {formatUsd(remainingForDisplayUsd(headroomUsd))}
           </p>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pass-amount">Amount (credits)</Label>
+            <Label htmlFor="pass-amount">Amount (USD)</Label>
             <Input
               id="pass-amount"
               type="number"
-              min="1"
-              step="1"
+              min="0.01"
+              step="0.01"
               value={amount}
-              // DIGITS ONLY, filtered on the way in. `min="1"` is advisory
-              // here: the browser enforces it on native form submission and
-              // this dialog submits from a button, so "-50" was typeable and
-              // reached passBlockReason to be refused after the fact. Credits
-              // are whole (step="1"), so stripping everything but digits also
-              // drops "-", "e" and "." — every character a number input
-              // accepts that this field has no meaning for.
-              onChange={(event) => setAmount(event.target.value.replace(/[^0-9]/g, ""))}
+              // Digits and one decimal point, filtered on the way in. `min` is
+              // advisory here: the browser enforces it on native form
+              // submission and this dialog submits from a button, so "-50"
+              // was typeable and reached passBlockReason to be refused after
+              // the fact. Dropping "-" and "e" closes that; dollars need the ".".
+              onChange={(event) =>
+                setAmount(event.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1"))
+              }
               disabled={isPending}
             />
           </div>
           <p className="text-sm tabular-nums">
             Remaining after pass:{" "}
-            {Number.isFinite(amountUsd) ? formatCredits(Math.max(0, headroomUsd - amountUsd)) : "—"}
+            {Number.isFinite(amountUsd) ? formatUsd(Math.max(0, headroomUsd - amountUsd)) : "—"}
           </p>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="pass-note">Note (optional)</Label>
@@ -179,7 +179,7 @@ export function PassCreditsDialog({
             Cancel
           </Button>
           <PendingButton onClick={handlePass} pending={isPending}>
-            Pass credits
+            Pass allowance
           </PendingButton>
         </DialogFooter>
       </DialogContent>

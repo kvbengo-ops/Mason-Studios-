@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { creditsToUsd, usdToCredits } from "./format-usd";
 import {
   BULK_ALLOWANCE_SCOPE_ROLES,
   MAX_GRANT_EXPIRY_DAYS,
@@ -17,17 +16,14 @@ describe("defaultGrantAmountUsd", () => {
     expect(defaultGrantAmountUsd(0.5)).toBe(0.5);
   });
 
-  // The bug this replaced a $5 round-up to fix, stated in the unit the
-  // people involved actually read. USD_PER_CREDIT is 0.005, so $5 is
-  // 1,000 cr: every request under $5 pre-filled the approve dialog at
-  // 1,000 cr no matter what was asked, five times over on a 200 cr ask.
-  it("a small credit request does not balloon to the old $5 (1,000 cr) floor", () => {
-    const twoHundredCredits = creditsToUsd(200);
-    expect(defaultGrantAmountUsd(twoHundredCredits)).toBe(twoHundredCredits);
-    expect(usdToCredits(defaultGrantAmountUsd(twoHundredCredits))).toBe(200);
-    // The whole range that used to collapse onto 1,000 cr.
-    for (const credits of [200, 400, 600, 800, 999]) {
-      expect(usdToCredits(defaultGrantAmountUsd(creditsToUsd(credits)))).toBeCloseTo(credits, 6);
+  // The bug this replaced a $5 round-up to fix: every request under $5
+  // pre-filled the approve dialog at $5 no matter what was asked, five times
+  // over on a $1 ask.
+  it("a small request does not balloon to the old $5 floor", () => {
+    expect(defaultGrantAmountUsd(1)).toBe(1);
+    // The whole range that used to collapse onto $5.
+    for (const usd of [1, 2, 3, 4, 4.99]) {
+      expect(defaultGrantAmountUsd(usd)).toBe(usd);
     }
   });
 
