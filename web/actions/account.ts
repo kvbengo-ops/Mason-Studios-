@@ -650,3 +650,39 @@ export async function setAllEditorsDailyCap(
   revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
   return { updated: (data ?? []).length };
 }
+
+/**
+ * The hourly twin of setAllEditorsDailyCap: sets, or clears (null = no
+ * hourly cap), profiles.hourly_cap_override_usd on every account in `scope`.
+ * Same validation as setHourlyCapOverride, same never-admins scoping. No
+ * grant revocation on zero, for the same reason as the daily twin.
+ */
+export async function setAllEditorsHourlyCap(
+  hourlyCapUsd: number | null,
+  scope: BulkAllowanceScope = "all",
+): Promise<BulkAllowanceResult> {
+  await requireAdmin();
+
+  const roles = BULK_ALLOWANCE_SCOPE_ROLES[scope];
+  if (!roles) {
+    return { error: "Choose which accounts this hourly cap applies to." };
+  }
+  if (hourlyCapUsd !== null && (!Number.isFinite(hourlyCapUsd) || hourlyCapUsd < 0)) {
+    return { error: "Hourly cap must be zero or a positive amount." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .update({ hourly_cap_override_usd: hourlyCapUsd })
+    .in("role", roles as ProfileRole[])
+    .select("id");
+
+  if (error) {
+    throw new Error(`Failed to set the editor hourly cap: ${error.message}`);
+  }
+
+  revalidatePath(USERS_PATH);
+  revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
+  return { updated: (data ?? []).length };
+}

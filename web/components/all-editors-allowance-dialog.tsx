@@ -1,7 +1,8 @@
 "use client";
 
-// Bulk weekly allowance for every editor-tier account, from /users
-// (actions/account.ts's setAllEditorsWeeklyCap).
+// Every team-wide spending limit from /users, behind one "Spending limits"
+// button: the weekly allowance by role, plus an OPTIONAL daily and hourly cap,
+// each behind its own switch.
 //
 // The copy below says out loud that this is not the role default, because
 // an admin will otherwise assume it is. It writes an override onto each
@@ -9,11 +10,9 @@
 // env-var default until someone runs this again. That ceiling is recorded
 // on the Server Action, along with what changing it would actually cost.
 //
-// Destructive-ish enough to confirm: it rewrites a money limit on every
-// editor at once, including any per-person allowance an admin had
-// deliberately set. So the confirm step names the count it is about to
-// affect rather than firing on first click, the same reasoning
-// reject-account-dialog.tsx uses.
+// NOTHING APPLIES UNTIL SAVE, switches included. Turning the daily switch
+// off used to be its own confirm dialog (daily-cap-switch.tsx); here the
+// warning shows under the switch instead and Save is the confirmation.
 
 import { useState, useTransition } from "react";
 import type { JSX } from "react";
@@ -38,7 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { setAllEditorsDailyCap, setAllEditorsWeeklyCap } from "@/actions/account";
+import {
+  setAllEditorsDailyCap,
+  setAllEditorsHourlyCap,
+  setAllEditorsWeeklyCap,
+  setUserDailyCapEnabled,
+} from "@/actions/account";
 import {
   BULK_ALLOWANCE_SCOPE_LABELS,
   dailyCapOverrideError,
@@ -46,6 +50,42 @@ import {
   type BulkAllowanceScope,
 } from "@/lib/allowance";
 import { creditsToUsd, formatCredits } from "@/lib/format-usd";
+import { cn } from "@/lib/utils";
+
+function Toggle({
+  id,
+  checked,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+}): JSX.Element {
+  return (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+        checked ? "bg-primary" : "bg-muted-foreground/30",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-block size-5 rounded-full bg-background shadow transition-transform",
+          checked ? "translate-x-[1.375rem]" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
+}
 
 export function AllEditorsAllowanceDialog({
   /** ADMIN_WEEKLY_CAP_USD, resolved server-side — see the per-account
@@ -55,22 +95,31 @@ export function AllEditorsAllowanceDialog({
   editorCount,
   /** ADMIN_DAILY_CAP_USD, resolved server-side — the ceiling the daily field validates against. */
   maxDailyCapUsd,
-  /** Whether the daily guard is switched on for the installation. Off hides the daily field: a number nothing enforces is a number that misleads. */
+  /** The installation-wide daily guard (app_settings, 0077) — the daily switch's starting state. */
   dailyCapEnabled = false,
   /** Accounts on `trusted_editor`. Counted separately because the scope
    * below writes to one tier or the other, and the copy names the number it
    * is about to change. */
   trustedEditorCount,
+  /** Editor-tier accounts the daily on/off moves (it is installation-wide, not per role). */
+  followingDefaultCount,
+  /** Whether any editor-tier account has an hourly cap now — the hourly switch's starting state. */
+  hourlyCapInUse = false,
 }: {
   maxWeeklyCapUsd: number;
   maxDailyCapUsd: number;
   dailyCapEnabled?: boolean;
   editorCount: number;
   trustedEditorCount: number;
+  followingDefaultCount: number;
+  hourlyCapInUse?: boolean;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const [credits, setCredits] = useState("2000");
+  const [dailyOn, setDailyOn] = useState(dailyCapEnabled);
   const [dailyCredits, setDailyCredits] = useState("400");
+  const [hourlyOn, setHourlyOn] = useState(hourlyCapInUse);
+  const [hourlyCredits, setHourlyCredits] = useState("100");
   // "all" is the default because it is what this control did before scopes
   // existed — an admin who opens it and clicks straight through gets the
   // behaviour they already knew.
@@ -78,44 +127,6 @@ export function AllEditorsAllowanceDialog({
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [doneMessage, setDoneMessage] = useState<string | null>(null);
-
-  function submit(weeklyCapUsd: number | null, dailyCapUsd: number | null): void {
-    setErrorMessage(null);
-    setDoneMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await setAllEditorsWeeklyCap(weeklyCapUsd, scope);
-        if ("error" in result) {
-          setErrorMessage(result.error);
-          return;
-        }
-        // Weekly first: it is the one that revokes grants on zero, so if it
-        // fails there is nothing to unwind. Only written when the guard is
-        // on — an amount nothing enforces is not worth stamping onto every
-        // row, and "Use role defaults" clears both regardless.
-        if (dailyCapEnabled || dailyCapUsd === null) {
-          const dailyResult = await setAllEditorsDailyCap(dailyCapUsd, scope);
-          if ("error" in dailyResult) {
-            setErrorMessage(dailyResult.error);
-            return;
-          }
-        }
-        // Stays open on success, unlike the per-account dialog: the admin
-        // just changed every editor's limit at once and the count is the
-        // only confirmation that it hit who they expected.
-        setDoneMessage(
-          weeklyCapUsd === null
-            ? `Cleared. ${result.updated} account${result.updated === 1 ? "" : "s"} back on role defaults.`
-            : `Set ${formatCredits(weeklyCapUsd)} on ${result.updated} account${result.updated === 1 ? "" : "s"}.`,
-        );
-      } catch (error) {
-        unstable_rethrow(error);
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to set the editor allowance.",
-        );
-      }
-    });
-  }
 
   // What the chosen scope will actually write to, so every number on screen
   // is the number the Server Action is about to change.
@@ -125,6 +136,64 @@ export function AllEditorsAllowanceDialog({
       : scope === "trusted_editor"
         ? trustedEditorCount
         : editorCount + trustedEditorCount;
+  const plural = (n: number): string => `${n} account${n === 1 ? "" : "s"}`;
+
+  /**
+   * `dailyCapUsd` / `hourlyCapUsd`: a number sets it, null clears it,
+   * undefined leaves it alone. `dailyEnabled` undefined leaves the switch.
+   */
+  function submit(
+    weeklyCapUsd: number | null,
+    dailyEnabled: boolean | undefined,
+    dailyCapUsd: number | null | undefined,
+    hourlyCapUsd: number | null,
+  ): void {
+    setErrorMessage(null);
+    setDoneMessage(null);
+    startTransition(async () => {
+      try {
+        // Weekly first: it is the one that revokes grants on zero, so if it
+        // fails there is nothing to unwind.
+        const result = await setAllEditorsWeeklyCap(weeklyCapUsd, scope);
+        if ("error" in result) {
+          setErrorMessage(result.error);
+          return;
+        }
+        if (dailyEnabled !== undefined && dailyEnabled !== dailyCapEnabled) {
+          const switched = await setUserDailyCapEnabled(dailyEnabled);
+          if (switched?.error) {
+            setErrorMessage(switched.error);
+            return;
+          }
+        }
+        if (dailyCapUsd !== undefined) {
+          const dailyResult = await setAllEditorsDailyCap(dailyCapUsd, scope);
+          if ("error" in dailyResult) {
+            setErrorMessage(dailyResult.error);
+            return;
+          }
+        }
+        const hourlyResult = await setAllEditorsHourlyCap(hourlyCapUsd, scope);
+        if ("error" in hourlyResult) {
+          setErrorMessage(hourlyResult.error);
+          return;
+        }
+        // Stays open on success, unlike the per-account dialog: the admin
+        // just changed every editor's limit at once and the count is the
+        // only confirmation that it hit who they expected.
+        setDoneMessage(
+          weeklyCapUsd === null
+            ? `Cleared. ${plural(result.updated)} back on role defaults.`
+            : `Saved on ${plural(result.updated)}.`,
+        );
+      } catch (error) {
+        unstable_rethrow(error);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to set the editor allowance.",
+        );
+      }
+    });
+  }
 
   function handleSave(): void {
     const entered = Number(credits);
@@ -138,11 +207,14 @@ export function AllEditorsAllowanceDialog({
       setErrorMessage(error);
       return;
     }
-    let dailyCapUsd: number | null = null;
-    if (dailyCapEnabled) {
+
+    // Daily OFF leaves the stored amounts alone: the switch is what stops
+    // them applying, and turning it back on brings them back as they were.
+    let dailyCapUsd: number | undefined;
+    if (dailyOn) {
       const enteredDaily = Number(dailyCredits);
       if (!Number.isFinite(enteredDaily) || enteredDaily < 0) {
-        setErrorMessage("Enter zero or a positive daily guard.");
+        setErrorMessage("Enter zero or a positive daily cap.");
         return;
       }
       dailyCapUsd = creditsToUsd(enteredDaily);
@@ -152,22 +224,35 @@ export function AllEditorsAllowanceDialog({
         return;
       }
     }
-    submit(weeklyCapUsd, dailyCapUsd);
+
+    // Hourly has no installation switch — an account is capped exactly when
+    // it has a value — so OFF clears it for the chosen role.
+    let hourlyCapUsd: number | null = null;
+    if (hourlyOn) {
+      const enteredHourly = Number(hourlyCredits);
+      if (!Number.isFinite(enteredHourly) || enteredHourly < 0) {
+        setErrorMessage("Enter zero or a positive hourly cap.");
+        return;
+      }
+      hourlyCapUsd = creditsToUsd(enteredHourly);
+    }
+
+    submit(weeklyCapUsd, dailyOn, dailyCapUsd, hourlyCapUsd);
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
-          Set allowance by role
+          Spending limits
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Allowance by role</DialogTitle>
+          <DialogTitle>Spending limits</DialogTitle>
           <DialogDescription>
-            Applies to {scopedCount} account{scopedCount === 1 ? "" : "s"} right now. Admins are
-            never affected, and any allowance you set on one person individually is overwritten.
+            Applies to {plural(scopedCount)} right now. Admins are never affected, and any allowance
+            you set on one person individually is overwritten.
           </DialogDescription>
         </DialogHeader>
 
@@ -215,9 +300,6 @@ export function AllEditorsAllowanceDialog({
             onChange={(event) => setCredits(event.target.value)}
             disabled={isPending}
           />
-          {/* The one thing an admin will get wrong if it is not said here.
-              This sets a value on the accounts that exist now; it does not
-              change what a NEW account starts with. */}
           <p className="text-xs text-muted-foreground">
             Up to {formatCredits(maxWeeklyCapUsd)}. This is not the role default — it sets a value
             on the accounts that exist today. Someone who signs up later starts on the role default
@@ -225,28 +307,90 @@ export function AllEditorsAllowanceDialog({
           </p>
         </div>
 
-        {/* Only when the guard is actually on. Setting a daily amount the
-            installation does not enforce writes a number onto every row that
-            changes nothing an editor can observe — worse than absent,
-            because it reads as a limit. */}
-        {dailyCapEnabled ? (
-          <div className="grid gap-2">
-            <Label htmlFor="all-editors-daily-credits">Credits per day</Label>
-            <Input
-              id="all-editors-daily-credits"
-              type="number"
-              min={0}
-              step={100}
-              value={dailyCredits}
-              onChange={(event) => setDailyCredits(event.target.value)}
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="all-editors-daily-switch" className="flex flex-col items-start gap-0.5">
+              <span>Daily cap</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                Optional burst guard under the weekly figure.
+              </span>
+            </Label>
+            <Toggle
+              id="all-editors-daily-switch"
+              checked={dailyOn}
+              onChange={setDailyOn}
               disabled={isPending}
             />
-            <p className="text-xs text-muted-foreground">
-              A burst guard under the weekly figure above, not a second budget — anything at or over
-              the weekly amount never fires. Up to {formatCredits(maxDailyCapUsd)}.
-            </p>
           </div>
-        ) : null}
+          {dailyOn ? (
+            <div className="grid gap-2">
+              <Label htmlFor="all-editors-daily-credits">Credits per day</Label>
+              <Input
+                id="all-editors-daily-credits"
+                type="number"
+                min={0}
+                step={100}
+                value={dailyCredits}
+                onChange={(event) => setDailyCredits(event.target.value)}
+                disabled={isPending}
+              />
+              <p className="text-xs text-muted-foreground">
+                Anything at or over the weekly amount never fires. Up to{" "}
+                {formatCredits(maxDailyCapUsd)}.
+              </p>
+            </div>
+          ) : null}
+          {/* The on/off is installation-wide (app_settings), not per role —
+              said here so "Editors only" above isn't read as covering it. */}
+          {dailyOn !== dailyCapEnabled ? (
+            <p
+              className={cn(
+                "text-xs",
+                dailyOn ? "text-muted-foreground" : "font-medium text-destructive",
+              )}
+            >
+              {dailyOn
+                ? `Save turns the daily cap on for all ${plural(followingDefaultCount)}.`
+                : `Save turns the daily cap off for all ${plural(followingDefaultCount)} — one editor could spend a week's allowance in an afternoon.`}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-4">
+            <Label
+              htmlFor="all-editors-hourly-switch"
+              className="flex flex-col items-start gap-0.5"
+            >
+              <span>Hourly cap</span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {hourlyOn
+                  ? "Optional ceiling per hour."
+                  : `Off — Save removes hourly caps from these ${plural(scopedCount)}.`}
+              </span>
+            </Label>
+            <Toggle
+              id="all-editors-hourly-switch"
+              checked={hourlyOn}
+              onChange={setHourlyOn}
+              disabled={isPending}
+            />
+          </div>
+          {hourlyOn ? (
+            <div className="grid gap-2">
+              <Label htmlFor="all-editors-hourly-credits">Credits per hour</Label>
+              <Input
+                id="all-editors-hourly-credits"
+                type="number"
+                min={0}
+                step={10}
+                value={hourlyCredits}
+                onChange={(event) => setHourlyCredits(event.target.value)}
+                disabled={isPending}
+              />
+            </div>
+          ) : null}
+        </div>
 
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
         {doneMessage ? <p className="text-sm text-muted-foreground">{doneMessage}</p> : null}
@@ -255,7 +399,11 @@ export function AllEditorsAllowanceDialog({
           <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
             Close
           </Button>
-          <PendingButton variant="outline" onClick={() => submit(null, null)} pending={isPending}>
+          <PendingButton
+            variant="outline"
+            onClick={() => submit(null, undefined, null, null)}
+            pending={isPending}
+          >
             Use role defaults
           </PendingButton>
           <PendingButton onClick={handleSave} pending={isPending}>

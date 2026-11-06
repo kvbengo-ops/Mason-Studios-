@@ -6,6 +6,7 @@ import {
   setWeeklyCapOverride,
   setDailyCapOverride,
   setAllEditorsDailyCap,
+  setAllEditorsHourlyCap,
   setAllEditorsWeeklyCap,
 } from "./account";
 import { requireAdmin } from "@/actions/guard";
@@ -424,6 +425,30 @@ describe("setAllEditorsDailyCap", () => {
     const result = await setAllEditorsDailyCap(2, "admin" as never);
 
     expect(result).toEqual({ error: expect.stringMatching(/which accounts/i) });
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("setAllEditorsHourlyCap", () => {
+  it("writes the hourly override to the scoped roles and reports the count", async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+    const builder = fakeBuilder({ data: [{ id: "a" }, { id: "b" }], error: null });
+    vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
+
+    const result = await setAllEditorsHourlyCap(1.5, "trusted_editor");
+
+    expect(builder.in).toHaveBeenCalledWith("role", ["trusted_editor"]);
+    expect(builder.update).toHaveBeenCalledWith({ hourly_cap_override_usd: 1.5 });
+    expect(result).toEqual({ updated: 2 });
+  });
+
+  it("refuses a negative amount or an unknown scope without touching the database", async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+
+    expect(await setAllEditorsHourlyCap(-1, "all")).toEqual({ error: expect.any(String) });
+    expect(await setAllEditorsHourlyCap(1, "admin" as never)).toEqual({
+      error: expect.stringMatching(/which accounts/i),
+    });
     expect(createAdminClient).not.toHaveBeenCalled();
   });
 });

@@ -42,13 +42,7 @@ vi.mock("@/components/all-editors-allowance-dialog", () => ({
 }));
 
 vi.mock("@/components/user-row-actions", () => ({
-  UserRowActions: ({
-    userId,
-    allowanceOnly,
-  }: {
-    userId: string;
-    allowanceOnly?: boolean;
-  }) => (
+  UserRowActions: ({ userId, allowanceOnly }: { userId: string; allowanceOnly?: boolean }) => (
     <span
       data-testid={`user-row-actions-${userId}`}
       data-allowance-only={String(allowanceOnly ?? false)}
@@ -115,15 +109,14 @@ describe("UsersPage row actions", () => {
           or: vi.fn(() => builder),
           eq: vi.fn(() => builder),
           in: vi.fn(() => builder),
+          not: vi.fn(() => builder),
           order: vi.fn(() => builder),
           range: vi.fn(async () => ({
             data: table === "user_directory" ? directoryRows : [],
             error: null,
             count: directoryRows.length,
           })),
-          then: (
-            resolve: (value: { data: unknown[]; error: null; count: number }) => unknown,
-          ) =>
+          then: (resolve: (value: { data: unknown[]; error: null; count: number }) => unknown) =>
             Promise.resolve({
               data:
                 table === "profiles"
@@ -157,9 +150,11 @@ describe("UsersPage row actions", () => {
     expect(
       screen.queryByRole("link", { name: /view creations for admin@example\.com/i }),
     ).toBeNull();
-    expect(screen.getByTestId("user-row-actions-admin-1").getAttribute("data-allowance-only"))
-      .toBe("true");
-    expect(screen.getByTestId("user-row-actions-editor-1").getAttribute("data-allowance-only"))
-      .toBe("false");
+    expect(screen.getByTestId("user-row-actions-admin-1").getAttribute("data-allowance-only")).toBe(
+      "true",
+    );
+    expect(
+      screen.getByTestId("user-row-actions-editor-1").getAttribute("data-allowance-only"),
+    ).toBe("false");
   });
 });

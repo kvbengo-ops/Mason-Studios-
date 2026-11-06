@@ -268,6 +268,7 @@ export default async function UsersPage({
     { count: plainEditorCount },
     { count: trustedEditorCount },
     { count: followingDefaultCount },
+    { count: hourlyCappedCount },
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "editor"),
     supabase
@@ -282,6 +283,13 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .in("role", ["editor", "trusted_editor"]),
+    // Whether the Spending limits panel's hourly switch starts on: hourly has
+    // no installation setting, an account is capped exactly when it has one.
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .in("role", ["editor", "trusted_editor"])
+      .not("hourly_cap_override_usd", "is", null),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -465,11 +473,10 @@ export default async function UsersPage({
             control hides entirely when the ceiling could not be resolved,
             same rule as the per-account one: a limit editor that cannot
             validate its own input should not exist. */}
+        {/* One "Spending limits" button holds the daily switch and the
+            by-role amounts. If lib/spend failed the amounts can't validate,
+            so only the switch shows, on its own. */}
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <DailyCapSwitch
-            enabled={dailyCapEnabled}
-            followingDefaultCount={followingDefaultCount ?? 0}
-          />
           {maxWeeklyCapUsd !== null ? (
             <AllEditorsAllowanceDialog
               maxWeeklyCapUsd={maxWeeklyCapUsd}
@@ -477,8 +484,15 @@ export default async function UsersPage({
               dailyCapEnabled={dailyCapEnabled}
               editorCount={plainEditorCount ?? 0}
               trustedEditorCount={trustedEditorCount ?? 0}
+              followingDefaultCount={followingDefaultCount ?? 0}
+              hourlyCapInUse={(hourlyCappedCount ?? 0) > 0}
             />
-          ) : null}
+          ) : (
+            <DailyCapSwitch
+              enabled={dailyCapEnabled}
+              followingDefaultCount={followingDefaultCount ?? 0}
+            />
+          )}
         </div>
       </div>
 
@@ -678,9 +692,7 @@ export default async function UsersPage({
                             {`${formatUsd(activeGrants.totalUsd)} (${activeGrants.count})`}
                             {activeGrants.latestTransferAmountUsd !== null ? (
                               <Badge variant="secondary" title="Latest credit transfer">
-                                {activeGrants.latestTransferAmountUsd < 0
-                                  ? "Passed"
-                                  : "Received"}
+                                {activeGrants.latestTransferAmountUsd < 0 ? "Passed" : "Received"}
                               </Badge>
                             ) : null}
                           </span>
@@ -722,8 +734,7 @@ export default async function UsersPage({
                               href={`/users/${user.id}/creations`}
                               className="whitespace-nowrap text-sm font-medium text-foreground underline-offset-4 hover:underline"
                             >
-                              View creations{" "}
-                              <span className="sr-only"> for {user.email}</span>
+                              View creations <span className="sr-only"> for {user.email}</span>
                             </Link>
                             {user.status === "active" ? (
                               /* An ACTIVE editor tier is the only row with a role

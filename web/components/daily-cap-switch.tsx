@@ -31,6 +31,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PendingButton } from "@/components/pending-button";
 import { setUserDailyCapEnabled } from "@/actions/account";
+import { cn } from "@/lib/utils";
 
 export function DailyCapSwitch({
   enabled,
@@ -63,25 +64,43 @@ export function DailyCapSwitch({
     });
   }
 
+  // A real on/off switch. ON is one click; OFF opens the confirm below.
+  const toggle = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={enabled ? "Daily cap on — turn off" : "Enable daily cap"}
+      disabled={isPending}
+      onClick={enabled ? undefined : (): void => submit(true)}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+        enabled ? "bg-primary" : "bg-muted-foreground/30",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-block size-5 rounded-full bg-background shadow transition-transform",
+          enabled ? "translate-x-[1.375rem]" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
+
   if (!enabled) {
     return (
-      <div className="flex flex-col gap-0.5">
-        <PendingButton size="sm" variant="outline" onClick={() => submit(true)} pending={isPending}>
-          Enable daily cap
-        </PendingButton>
+      <div className="flex flex-col items-end gap-0.5">
+        {toggle}
         {errorMessage ? <span className="text-xs text-destructive">{errorMessage}</span> : null}
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col items-end gap-0.5">
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button size="sm" variant="outline">
-            Daily cap on — disable
-          </Button>
-        </DialogTrigger>
+        <DialogTrigger asChild>{toggle}</DialogTrigger>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Turn the daily cap off?</DialogTitle>
