@@ -25,13 +25,15 @@ import { Button } from "@/components/ui/button";
 import { WeeklyAllowanceDialog } from "@/components/weekly-allowance-dialog";
 import { DeactivateAccountDialog } from "@/components/deactivate-account-dialog";
 import { PromoteAdminDialog } from "@/components/promote-admin-dialog";
-import { setTrustedEditor } from "@/actions/account";
+import { demoteAdmin, setTrustedEditor } from "@/actions/account";
 
 export function UserRowActions({
   userId,
   email,
   isTrusted,
   allowanceOnly = false,
+  /** Admin rows only: offer demotion. False on the viewer's own row. */
+  canDemote = false,
   /** Null when lib/spend did not load — the allowance item is hidden rather than offering a control that cannot validate its own input. */
   allowance,
 }: {
@@ -39,6 +41,7 @@ export function UserRowActions({
   email: string;
   isTrusted: boolean;
   allowanceOnly?: boolean;
+  canDemote?: boolean;
   allowance: {
     effectiveWeeklyCapUsd: number;
     hasOverride: boolean;
@@ -64,6 +67,21 @@ export function UserRowActions({
         const result = await setTrustedEditor(userId, isTrusted ? "untrust" : "trust");
         // The lost-race branch (someone else changed this role first) comes
         // back as data, not a throw — see lib/action-result.ts.
+        if (result?.error) setErrorMessage(result.error);
+      } catch (error) {
+        unstable_rethrow(error);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Failed to change that account's role.",
+        );
+      }
+    });
+  }
+
+  function demote(role: "editor" | "trusted_editor"): void {
+    setErrorMessage(null);
+    startTransition(async () => {
+      try {
+        const result = await demoteAdmin(userId, role);
         if (result?.error) setErrorMessage(result.error);
       } catch (error) {
         unstable_rethrow(error);
@@ -100,6 +118,14 @@ export function UserRowActions({
               >
                 Make admin
               </DropdownMenuItem>
+            </>
+          ) : null}
+          {canDemote ? (
+            <>
+              <DropdownMenuItem onSelect={() => demote("trusted_editor")}>
+                Make trusted editor
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => demote("editor")}>Make editor</DropdownMenuItem>
             </>
           ) : null}
           {allowance ? (

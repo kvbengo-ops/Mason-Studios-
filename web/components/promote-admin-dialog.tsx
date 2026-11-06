@@ -55,7 +55,7 @@ export function PromoteAdminDialog({
           <DialogTitle>Make {email} an admin?</DialogTitle>
           <DialogDescription>
             This gives them administrator access, including access to other users’ projects and
-            account management. This page has no demotion control.
+            account management.
           </DialogDescription>
         </DialogHeader>
         {errorMessage ? (
