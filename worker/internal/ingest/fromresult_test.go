@@ -406,22 +406,8 @@ func TestFromResult_HappyPath_RecordsExpectedAssetAndRun(t *testing.T) {
 	}
 }
 
-// TestFromResult_AlwaysRecordsKieVendor replaces
-// TestFromResult_RecordsPassedVendor_NotPickModelDefault, which pinned the
-// fal-era `vendor fal.Vendor` parameter: FromResult used to take it because
-// it had no other reliable way to know which of two vendors actually ran a
-// render (the resolved Model carried only a compile-time DEFAULT — see
-// fal.Descriptor.Vendor's old doc comment), so the caller (which knew
-// structurally, from which webhook route fired) had to tell it explicitly.
-// That test asserted the parameter WON over PickModel's own default when
-// the two disagreed (VendorKie in, VendorKie out, even though PickModel's
-// default was VendorFal).
-//
-// The parameter is gone (see FromResult's own doc comment): with one
-// vendor, there is no second default it could disagree with. What is left
-// to pin is simpler and unconditional — runs.vendor is always kie.Vendor,
-// regardless of which model or scene shape produced the render.
-func TestFromResult_AlwaysRecordsKieVendor(t *testing.T) {
+// Unprefixed task ids belong to kie and should be recorded with kie as vendor.
+func TestFromResult_RecordsKieVendorForUnprefixedTaskID(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("fake clip bytes"))
@@ -454,6 +440,48 @@ func TestFromResult_AlwaysRecordsKieVendor(t *testing.T) {
 	}
 	if got := fs.markDoneCalls[0].run.Vendor; got != kie.Vendor {
 		t.Errorf("MarkDone run.Vendor = %q, want %q", got, kie.Vendor)
+	}
+}
+
+func TestFromResult_BytePlusVendorAndMissingTokensKeepCostUnknown(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("fake clip bytes"))
+	}))
+	defer srv.Close()
+	installFakeFFmpeg(t, 0)
+
+	uploadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer uploadSrv.Close()
+
+	fs := &fakeStore{}
+	deps := Deps{
+		Store: fs,
+		Config: &config.Config{
+			SupabaseURL:            uploadSrv.URL,
+			SupabaseServiceRoleKey: "test-key",
+		},
+		Media:  media.NewRunner(1),
+		Logger: testLogger(),
+	}
+
+	scene := testScene(t)
+	requestID := kie.BytePlusTaskPrefix + "cgt-123"
+	scene.KieTaskID = &requestID
+	if err := FromResult(context.Background(), deps, scene, testResult(t, srv.URL)); err != nil {
+		t.Fatalf("FromResult() error = %v, want nil", err)
+	}
+	if len(fs.markDoneCalls) != 1 {
+		t.Fatalf("MarkDone called %d times, want 1", len(fs.markDoneCalls))
+	}
+	run := fs.markDoneCalls[0].run
+	if run.Vendor != kie.BytePlusVendor {
+		t.Errorf("MarkDone run.Vendor = %q, want %q", run.Vendor, kie.BytePlusVendor)
+	}
+	if run.CostUSD != nil || run.Error == nil || !strings.HasPrefix(*run.Error, store.BillingUnknownPrefix) {
+		t.Errorf("MarkDone run cost/error = %v/%v, want unknown billing", run.CostUSD, derefString(run.Error))
 	}
 }
 

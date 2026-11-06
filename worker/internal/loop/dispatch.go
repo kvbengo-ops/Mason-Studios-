@@ -438,11 +438,11 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 			))
 			return
 		}
-		failScene(ctx, deps, logger, scene, fmt.Errorf("submit to kie: %w", err))
+		failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w", err))
 		return
 	}
 
-	// A submission kie accepted is the only evidence available that the
+	// A submission the router accepted is the only evidence available that the
 	// account can pay again — the worker has no balance endpoint (admin
 	// scope, which it deliberately does not hold). Clearing here also resets
 	// the accumulated backoff, so a process that has been up for months does
@@ -459,8 +459,10 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	// fps gets the same treatment for a milder reason: Seedance does not take
 	// an fps input at all (SupportsFPSInput false), so `fps: 0` reads as a
 	// broken setting rather than an inapplicable one.
+	vendor := kie.VendorOf(requestID)
 	fields := []any{
 		slog.String("model", model.KieModelID),
+		slog.String("vendor", vendor),
 		slog.Bool("has_audio", model.HasAudio),
 		slog.String("resolution", model.Resolution),
 		slog.String("kie_task_id", requestID),
@@ -468,61 +470,64 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	if model.FPS > 0 {
 		fields = append(fields, slog.Int("fps", model.FPS))
 	}
-	if costKnown {
+	if vendor == kie.BytePlusVendor {
+		fields = append(fields, slog.String("estimated_cost_usd", "unknown until BytePlus reports completion_tokens"))
+	} else if costKnown {
 		fields = append(fields, slog.Float64("estimated_cost_usd", estimatedCost))
 	} else {
 		fields = append(fields, slog.String("estimated_cost_usd", "unknown"))
 	}
 	logger.Info("dispatch: submitted render", fields...)
 
-	// kie is already running (and billing) this job at this point; there
-	// is no submission to roll back on a MarkRendering failure, only a
-	// local bookkeeping problem to log as loudly as possible so it gets
-	// noticed — the reconcile loop cannot help here since it finds work
+	// The router accepted this job; there is no submission to roll back on a
+	// MarkRendering failure, only a local bookkeeping problem to log loudly so it gets noticed.
+	// The reconcile loop cannot help here since it finds work
 	// via kie_task_id, which is exactly what failed to persist.
 	if err := markRenderingWithRetry(ctx, deps, scene.ID, requestID); err != nil {
-		// The render is already running and already billed. Losing the
-		// request ID here means the webhook cannot be matched to a scene
-		// and reconcile cannot poll for it, so the clip is paid for and
-		// unreachable — it will eventually be timed out and charged again
-		// on retry. Worth shouting about: this is real money leaving with
-		// nothing to show for it.
-		// Same reason as the submit line above, and it matters more here:
-		// this message exists to say money left with nothing to show for it,
-		// and `wasted_usd: 0` on an unpriceable render says the opposite of
-		// the sentence it sits inside.
-		wasted := slog.String("wasted_usd", "unknown, no rate for this model/resolution")
-		if costKnown {
-			wasted = slog.Float64("wasted_usd", estimatedCost)
+		// Losing the request ID here means reconcile cannot poll for the
+		// clip. It is unrecoverable automatically and may already be billable.
+		// BytePlus only reports its token bill after completion; the kie
+		// estimate is not a safe substitute if the id cannot be persisted.
+		wasted := slog.String("wasted_usd", "unknown, BytePlus usage is unavailable")
+		if vendor != kie.BytePlusVendor || deps.Config.IsDev() {
+			wasted = slog.String("wasted_usd", "unknown, no rate for this model/resolution")
+			if costKnown {
+				wasted = slog.Float64("wasted_usd", estimatedCost)
+			}
 		}
-		logger.Error("dispatch: kie submission succeeded but the task id could not be persisted; this render is paid for and unrecoverable",
+		logger.Error("dispatch: submission succeeded but the task id could not be persisted; this render cannot be reconciled automatically",
+			slog.String("vendor", vendor),
 			slog.String("kie_task_id", requestID),
 			wasted,
 			slog.String("error", err.Error()),
 		)
 
-		// Mark it failed now, with the cost we already know was billed,
-		// rather than leaving it stuck in 'rendering' with no task id
+		// Mark it failed now with the task id in its run row, rather than
+		// leaving it stuck in 'rendering' with no task id
 		// recorded. Left alone, StaleRendering would eventually find this
 		// scene and reconcileScene's nil-KieTaskID branch would mark it
-		// failed as "claimed but never submitted" — which is wrong (kie DID
-		// accept and start this job; we just failed to persist the id) and,
-		// worse for this task's purpose, records it as a free failure.
-		// Doing it here, with the request id and cost still in hand, is
-		// what keeps this specific dollar figure from quietly
-		// reclassifying itself as $0 a reconcile pass later.
+		// failed as "claimed but never submitted" — the vendor did accept
+		// the job. Kie can be estimated; BytePlus is marked billing-unknown
+		// because its final token count is not available without reconcile.
 		failMsg := fmt.Sprintf(
-			"kie accepted request %s but the local record of it could not be saved: %v",
-			requestID, err,
+			"%s accepted request %s but the local record of it could not be saved: %v",
+			vendor, requestID, err,
 		)
+		runCost := costOrZeroIfMocked(deps, estimatedCost, costKnown)
+		if vendor == kie.BytePlusVendor && !deps.Config.IsDev() {
+			// BytePlus charges by completion tokens, which are unavailable
+			// without the persisted scene to reconcile.
+			failMsg = store.BillingUnknownPrefix + failMsg
+			runCost = nil
+		}
 		billedRun := store.Run{
 			ProjectID: scene.ProjectID,
 			KieTaskID: &requestID,
-			Vendor:    kie.VendorOf(requestID),
+			Vendor:    vendor,
 			Model:     model.KieModelID,
 			// Same rule as ingest.FromResult: a mocked submission was billed
 			// nothing, so a failure on that path costs nothing either.
-			CostUSD: costOrZeroIfMocked(deps, estimatedCost, costKnown),
+			CostUSD: runCost,
 			Error:   &failMsg,
 		}
 		// recoveryCtx, not ctx: the reason markRenderingWithRetry gave up is
@@ -977,18 +982,18 @@ func referencePrompt(scene store.Scene, refs []store.SceneReference, withSpeech 
 // state the reconcile loop exists to eventually catch via submitted_at,
 // but it deserves to be loud here too.
 //
-// Almost every call site reaching this function failed BEFORE kie accepted
+// Almost every call site reaching this function failed BEFORE the vendor accepted
 // a job: no reference frame to submit, a signing failure, or Submit itself
 // erroring without returning a request id (see dispatchScene). None of
-// those gets kie to start a job, and a request kie never started is a
-// request kie cannot have billed for — so the recorded run deliberately
+// those gets a vendor to start a job, and a request it never started is one
+// it cannot have billed for — so the recorded run deliberately
 // carries no cost_usd.
 //
 // The one exception is kie.ErrSubmissionOutcomeUnknown: the submission POST
-// was lost or answered ambiguously, so kie may have accepted and billed the
+// was lost or answered ambiguously, so the selected vendor may have accepted and billed the
 // job even though this worker holds no request id for it. That run is not a
 // free failure and must not be reported as one, but it is not a known charge
-// either — cost_usd stays nil (an estimate here would fabricate a charge kie
+// either — cost_usd stays nil (an estimate here would fabricate a charge the vendor
 // may never have made) and the error is tagged with store.BillingUnknownPrefix
 // so the unresolved ones are queryable. Tagged here rather than at the call
 // site because every path into this function that can carry that error routes
@@ -1015,20 +1020,24 @@ func failScene(ctx context.Context, deps Deps, logger *slog.Logger, scene store.
 
 	run := store.Run{
 		ProjectID: scene.ProjectID,
-		// This scene never actually reached kie (every call site into
+		// This scene never actually reached a vendor (every call site into
 		// failScene fails before or at Submit — see this function's doc
-		// comment above), so nothing was billed, but the recorded vendor
-		// should still say which one this attempt WOULD have gone to.
+		// comment above), so nothing was billed. A vendor-tagged submit error
+		// still identifies which vendor this attempt reached.
 		Vendor: kie.Vendor,
 		Model:  modelID,
 		Error:  &errMsg,
+	}
+	var vendorError interface{ SubmissionVendor() string }
+	if errors.As(cause, &vendorError) {
+		run.Vendor = vendorError.SubmissionVendor()
 	}
 	// recoveryCtx for the same reason as the lost-request-id branch above,
 	// though less money rides on it: every cause that reaches this function
 	// (RefFrameURL, SignedURL, Submit) takes ctx and fails when it is
 	// cancelled, so a shutdown mid-dispatch would otherwise mean the
 	// mark-failed write is cancelled too. Nothing is misbilled if that
-	// happens — none of these paths got kie to start a job — but the scene
+	// happens — none of these paths got a vendor to start a job — but the scene
 	// stays in 'rendering' until StaleRendering picks it up 20 minutes later,
 	// showing an operator a render that was never running.
 	recCtx, cancel := recoveryCtx(ctx)

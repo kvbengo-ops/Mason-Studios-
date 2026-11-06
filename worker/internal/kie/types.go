@@ -155,8 +155,8 @@ type Result struct {
 	InferenceMS *int
 	// ActualCostUSD is a vendor-reported charge for this specific render,
 	// populated only when the vendor's own API hands one back.
-	// kie.Client.Result sets this from recordInfo's creditsConsumed field
-	// (1 credit = $0.005 — see creditUSD in client.go). Every caller that
+	// kie.Client.Result reads recordInfo's creditsConsumed; BytePlus.Router
+	// computes it from completion_tokens and the model price. Every caller that
 	// turns a Result into runs.cost_usd (internal/ingest.FromResult) must
 	// prefer this over EstimateCost's estimate when it is non-nil: an
 	// estimate exists to approximate a bill nobody can read back yet; a
@@ -170,14 +170,4 @@ type Result struct {
 // job, so callers must record the uncertainty (see store.BillingUnknownPrefix)
 // and must not replay the request automatically without a vendor-backed
 // idempotency key.
-//
-// Moved here from fal/client.go verbatim, and — unlike most of this
-// migration — NOT just a rename. Until this change, only fal.Client's
-// doJSON ever produced this sentinel; kie.Client's own classifyAmbiguousFailure
-// (client.go) had no equivalent, so an ambiguous lost-POST failure on kie
-// was silently recorded as a confident, free ($0) failure instead of a
-// billing-unknown one — invisible while fal was still the vendor most
-// submissions went through, and a real gap the moment kie became the only
-// vendor. classifyAmbiguousFailure and doOnce's 408-on-POST branch both now
-// wrap this, mirroring exactly what fal's doJSON used to do.
-var ErrSubmissionOutcomeUnknown = errors.New("kie: submission outcome unknown")
+var ErrSubmissionOutcomeUnknown = errors.New("submission outcome unknown")

@@ -21,6 +21,18 @@ type Vendor interface {
 	BilledUSD(ctx context.Context, requestID string) (*float64, error)
 }
 
+type submissionError struct {
+	model string
+	err   error
+}
+
+func (e *submissionError) Error() string {
+	return fmt.Sprintf("byteplus: submit %s: %v", e.model, e.err)
+}
+
+func (e *submissionError) Unwrap() error            { return e.err }
+func (e *submissionError) SubmissionVendor() string { return kie.BytePlusVendor }
+
 // videoMarker follows kie.BytePlusTaskPrefix when the render carried a
 // reference video. BytePlus prices those tokens lower, and its get-task
 // response does not echo the inputs, so the one fact the bill depends on is
@@ -59,7 +71,7 @@ type Router struct {
 	// Individual accounts get 3, Enterprise 10). Over the account's limit
 	// BytePlus does not refuse — it QUEUES, and the queued time counts toward
 	// execution_expires_after — so the cap is enforced here and the overflow
-	// goes to kie. 0 = no cap.
+	// goes to kie.
 	MaxInflight int
 	// Inflight counts BytePlus tasks still rendering (scenes in 'rendering'
 	// whose task id carries kie.BytePlusTaskPrefix).
@@ -88,7 +100,7 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 		return r.Kie.Submit(ctx, req)
 	}
 	if err != nil {
-		return "", fmt.Errorf("byteplus: submit %s: %w", req.KieModelID, err)
+		return "", &submissionError{model: req.KieModelID, err: err}
 	}
 	marker := ""
 	if len(req.VideoURLs) > 0 {
@@ -101,11 +113,7 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 // two goroutines from one dispatch tick cannot both see the last free slot.
 // toKie reports that kie should take the render instead.
 //
-// ponytail: an in-process lock and a short "recent" window. Two worker
-// processes would each enforce the cap on their own and could overshoot it
-// briefly; the excess then waits in BytePlus's queue, bounded by
-// execution_expires_after. Move the count into one SQL claim if more than one
-// worker ever runs.
+// shortcut: the cap is per process; use a shared Postgres claim before running multiple workers.
 func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (id string, toKie bool, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -119,7 +127,11 @@ func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (id 
 	}
 	r.recent = kept
 
-	if r.MaxInflight > 0 && r.Inflight != nil {
+	if r.MaxInflight > 0 {
+		if r.Inflight == nil {
+			r.logger().Warn("byteplus: in-flight counter is unavailable, sending this render to kie")
+			return "", true, nil
+		}
 		n, err := r.Inflight(ctx)
 		if err != nil {
 			r.logger().Warn("byteplus: could not count in-flight tasks, sending this render to kie", slog.String("error", err.Error()))

@@ -1,10 +1,12 @@
 package byteplus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -234,6 +236,19 @@ func TestAtMaxInflightTheRenderGoesToKie(t *testing.T) {
 	}
 }
 
+func TestMissingInflightCounterFailsClosedToKie(t *testing.T) {
+	ark := &fakeArk{task: `{}`}
+	k := &fakeKie{}
+	r := router(k, ark.client(t))
+	r.Inflight = nil
+	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if len(ark.created) != 0 || len(k.submitted) != 1 {
+		t.Errorf("BytePlus creates %d, kie submits %d; want cap failure to go to kie", len(ark.created), len(k.submitted))
+	}
+}
+
 func TestRecentSubmissionsCountBeforeTheyArePersisted(t *testing.T) {
 	ark := &fakeArk{task: `{}`}
 	k := &fakeKie{}
@@ -297,6 +312,28 @@ func TestLostSubmitIsBillingUnknownAndNeverRetriedOnKie(t *testing.T) {
 	}
 	if len(k.submitted) != 0 {
 		t.Errorf("kie received %v — BytePlus may already be rendering it; a second render bills twice", k.submitted)
+	}
+}
+
+func TestMalformedSuccessResponseIsBillingUnknownAndNeverRetriedOnKie(t *testing.T) {
+	ark := &fakeArk{createStatus: http.StatusOK, createBody: `{}`}
+	k := &fakeKie{}
+	r := router(k, ark.client(t))
+	_, err := r.Submit(context.Background(), seedanceRequest())
+	if !errors.Is(err, kie.ErrSubmissionOutcomeUnknown) {
+		t.Errorf("err = %v, want billing-unknown when a successful response has no task id", err)
+	}
+	if len(k.submitted) != 0 {
+		t.Errorf("kie received %v after BytePlus may have accepted the render", k.submitted)
+	}
+}
+
+func TestSubmitLogRedactsReferenceQueryStrings(t *testing.T) {
+	var log bytes.Buffer
+	c := &Client{log: slog.New(slog.NewTextHandler(&log, nil))}
+	c.logRequest(buildCreateRequest(seedanceRequest(), ModelSeedance25))
+	if strings.Contains(log.String(), "token=") || !strings.Contains(log.String(), "?<redacted>") {
+		t.Errorf("submit log did not redact reference URL query strings: %s", log.String())
 	}
 }
 

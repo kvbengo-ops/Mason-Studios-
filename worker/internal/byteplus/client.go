@@ -240,7 +240,7 @@ func (c *Client) create(ctx context.Context, body createRequest) (string, error)
 		return "", err
 	}
 	if out.ID == "" {
-		return "", fmt.Errorf("byteplus: create task: response had no id")
+		return "", fmt.Errorf("%w: byteplus: create task: response had no id", kie.ErrSubmissionOutcomeUnknown)
 	}
 	return out.ID, nil
 }
@@ -314,7 +314,7 @@ func (c *Client) do(ctx context.Context, method, url string, body []byte, out an
 	}
 	if out != nil {
 		if err := json.Unmarshal(respBody, out); err != nil {
-			return fmt.Errorf("byteplus: %s: decode response: %w", method, err)
+			return ambiguous(fmt.Errorf("byteplus: %s: decode response: %w", method, err))
 		}
 	}
 	return nil

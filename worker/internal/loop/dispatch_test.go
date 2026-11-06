@@ -18,6 +18,25 @@ import (
 
 func strPtr(s string) *string { return &s }
 
+type taggedSubmissionError struct{ vendor string }
+
+func (e taggedSubmissionError) Error() string            { return "submission failed" }
+func (e taggedSubmissionError) SubmissionVendor() string { return e.vendor }
+
+func TestFailSceneRecordsVendorFromSubmitError(t *testing.T) {
+	fs := &fakeStore{}
+	deps := Deps{Store: fs, Config: &config.Config{}, Logger: testLogger()}
+	scene := store.Scene{ID: "scene-1", ProjectID: "project-1"}
+	cause := taggedSubmissionError{vendor: kie.BytePlusVendor}
+	failScene(context.Background(), deps, testLogger(), scene, cause)
+	if len(fs.markFailedCalls) != 1 {
+		t.Fatalf("MarkFailed called %d times, want 1", len(fs.markFailedCalls))
+	}
+	if got := fs.markFailedCalls[0].run.Vendor; got != kie.BytePlusVendor {
+		t.Errorf("run vendor = %q, want %q", got, kie.BytePlusVendor)
+	}
+}
+
 // TestPromptForScene pins the AUDIO_ENABLED speech-injection probe: the
 // compiled video_prompt must be sent unchanged to a silent render, and get
 // exactly one appended dialogue clause on an audio render — never a
@@ -232,6 +251,43 @@ func TestDispatchScene_LostKieTaskID_RecordsBilledRun(t *testing.T) {
 	if call.run.Error == nil || !strings.Contains(*call.run.Error, "kie accepted request") {
 		t.Errorf("MarkFailed run.Error = %v, want it to say kie accepted the request but the id could not be saved",
 			derefStr(call.run.Error))
+	}
+}
+
+func TestDispatchScene_LostBytePlusTaskID_RecordsUnknownBilling(t *testing.T) {
+	signSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"signedURL":"/object/sign/media/projects/project-1/ref_frame/scene-1.png?token=test"}`))
+	}))
+	defer signSrv.Close()
+
+	fs := &fakeStore{
+		refFrameURL:      "projects/project-1/ref_frame/scene-1.png",
+		markRenderingErr: context.DeadlineExceeded,
+	}
+	deps := Deps{
+		Store: fs,
+		Config: &config.Config{
+			SupabaseURL:            signSrv.URL,
+			SupabaseServiceRoleKey: "test-key",
+			AppBaseURL:             "https://worker.example",
+			RenderConcurrency:      10,
+		},
+		Logger: testLogger(),
+		Kie:    &fakeVideoVendor{name: kie.BytePlusTaskPrefix + "cgt-123"},
+	}
+
+	scene := store.Scene{ID: "scene-1", ProjectID: "project-1", DurationS: 8, Status: "rendering"}
+	dispatchScene(context.Background(), deps, scene, "https://worker.example")
+	if len(fs.markFailedCalls) != 1 {
+		t.Fatalf("MarkFailed called %d times, want 1", len(fs.markFailedCalls))
+	}
+	run := fs.markFailedCalls[0].run
+	if run.Vendor != kie.BytePlusVendor || run.KieTaskID == nil || *run.KieTaskID != kie.BytePlusTaskPrefix+"cgt-123" {
+		t.Errorf("MarkFailed run vendor/id = %q/%v, want BytePlus and its task id", run.Vendor, run.KieTaskID)
+	}
+	if run.CostUSD != nil || run.Error == nil || !strings.HasPrefix(*run.Error, store.BillingUnknownPrefix) {
+		t.Errorf("MarkFailed run cost/error = %v/%v, want unknown billing", run.CostUSD, derefStr(run.Error))
 	}
 }
 
