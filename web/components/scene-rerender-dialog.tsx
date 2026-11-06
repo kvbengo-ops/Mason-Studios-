@@ -74,6 +74,7 @@ export function SceneRerenderDialog({
   costUsd,
   settingsLabel,
   unpaidRate,
+  rateSource = "kie",
   vendor,
   vendorBalanceLabel,
   budget,
@@ -133,6 +134,11 @@ export function SceneRerenderDialog({
    * passing nothing keeps its dialog unchanged.
    */
   unpaidRate?: boolean;
+  /**
+   * Whose published price `unpaidRate` refers to — "BytePlus" for the
+   * Seedance 2.5 · BytePlus ModelArk option, kie for everything else.
+   */
+  rateSource?: "BytePlus" | "kie";
   /**
    * Which vendor this render bills, resolved server-side. Named next to the
    * balance below so "442 cr left" can't be misread as the other vendor's.
@@ -293,8 +299,9 @@ export function SceneRerenderDialog({
           ) : null}
           {unpaidRate ? (
             <span className="max-w-xs text-center text-xs text-muted-foreground">
-              This rate is kie&rsquo;s published figure, not a receipt — nobody here has been billed
-              at this resolution yet, so it could be wrong in either direction.
+              {rateSource === "BytePlus"
+                ? "This estimate uses BytePlus ModelArk’s published token price, not a receipt; final cost depends on actual token usage."
+                : "This rate is kie’s published figure, not a receipt — nobody here has been billed at this resolution yet, so it could be wrong in either direction."}
             </span>
           ) : null}
         </div>

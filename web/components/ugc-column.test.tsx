@@ -146,6 +146,15 @@ const BUDGET = {
 const UNPAID_OPTIONS: readonly UgcOption[] = OPTIONS.map((o) =>
   o.modelId === "seedance-2.5" && o.resolution === "480p" ? { ...o, unpaid: true } : o,
 );
+const BYTEPLUS_UNPAID_OPTIONS: readonly UgcOption[] = [
+  {
+    ...OPTIONS[1]!,
+    modelId: "seedance-2.5-byteplus",
+    label: "Seedance 2.5 · BytePlus ModelArk",
+    creditsPerSecond: 20.56005,
+    unpaid: true,
+  },
+];
 
 function renderColumn(
   selectedScene: { id: string; idx: number; prompt: string } | null,
@@ -382,6 +391,17 @@ describe("UgcColumn pins its settings, but the model follows the scene", () => {
 
     await user.click(screen.getByRole("button", { name: /regenerate/i }));
     expect(await screen.findByText(/published figure, not a receipt/i)).toBeTruthy();
+  });
+
+  it("names BytePlus ModelArk for the BytePlus option in the confirm", async () => {
+    const user = userEvent.setup();
+    renderColumn({ ...SEEDANCE_SCENE, modelId: "seedance-2.5-byteplus" }, BYTEPLUS_UNPAID_OPTIONS);
+
+    await user.click(screen.getByRole("button", { name: /regenerate/i }));
+    expect(
+      await screen.findByText(/BytePlus ModelArk’s published token price, not a receipt/i),
+    ).toBeTruthy();
+    expect(screen.queryByText(/kie’s published figure/i)).toBeNull();
   });
 
   it("says so when the pinned pair is not on offer, rather than quietly using another", () => {

@@ -25,6 +25,7 @@ import {
   isResolutionAllowedForDuration,
   maxDurationForResolution,
   pickModel,
+  SEEDANCE_2_5_BYTEPLUS,
   type RenderSettings,
 } from "@/lib/models";
 import { effectiveRender } from "@/lib/effective-render";
@@ -211,6 +212,7 @@ export function SceneSettingsPanel({
     isTalkingHead,
     audioEnabled,
   });
+  const rateSource = model.id === SEEDANCE_2_5_BYTEPLUS.id ? "BytePlus ModelArk" : "kie";
 
   // sceneBusy is the WORKBENCH's work, not this panel's — a frame
   // regeneration, a rewrite, a retry, running in the column to the left.
@@ -497,8 +499,9 @@ export function SceneSettingsPanel({
               between a quote and a guess wearing a quote's clothes. */}
           {priceIsEstimate ? (
             <p className="text-xs text-muted-foreground">
-              Nobody has been billed for {settings.resolution} on {model.label} yet — this quotes
-              kie&rsquo;s published rate, not a receipt.
+              {rateSource === "BytePlus ModelArk"
+                ? "This estimate uses BytePlus ModelArk’s published token price, not a receipt; final cost depends on actual token usage."
+                : `Nobody has been billed for ${settings.resolution} on ${model.label} yet — this quotes kie’s published rate, not a receipt.`}
             </p>
           ) : null}
           {/* Names the substitution rather than letting the price look

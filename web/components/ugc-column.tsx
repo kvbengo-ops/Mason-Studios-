@@ -67,7 +67,7 @@ function modelMenuId(modelId: string): string {
 import type { RenderBudgetFigures } from "@/lib/render-budget";
 import type { ActionNotice, ActionResult } from "@/lib/action-result";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
-import { kieModel } from "@/lib/kie/models";
+import { kieModel, SEEDANCE_2_5_BYTEPLUS } from "@/lib/kie/models";
 import { cn } from "@/lib/utils";
 import {
   beginGeneratePending,
@@ -776,6 +776,8 @@ export function UgcColumn({
 
   const tierOptions = options.filter((o) => o.modelId === option.modelId);
   const resolutions = kieModel(option.modelId)?.resolutions ?? tierOptions.map((o) => o.resolution);
+  // Whose published price the confirm dialog's "not a receipt" note names.
+  const rateSource = option.modelId === SEEDANCE_2_5_BYTEPLUS.id ? "BytePlus" : "kie";
 
   // THE TRIGGER FOR EVERYTHING BELOW THAT DIFFERS FOR KLING. option.nativeAudio,
   // not a string compare against "kling-3.0-pro" — see that field's own
@@ -2104,6 +2106,7 @@ export function UgcColumn({
                 costUsd={regenerateUsd}
                 notice={unknownTagsNotice}
                 unpaidRate={option.unpaid}
+                rateSource={rateSource}
                 vendor={vendor}
                 budget={budget}
                 trigger={
@@ -2227,6 +2230,7 @@ export function UgcColumn({
                 settingsLabel={settingsLabel}
                 notice={unknownTagsNotice}
                 unpaidRate={option.unpaid}
+                rateSource={rateSource}
                 vendor={vendor}
                 budget={budget}
                 trigger={

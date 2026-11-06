@@ -229,3 +229,26 @@ describe("SceneRerenderDialog — the settings behind the price", () => {
     expect(dialog.textContent).toContain("Seedance 2.5 · 480p · 4s");
   });
 });
+
+describe("SceneRerenderDialog — published price source", () => {
+  it("labels the unpublished Seedance estimate as BytePlus ModelArk", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SceneRerenderDialog
+        sceneId="scene-1"
+        sceneLabel="Scene 4"
+        costUsd={0.41}
+        unpaidRate
+        rateSource="BytePlus"
+        budget={BUDGET}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^re-render/i }));
+    expect(
+      await screen.findByText(/BytePlus ModelArk’s published token price, not a receipt/i),
+    ).toBeTruthy();
+    expect(screen.queryByText(/kie’s published figure/i)).toBeNull();
+  });
+});

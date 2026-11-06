@@ -14,7 +14,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { SceneSettingsPanel, type SceneSettingsPanelProps } from "./scene-settings-panel";
 import { RailBusyProvider, useRailBusySetter } from "@/components/project-rail";
 import { useEffect } from "react";
-import { KLING_3_PRO, SEEDANCE_2_5, pickModel } from "@/lib/models";
+import { KLING_3_PRO, SEEDANCE_2_5, SEEDANCE_2_5_BYTEPLUS, pickModel } from "@/lib/models";
 
 const updateSceneRenderOverride = vi.fn();
 const clearSceneRenderOverride = vi.fn();
@@ -71,6 +71,25 @@ function props(overrides: Partial<SceneSettingsPanelProps> = {}): SceneSettingsP
 function button(name: string | RegExp): HTMLButtonElement {
   return screen.getByRole("button", { name }) as HTMLButtonElement;
 }
+
+describe("SceneSettingsPanel — published price source", () => {
+  it("labels the BytePlus estimate with BytePlus ModelArk pricing", () => {
+    render(
+      <SceneSettingsPanel
+        {...props({
+          initialSettings: {
+            model: SEEDANCE_2_5_BYTEPLUS.id,
+            resolution: "480p",
+            fps: SEEDANCE_2_5_BYTEPLUS.defaultFps,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/BytePlus ModelArk’s published token price/i)).toBeTruthy();
+    expect(screen.queryByText(/kie’s published rate/i)).toBeNull();
+  });
+});
 
 describe("SceneSettingsPanel — re-syncing to the server", () => {
   it("shows the new settings when the page re-renders with different ones", () => {
@@ -133,7 +152,10 @@ describe("SceneSettingsPanel — substitution", () => {
   // clip is rendering on a model it isn't, at a price it won't be charged.
   it.each([
     ["a B-roll scene", { isTalkingHead: false, audioEnabled: true }],
-    ["a talking-head scene with audio off account-wide", { isTalkingHead: true, audioEnabled: false }],
+    [
+      "a talking-head scene with audio off account-wide",
+      { isTalkingHead: true, audioEnabled: false },
+    ],
     ["a B-roll scene with audio off account-wide", { isTalkingHead: false, audioEnabled: false }],
   ])("says nothing about a fallback on %s of a Kling project", (_name, overrides) => {
     render(
