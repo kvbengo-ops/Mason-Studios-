@@ -17,6 +17,7 @@
 import { useState, useTransition } from "react";
 import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
+import { SlidersHorizontal } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -244,6 +245,7 @@ export function AllEditorsAllowanceDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
+          <SlidersHorizontal aria-hidden="true" className="size-4" />
           Spending limits
         </Button>
       </DialogTrigger>
