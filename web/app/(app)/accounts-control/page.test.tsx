@@ -191,7 +191,7 @@ describe("AccountsControlPage", () => {
     });
     expect(dailySpendBar.getAttribute("aria-valuenow")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     expect(dailySpendBar.getAttribute("aria-valuemax")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
-    expect(screen.getByText("500 cr")).toBeTruthy(); // $2.50 today = 500 cr
+    expect(screen.getByText("$2.50")).toBeTruthy(); // today
     expect(loadEditorVideos).not.toHaveBeenCalled();
     cleanup();
 

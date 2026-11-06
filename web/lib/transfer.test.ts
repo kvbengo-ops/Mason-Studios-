@@ -60,7 +60,7 @@ describe("passBlockReason", () => {
 
   it("refuses an admin recipient, naming the RECIPIENT rather than the caller", () => {
     const reason = passBlockReason(eligibility({ recipientRole: "admin" }));
-    expect(reason).toMatch(/pass credits to another editor/i);
+    expect(reason).toMatch(/pass allowance to another editor/i);
     expect(reason).not.toBe(NOT_A_PASSER);
   });
 
@@ -77,7 +77,7 @@ describe("passBlockReason", () => {
   it("refuses more than the sender's headroom, and says how much is left", () => {
     const reason = passBlockReason(eligibility({ amountUsd: 20.01, headroomUsd: 20 }));
     // 20 USD is 4,000 credits — the unit the sender actually reads.
-    expect(reason).toMatch(/4,000 cr/);
+    expect(reason).toMatch(/\$20\.00/);
   });
 
   // An empty balance is NOT the overshoot case above. "You only have 0 cr
@@ -87,7 +87,7 @@ describe("passBlockReason", () => {
   it("calls an empty balance insufficient funds, not an amount that overshoots", () => {
     const reason = passBlockReason(eligibility({ amountUsd: 0.01, headroomUsd: 0 }));
     expect(reason).toMatch(/insufficient funds/i);
-    expect(reason).toMatch(/0 cr/);
+    expect(reason).toMatch(/\$0\.00/);
   });
 
   // An account already over its allowance has negative headroom. It must be
@@ -96,7 +96,7 @@ describe("passBlockReason", () => {
   it("refuses a sender in deficit and shows 0 left, not a negative figure", () => {
     const reason = passBlockReason(eligibility({ amountUsd: 1, headroomUsd: -2 }));
     expect(reason).toMatch(/insufficient funds/i);
-    expect(reason).toMatch(/0 cr/);
+    expect(reason).toMatch(/\$0\.00/);
     expect(reason).not.toMatch(/-/);
   });
 
@@ -114,7 +114,7 @@ describe("passBlockReason", () => {
   // it, so it can stay about the amount alone.
   it("still refuses an overshoot against a real balance, and says how much is left", () => {
     const reason = passBlockReason(eligibility({ amountUsd: 20.01, headroomUsd: 20 }));
-    expect(reason).toMatch(/4,000 cr/);
+    expect(reason).toMatch(/\$20\.00/);
     expect(reason).not.toMatch(/insufficient funds/i);
   });
 

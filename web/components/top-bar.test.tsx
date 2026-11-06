@@ -112,7 +112,7 @@ describe("TopBar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Credits" }));
+    await user.click(screen.getByRole("button", { name: "Allowance" }));
     const link = screen.getByRole("link", { name: /Weekly credit period reset/ });
     expect(link.getAttribute("href")).toBe("/profile");
     await user.click(link);

@@ -35,23 +35,23 @@ describe("PassCreditsDialog", () => {
     vi.mocked(passBlockReason).mockReturnValue("You do not have enough weekly headroom.");
     showDialog(0);
     await user.selectOptions(screen.getByRole("combobox"), "peer");
-    await user.type(screen.getByLabelText("Amount (credits)"), "400");
-    await user.click(screen.getByRole("button", { name: "Pass credits" }));
+    await user.type(screen.getByLabelText("Amount (USD)"), "2");
+    await user.click(screen.getByRole("button", { name: "Pass allowance" }));
     expect(screen.getByRole("alert").textContent).toBe("You do not have enough weekly headroom.");
     expect(passAllowance).not.toHaveBeenCalled();
   });
 
-  it("converts credits at the action boundary and shows remaining headroom", async () => {
+  it("passes dollars and shows remaining headroom", async () => {
     const user = userEvent.setup();
     vi.mocked(passBlockReason).mockReturnValue(null);
     vi.mocked(passAllowance).mockResolvedValue(undefined);
     showDialog();
     await user.selectOptions(screen.getByRole("combobox"), "peer");
-    await user.type(screen.getByLabelText("Amount (credits)"), "400");
+    await user.type(screen.getByLabelText("Amount (USD)"), "2");
     await user.type(screen.getByLabelText("Note (optional)"), "  For your clip  ");
-    expect(screen.getByText("Remaining this week: 2,000 cr")).toBeTruthy();
-    expect(screen.getByText("Remaining after pass: 1,600 cr")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Pass credits" }));
+    expect(screen.getByText("Remaining this week: $10.00")).toBeTruthy();
+    expect(screen.getByText("Remaining after pass: $8.00")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Pass allowance" }));
     expect(passBlockReason).toHaveBeenCalledWith({
       senderId: "sender",
       senderRole: "editor",
@@ -70,18 +70,18 @@ describe("PassCreditsDialog", () => {
     const user = userEvent.setup();
     vi.mocked(passBlockReason).mockReturnValue(null);
     showDialog(10);
-    const amount = screen.getByLabelText<HTMLInputElement>("Amount (credits)");
+    const amount = screen.getByLabelText<HTMLInputElement>("Amount (USD)");
     await user.type(amount, "-50");
     expect(amount.value).toBe("50");
   });
 
-  it("drops a decimal point too — credits are whole", async () => {
+  it("keeps one decimal point for cents, and drops a second", async () => {
     const user = userEvent.setup();
     vi.mocked(passBlockReason).mockReturnValue(null);
     showDialog(10);
-    const amount = screen.getByLabelText<HTMLInputElement>("Amount (credits)");
-    await user.type(amount, "1.5");
-    expect(amount.value).toBe("15");
+    const amount = screen.getByLabelText<HTMLInputElement>("Amount (USD)");
+    await user.type(amount, "1.5.2");
+    expect(amount.value).toBe("1.52");
   });
 
   it("explains expiry and that unused headroom is not returned", () => {

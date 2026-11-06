@@ -43,7 +43,7 @@ describe("AdminCreationsGrid", () => {
 
     expect(screen.getByText("A minimalist skincare bottle on marble")).toBeTruthy();
     expect(screen.getAllByText("Nano Banana").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("8 cr").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("$0.04").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByRole("button", { name: FORBIDDEN_BUTTON_PATTERN })).toBeNull();
     expect(screen.queryByRole("link", { name: FORBIDDEN_BUTTON_PATTERN })).toBeNull();
   });
@@ -90,7 +90,7 @@ describe("AdminCreationsGrid", () => {
     expect(screen.getAllByText("Creator holding bottle to camera").length).toBeGreaterThanOrEqual(
       1,
     );
-    expect(screen.getAllByText("112 cr").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("$0.56").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByRole("button", { name: FORBIDDEN_BUTTON_PATTERN })).toBeNull();
     expect(screen.queryByRole("link", { name: FORBIDDEN_BUTTON_PATTERN })).toBeNull();
   });

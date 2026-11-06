@@ -267,20 +267,20 @@ describe("UgcColumn's prompt field follows the selected scene", () => {
 // ---------------------------------------------------------------------------
 
 describe("UgcColumn quotes one unit, from the button through to the confirm", () => {
-  it("shows credits in the dialog, not just on the button", async () => {
+  it("shows the button's price in the dialog, not just on the button", async () => {
     const user = userEvent.setup();
     renderColumn({ id: "scene-1", idx: 3, prompt: "a cat knocks a glass over" });
 
     const button = screen.getByRole("button", { name: /regenerate scene 3/i });
-    const buttonCredits = /(\d+) credits/.exec(button.textContent ?? "")?.[1];
-    expect(buttonCredits, "the button does not quote credits at all").toBeTruthy();
+    const buttonCredits = /\$(\d+\.\d{2})/.exec(button.textContent ?? "")?.[1];
+    expect(buttonCredits, "the button does not quote a price at all").toBeTruthy();
 
     await user.click(button);
     const dialog = await screen.findByRole("dialog");
 
     expect(
-      within(dialog).getAllByText(new RegExp(`${buttonCredits} credits`)).length,
-      `the button quotes ${buttonCredits} credits and the dialog does not — an operator has to convert units to check the two agree, while being asked to approve the spend`,
+      within(dialog).getAllByText(new RegExp(`\\$${buttonCredits}`)).length,
+      `the button quotes $${buttonCredits} and the dialog does not — an operator has to check the two agree while being asked to approve the spend`,
     ).toBeGreaterThan(0);
   });
 
@@ -456,7 +456,7 @@ describe("Length is a control, and it reprices the button", () => {
     renderColumn(null);
 
     // 28 cr/s x 4s.
-    expect(screen.getByRole("button", { name: /Generate · 112 credits/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Generate · \$0\.56/ })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Length: 4 seconds" }));
     fireEvent.change(screen.getByRole("slider", { name: "Length in seconds" }), {
@@ -464,7 +464,7 @@ describe("Length is a control, and it reprices the button", () => {
     });
 
     // 28 cr/s x 8s, quoted before the press rather than discovered after it.
-    expect(screen.getByRole("button", { name: /Generate · 224 credits/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Generate · \$1\.12/ })).toBeTruthy();
     expect(
       screen.getByRole("slider", { name: "Length in seconds" }).getAttribute("aria-valuetext"),
     ).toBe("8 seconds");
@@ -693,7 +693,7 @@ describe("UgcColumn — Generate confirms before it spends", () => {
 
     // 28 cr/s x 4s, the same figure the button quotes, plus the dollars the
     // caps are denominated in.
-    expect(dialog.textContent).toContain("112 credits");
+    expect(dialog.textContent).toContain("$0.56");
     expect(dialog.textContent).toMatch(/\$\d/);
     expect(dialog.textContent).toContain("Seedance 2.5 · 480p · 4s");
   });
@@ -782,7 +782,7 @@ describe("UgcColumn — Generate confirms before it spends", () => {
 
   it("re-asks after the settings change, at the new price", async () => {
     const { user, dialog } = await openConfirm();
-    expect(dialog.textContent).toContain("112 credits");
+    expect(dialog.textContent).toContain("$0.56");
     await user.click(within(dialog).getByRole("button", { name: /^cancel/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
@@ -793,7 +793,7 @@ describe("UgcColumn — Generate confirms before it spends", () => {
     await user.click(screen.getByRole("button", { name: /^Generate ·/ }));
 
     const reopened = await screen.findByRole("dialog");
-    expect(reopened.textContent).toContain("224 credits");
+    expect(reopened.textContent).toContain("$1.12");
     expect(reopened.textContent).toContain("Seedance 2.5 · 480p · 8s");
     expect(generateClip).not.toHaveBeenCalled();
   });
@@ -856,7 +856,7 @@ describe("the Generate price counts the tagged video", () => {
     // rate six receipts agree on.
     renderWith("@jen sips coffee", [picture]);
 
-    expect(screen.getByRole("button", { name: /^generate · 112 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.56$/i })).toBeTruthy();
   });
 
   it("adds the video's own seconds, at the video rate", () => {
@@ -866,7 +866,7 @@ describe("the Generate price counts the tagged video", () => {
     renderWith("@jen sips coffee, @clip1 style", [picture, measuredVideo]);
 
     expect(
-      screen.getByRole("button", { name: /^generate · 136 credits$/i }),
+      screen.getByRole("button", { name: /^generate · \$0\.68$/i }),
       "the confirm still quotes the clip alone on a render kie bills for the video too",
     ).toBeTruthy();
   });
@@ -987,17 +987,17 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
       />,
     );
 
-    expect(screen.getByRole("button", { name: /generate.*80 cr/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /generate.*\$0\.40/i })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Resolution: 480p" }));
-    expect(screen.getByRole("menuitem", { name: /480p.*20 cr\/s/ })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /1080p.*27 cr\/s/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /480p.*\$0\.100\/s/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /1080p.*\$0\.135\/s/ })).toBeTruthy();
     expect(screen.queryByRole("menuitem", { name: /4K/ })).toBeNull();
-    await user.click(screen.getByRole("menuitem", { name: /1080p.*27 cr\/s/ }));
+    await user.click(screen.getByRole("menuitem", { name: /1080p.*\$0\.135\/s/ }));
 
     expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
       "1080p",
     );
-    expect(screen.getByRole("button", { name: /generate.*108 cr/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /generate.*\$0\.54/i })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -1031,13 +1031,13 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
     expect((container.querySelector('input[name="aspectRatio"]') as HTMLInputElement).value).toBe(
       "16:9",
     );
-    expect(screen.getByRole("button", { name: /^generate · 80 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.40$/i })).toBeTruthy();
   });
 
   it("quotes credits off the real 20 cr/s rate on the Generate button, not a relabelled one", () => {
     renderKling(null, [KLING_STD_OPTION]);
     // 20 cr/s x 4s (the pinned duration) = 80 credits.
-    expect(screen.getByRole("button", { name: /^generate · 80 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.40$/i })).toBeTruthy();
   });
 
   // Same wire-value rule, on the OTHER write path. Regenerate's confirmAction
@@ -1324,7 +1324,7 @@ describe("a prompt too long for the model never reaches the vendor", () => {
     // prompt gets.
     renderWith("@greta sips coffee", [verbose], OPTIONS);
 
-    expect(screen.getByRole("button", { name: /^generate · 112 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.56$/i })).toBeTruthy();
   });
 });
 
@@ -1873,12 +1873,12 @@ describe("Kling mode", () => {
     await pickFrame(user, "start frame", "jen");
 
     // Sound On by default: 20 cr/s x 4s (the pinned duration) = 80.
-    expect(screen.getByRole("button", { name: /^generate · 80 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.40$/i })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: /^sound on$/i }));
 
     // Sound Off: 14 cr/s x 4s = 56.
-    expect(screen.getByRole("button", { name: /^generate · 56 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.28$/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /^sound off$/i })).toBeTruthy();
   });
 
@@ -1893,7 +1893,7 @@ describe("Kling mode", () => {
     expect(screen.getByTitle(/audio is off for every render right now/i)).toBeTruthy();
     // Priced off the SILENT rate (14 cr/s x 4s = 56), not the sound one —
     // the control being hidden must not leave the price still assuming sound.
-    expect(screen.getByRole("button", { name: /^generate · 56 credits$/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^generate · \$0\.28$/i })).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText(/prompt/i), {
       target: { value: "a dog skateboarding" },

@@ -100,9 +100,9 @@ describe("AccountMenu — passing", () => {
     expect(screen.getByRole("menuitem", { name: "Passes this week" }).getAttribute("href")).toBe(
       "/allowances",
     );
-    await user.click(screen.getByRole("menuitem", { name: "Pass credits" }));
-    expect(await screen.findByRole("dialog", { name: "Pass credits" })).toBeTruthy();
-    expect(screen.getByText("Remaining this week: 0 cr")).toBeTruthy();
+    await user.click(screen.getByRole("menuitem", { name: "Pass allowance" }));
+    expect(await screen.findByRole("dialog", { name: "Pass allowance" })).toBeTruthy();
+    expect(screen.getByText("Remaining this week: $0.00")).toBeTruthy();
   });
 
   it("does not offer passing to admins", async () => {
@@ -117,7 +117,7 @@ describe("AccountMenu — passing", () => {
       />,
     );
     await openMenu(user, "admin@example.com");
-    expect(screen.queryByRole("menuitem", { name: "Pass credits" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Pass allowance" })).toBeNull();
   });
 });
 
@@ -210,9 +210,9 @@ describe("AccountMenu", () => {
     // not just the old bare "X of Y left" line — see components/sidebar-
     // budget.tsx's BudgetMeter.
     expect(screen.getByText(/left this week/)).toBeTruthy();
-    expect(screen.getByText("1,000 cr allowance")).toBeTruthy();
-    expect(screen.getByText("-400 cr used")).toBeTruthy();
-    expect(screen.getByText(/600 cr left/)).toBeTruthy();
+    expect(screen.getByText("$5.00 allowance")).toBeTruthy();
+    expect(screen.getByText("-$2.00 used")).toBeTruthy();
+    expect(screen.getByText(/\$3\.00 left/)).toBeTruthy();
     // Nothing in flight in BASE_BUDGET, so no hold line — the ordinary
     // three-line breakdown is unchanged by the hold feature.
     expect(screen.queryByText(/on hold/)).toBeNull();
@@ -249,11 +249,11 @@ describe("AccountMenu", () => {
 
     // Held is NOT folded into "used" — used money is billed and gone, held
     // money comes back if the render never lands.
-    expect(screen.getByText("-400 cr used")).toBeTruthy();
-    expect(screen.getByText("-200 cr on hold (rendering)")).toBeTruthy();
+    expect(screen.getByText("-$2.00 used")).toBeTruthy();
+    expect(screen.getByText("-$1.00 on hold (rendering)")).toBeTruthy();
     // 1000 allowance - 400 used - 200 held = 400 left. The arithmetic on
     // screen has to close, or the hold line is just decoration.
-    expect(screen.getByText(/400 cr left/)).toBeTruthy();
+    expect(screen.getByText(/\$2\.00 left/)).toBeTruthy();
   });
 
   it("shows the team figure for admins", async () => {
@@ -419,7 +419,7 @@ describe("AccountMenu", () => {
     await openMenu(user, "test1@yopmail.com");
 
     expect(screen.queryByRole("menuitem", { name: /^request more$/i })).toBeNull();
-    expect(screen.getByText(/Allowance request pending: 3,000 cr/)).toBeTruthy();
+    expect(screen.getByText(/Allowance request pending: \$15\.00/)).toBeTruthy();
   });
 
   it("degrades to a fail-soft dash, not a broken menu, when the budget read failed", async () => {

@@ -702,13 +702,13 @@ export default async function AccountsControlPage({
           icon={BarChart3}
           label="Today (UTC)"
           value={formatUsd(overview.todaySpendUsd)}
-          sub={formatUsd(overview.todaySpendUsd)}
+          sub="So far today"
         />
         <Stat
           icon={History}
           label="This month"
           value={formatUsd(overview.monthSpendUsd)}
-          sub={`${formatUsd(overview.monthSpendUsd)} · ${formatUsd(overview.weekSpendUsd)} last 7 days`}
+          sub={`${formatUsd(overview.weekSpendUsd)} last 7 days`}
         />
         <Stat
           icon={Wallet}
@@ -716,7 +716,7 @@ export default async function AccountsControlPage({
           value={
             overview.kieBalanceUsd !== null ? formatUsd(overview.kieBalanceUsd) : "Unavailable"
           }
-          sub={`${overview.kieBalanceUsd !== null ? `${formatUsd(overview.kieBalanceUsd)} · ` : ""}Runway ${formatRunwayDays(overview.runwayEstimate)}`}
+          sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
         {/* ponytail: spend only — BytePlus's balance API needs a separate AK/SK with billing read. */}
