@@ -23,7 +23,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -318,30 +317,6 @@ func (c *Client) do(ctx context.Context, method, url string, body []byte, out an
 		}
 	}
 	return nil
-}
-
-// fallsBackToKie reports whether a create error is a refusal kie can absorb:
-// capacity (429: rate, queue, concurrency-by-balance, set limits) or account
-// state (401/403 auth, overdue, model not open; 404 model/endpoint access).
-// None of these started a task, so nothing was billed.
-//
-// NOT parameter errors or content-safety refusals — those describe the
-// render, and the scene should fail with BytePlus's reason. And never an
-// ambiguous failure (ErrSubmissionOutcomeUnknown): BytePlus may already be
-// rendering it, and a second render on kie would bill twice.
-func fallsBackToKie(err error) bool {
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
-		return false
-	}
-	switch apiErr.Status {
-	case http.StatusTooManyRequests, http.StatusUnauthorized, http.StatusForbidden:
-		return true
-	case http.StatusNotFound:
-		return apiErr.Code == "ModelNotOpen" || strings.HasPrefix(apiErr.Code, "InvalidEndpointOrModel")
-	default:
-		return false
-	}
 }
 
 // logRequest records the exact body sent, with every URL's signed query

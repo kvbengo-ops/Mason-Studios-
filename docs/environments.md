@@ -118,12 +118,14 @@ generated in kie's settings. Unset means every callback is rejected.
 of kie; every other model stays on kie. It is ignored under `MODE=development`.
 
 - `BYTEPLUS_MAX_INFLIGHT` (default 3 = Individual account; Enterprise 10): BytePlus tasks at
-  once. Over its limit BytePlus queues rather than refusing, so the worker sends the overflow
-  to kie. Rate-limit, queue-full, overdue-balance and model-not-activated refusals also fall
-  back to kie, unbilled. Parameter and content-safety refusals (including real faces) fail the
-  scene with BytePlus's reason in plain words.
-- `BYTEPLUS_ROUTE=0` stops new BytePlus renders while still polling the ones in flight. Use it
-  to switch BytePlus off; removing the key strands running tasks.
+  once. Over its limit BytePlus queues rather than refusing, so the worker fails the overflow
+  with "try again".
+- **The BytePlus pick never falls back to kie.** No key, routing off, at the cap, or any
+  BytePlus refusal (rate limit, overdue balance, model not activated, parameters, content
+  safety) fails the scene with the reason, unbilled. The fallback silently billed kie for every
+  BytePlus pick while `ModelNotOpen` refused them (2026-11-06).
+- `BYTEPLUS_ROUTE=0` stops new BytePlus renders (BytePlus picks fail) while still polling the
+  ones in flight. Use it to switch BytePlus off; removing the key strands running tasks.
 - `BYTEPLUS_MODEL`: an `ep-…` endpoint id if the account refuses model-id access.
 - No webhook: BytePlus's callback is unsigned, so completion arrives through the reconcile
   poll (45–90s), like a kie render without `KIE_WEBHOOK_SECRET`.

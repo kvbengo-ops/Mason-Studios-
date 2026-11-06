@@ -177,30 +177,35 @@ func TestTextOnlyRenderSendsNoTaskType(t *testing.T) {
 	}
 }
 
-func TestRouterKeepsEverythingOnKieWithoutAKey(t *testing.T) {
+func TestBytePlusPickNeverFallsBackToKieWithoutAKey(t *testing.T) {
 	k := &fakeKie{}
 	r := &Router{Kie: k}
 
-	id, err := r.Submit(context.Background(), seedanceRequest())
-	if err != nil || id != "kie-task-1" {
-		t.Fatalf("Submit = %q, %v; want kie's id", id, err)
-	}
-	if len(k.submitted) != 1 {
-		t.Errorf("kie submissions = %v, want the one Seedance render", k.submitted)
+	if _, err := r.Submit(context.Background(), seedanceRequest()); err == nil || len(k.submitted) != 0 {
+		t.Fatalf("err = %v, kie %v; want a failure and nothing on kie", err, k.submitted)
 	}
 }
 
-func TestRouteOffSendsNewRendersToKieButStillPollsBytePlus(t *testing.T) {
+func TestDevelopmentMocksTheBytePlusPickThroughKie(t *testing.T) {
+	k := &fakeKie{}
+	r := &Router{Kie: k, Mock: true}
+
+	if id, err := r.Submit(context.Background(), seedanceRequest()); err != nil || id != "kie-task-1" {
+		t.Fatalf("Submit = %q, %v; want the mocked kie id", id, err)
+	}
+}
+
+func TestRouteOffFailsNewRendersButStillPollsBytePlus(t *testing.T) {
 	ark := &fakeArk{task: `{"id":"cgt-123","status":"running"}`}
 	k := &fakeKie{}
 	r := router(k, ark.client(t))
 	r.Route = false
 
-	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
-		t.Fatalf("Submit: %v", err)
+	if _, err := r.Submit(context.Background(), seedanceRequest()); err == nil {
+		t.Fatal("Submit succeeded with routing off; want a failure")
 	}
-	if len(ark.created) != 0 || len(k.submitted) != 1 {
-		t.Errorf("BytePlus creates %d, kie submits %v; want 0 and the render on kie", len(ark.created), k.submitted)
+	if len(ark.created) != 0 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %v; want neither", len(ark.created), k.submitted)
 	}
 	if s, err := r.Status(context.Background(), kie.BytePlusTaskPrefix+"cgt-123"); err != nil || s != kie.StatusInProgress {
 		t.Errorf("Status of a running BytePlus task with routing off = %v, %v; want it still polled", s, err)
@@ -227,31 +232,31 @@ func TestRouterKeepsOtherModelsOnKie(t *testing.T) {
 	}
 }
 
-func TestAtMaxInflightTheRenderGoesToKie(t *testing.T) {
+func TestAtMaxInflightTheRenderFailsInsteadOfGoingToKie(t *testing.T) {
 	ark := &fakeArk{task: `{}`}
 	k := &fakeKie{}
 	r := router(k, ark.client(t))
 	r.Inflight = func(context.Context) (int, error) { return 3, nil }
 
-	id, err := r.Submit(context.Background(), seedanceRequest())
-	if err != nil || id != "kie-task-1" {
-		t.Fatalf("Submit = %q, %v; want kie's id — BytePlus would only queue it", id, err)
+	_, err := r.Submit(context.Background(), seedanceRequest())
+	if err == nil || !strings.Contains(err.Error(), "try again") {
+		t.Fatalf("err = %v; want a try-again failure", err)
 	}
-	if len(ark.created) != 0 {
-		t.Errorf("BytePlus received %d creates at its concurrency limit", len(ark.created))
+	if len(ark.created) != 0 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %v at the cap; want neither", len(ark.created), k.submitted)
 	}
 }
 
-func TestMissingInflightCounterFailsClosedToKie(t *testing.T) {
+func TestMissingInflightCounterFailsClosed(t *testing.T) {
 	ark := &fakeArk{task: `{}`}
 	k := &fakeKie{}
 	r := router(k, ark.client(t))
 	r.Inflight = nil
-	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
-		t.Fatalf("Submit: %v", err)
+	if _, err := r.Submit(context.Background(), seedanceRequest()); err == nil {
+		t.Fatal("Submit succeeded without an in-flight counter; want a failure")
 	}
-	if len(ark.created) != 0 || len(k.submitted) != 1 {
-		t.Errorf("BytePlus creates %d, kie submits %d; want cap failure to go to kie", len(ark.created), len(k.submitted))
+	if len(ark.created) != 0 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %d; want neither", len(ark.created), len(k.submitted))
 	}
 }
 
@@ -264,31 +269,32 @@ func TestRecentSubmissionsCountBeforeTheyArePersisted(t *testing.T) {
 	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
 		t.Fatalf("first Submit: %v", err)
 	}
-	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
-		t.Fatalf("second Submit: %v", err)
+	if _, err := r.Submit(context.Background(), seedanceRequest()); err == nil {
+		t.Fatal("second Submit succeeded; want the just-created task to fill the cap")
 	}
-	if len(ark.created) != 1 || len(k.submitted) != 1 {
-		t.Errorf("BytePlus creates %d, kie submits %d; want 1 and 1", len(ark.created), len(k.submitted))
+	if len(ark.created) != 1 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %d; want 1 and 0", len(ark.created), len(k.submitted))
 	}
 }
 
-func TestCapacityRefusalFallsBackToKie(t *testing.T) {
+func TestCapacityAndAccountRefusalsFailAndNeverReachKie(t *testing.T) {
 	for _, tc := range []struct {
 		status int
 		body   string
+		want   string
 	}{
-		{429, `{"error":{"code":"ModelAccountRpmRateLimitExceeded","message":"slow down"}}`},
-		{429, `{"error":{"code":"QuotaExceeded","message":"queue full"}}`},
-		{403, `{"error":{"code":"AccountOverdueError","message":"balance < 0"}}`},
-		{404, `{"error":{"code":"ModelNotOpen","message":"not activated"}}`},
+		{429, `{"error":{"code":"ModelAccountRpmRateLimitExceeded","message":"slow down"}}`, "slow down"},
+		{429, `{"error":{"code":"QuotaExceeded","message":"queue full"}}`, "queue full"},
+		{403, `{"error":{"code":"AccountOverdueError","message":"balance < 0"}}`, "balance < 0"},
+		{404, `{"error":{"code":"ModelNotOpen","message":"not activated"}}`, "not activated"},
 	} {
 		ark := &fakeArk{createStatus: tc.status, createBody: tc.body}
 		k := &fakeKie{}
 		r := router(k, ark.client(t))
 
-		id, err := r.Submit(context.Background(), seedanceRequest())
-		if err != nil || id != "kie-task-1" || len(k.submitted) != 1 {
-			t.Errorf("%d %s: Submit = %q, %v, kie %v; want the render on kie", tc.status, tc.body, id, err, k.submitted)
+		_, err := r.Submit(context.Background(), seedanceRequest())
+		if err == nil || !strings.Contains(err.Error(), tc.want) || len(k.submitted) != 0 {
+			t.Errorf("%d %s: err = %v, kie %v; want BytePlus's reason and nothing on kie", tc.status, tc.body, err, k.submitted)
 		}
 	}
 }

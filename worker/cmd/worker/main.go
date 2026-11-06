@@ -114,11 +114,12 @@ func run() error {
 			slog.String("mock_video_url", mockVideoURL))
 	}
 
-	// Seedance 2.5 goes to BytePlus ModelArk when BYTEPLUS_API_KEY is set
-	// (internal/byteplus); every other model, and every render when it is
-	// unset, stays on kie. Never in development: there every render is
-	// mocked through kie's client, and a real key there would bill.
-	router := &byteplus.Router{Kie: kieClient, Log: logger}
+	// The explicit Seedance 2.5 · BytePlus ModelArk selection goes to BytePlus
+	// only — without BYTEPLUS_API_KEY it fails, never falls back to kie
+	// (internal/byteplus). The existing Seedance 2.5 selection stays on kie.
+	// Never in development: every render, that pick included, is mocked
+	// through kie's client, and a real key there would bill.
+	router := &byteplus.Router{Kie: kieClient, Log: logger, Mock: cfg.IsDev()}
 	if cfg.BytePlusAPIKey != "" && !cfg.IsDev() {
 		router.BytePlus = byteplus.NewClient(cfg.BytePlusAPIKey, cfg.BytePlusModel, nil)
 		router.Route = cfg.BytePlusRoute
@@ -127,11 +128,13 @@ func run() error {
 			return st.RenderingWithTaskPrefix(ctx, kie.BytePlusTaskPrefix)
 		}
 		if router.Route {
-			logger.Info("BYTEPLUS_API_KEY is set: Seedance 2.5 renders go to BytePlus ModelArk (overflow and refusals to kie), every other model to kie",
+			logger.Info("BYTEPLUS_API_KEY is set: the BytePlus ModelArk model choice renders on BytePlus only (overflow and refusals fail, never kie); the kie model choice remains on kie",
 				slog.Int("byteplus_max_inflight", router.MaxInflight))
 		} else {
-			logger.Info("BYTEPLUS_ROUTE=0: no new renders go to BytePlus; tasks already there are still polled")
+			logger.Info("BYTEPLUS_ROUTE=0: no new renders go to BytePlus (BytePlus picks fail); tasks already there are still polled")
 		}
+	} else if !cfg.IsDev() {
+		logger.Warn("BYTEPLUS_API_KEY is not set: every Seedance 2.5 · BytePlus render will fail")
 	}
 
 	deps := loop.Deps{

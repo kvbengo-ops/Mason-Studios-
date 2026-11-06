@@ -332,8 +332,8 @@ services:
       - key: BYTEPLUS_ROUTE
         value: "1"
       # BytePlus tasks at once (Individual 3, Enterprise 10). Over its limit
-      # BytePlus QUEUES rather than refusing, so the worker sends the
-      # overflow to kie instead.
+      # BytePlus QUEUES rather than refusing, so the worker fails the
+      # overflow with "try again" (never kie).
       - key: BYTEPLUS_MAX_INFLIGHT
         value: "3"
       - key: APP_BASE_URL

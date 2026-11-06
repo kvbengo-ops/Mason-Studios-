@@ -2,6 +2,7 @@ package byteplus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -51,27 +52,33 @@ const (
 	recentWindow = 15 * time.Second
 )
 
-// Router is the worker's one video vendor: Seedance 2.5 goes to BytePlus
-// when BytePlus is configured, routed, and has room; everything else — and
-// anything BytePlus refuses for capacity or account reasons — goes to Kie.
+// Router is the worker's one video vendor: the Seedance 2.5 · BytePlus pick
+// goes to BytePlus and ONLY BytePlus; every other model goes to Kie. A
+// BytePlus render that cannot go to BytePlus (no key, routing off, at its
+// cap, refused) fails the scene with the reason — it never falls back to kie.
+// The fallback silently billed kie for BytePlus picks while ModelNotOpen
+// refused every one (2026-11-06), so the pick now means the vendor.
 // Polls route back by the id's prefix, so a render submitted before routing
 // changed still resolves against the vendor actually running it.
 //
 // Use it as a pointer: it holds a mutex.
 type Router struct {
 	Kie Vendor
-	// BytePlus is the client used to submit AND poll. nil = no key: every
-	// render goes to Kie, and a BytePlus id cannot be polled.
+	// BytePlus is the client used to submit AND poll. nil = no key: a BytePlus
+	// pick fails, and a BytePlus id cannot be polled.
 	BytePlus *Client
+	// Mock (MODE=development) sends the BytePlus pick through Kie's mocked
+	// client, so development renders it without a key and without billing.
+	Mock bool
 	// Route sends new Seedance 2.5 renders to BytePlus. False (BYTEPLUS_ROUTE=0)
-	// stops new submissions while BytePlus keeps polling the tasks already
-	// running there — the safe way to switch it off.
+	// stops new submissions (they fail) while BytePlus keeps polling the tasks
+	// already running there — the safe way to switch it off.
 	Route bool
 	// MaxInflight caps BytePlus tasks running at once (BYTEPLUS_MAX_INFLIGHT;
 	// Individual accounts get 3, Enterprise 10). Over the account's limit
 	// BytePlus does not refuse — it QUEUES, and the queued time counts toward
 	// execution_expires_after — so the cap is enforced here and the overflow
-	// goes to kie.
+	// fails with "try again".
 	MaxInflight int
 	// Inflight counts BytePlus tasks still rendering (scenes in 'rendering'
 	// whose task id carries kie.BytePlusTaskPrefix).
@@ -92,12 +99,18 @@ func (r *Router) logger() *slog.Logger {
 
 // Submit sends a render to its vendor and returns the id to persist.
 func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, error) {
-	if r.BytePlus == nil || !r.Route || req.SelectedModelID != kie.BytePlusSeedance25ID {
+	if req.SelectedModelID != kie.BytePlusSeedance25ID || r.Mock {
 		return r.Kie.Submit(ctx, req)
 	}
-	id, toKie, err := r.submitBytePlus(ctx, req)
-	if toKie {
-		return r.Kie.Submit(ctx, req)
+	var id string
+	var err error
+	switch {
+	case r.BytePlus == nil:
+		err = errors.New("BYTEPLUS_API_KEY is not set on the worker; this model renders on BytePlus only")
+	case !r.Route:
+		err = errors.New("BYTEPLUS_ROUTE=0 has paused new BytePlus renders; this model renders on BytePlus only")
+	default:
+		id, err = r.submitBytePlus(ctx, req)
 	}
 	if err != nil {
 		return "", &submissionError{model: req.KieModelID, err: err}
@@ -111,10 +124,9 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 
 // submitBytePlus holds the lock across the capacity check and the create, so
 // two goroutines from one dispatch tick cannot both see the last free slot.
-// toKie reports that kie should take the render instead.
 //
 // shortcut: the cap is per process; use a shared Postgres claim before running multiple workers.
-func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (id string, toKie bool, err error) {
+func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -129,43 +141,36 @@ func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (id 
 
 	if r.MaxInflight > 0 {
 		if r.Inflight == nil {
-			r.logger().Warn("byteplus: in-flight counter is unavailable, sending this render to kie")
-			return "", true, nil
+			return "", errors.New("the BytePlus in-flight counter is unavailable; try again")
 		}
 		n, err := r.Inflight(ctx)
 		if err != nil {
-			r.logger().Warn("byteplus: could not count in-flight tasks, sending this render to kie", slog.String("error", err.Error()))
-			return "", true, nil
+			return "", fmt.Errorf("could not count BytePlus renders in flight; try again: %w", err)
 		}
 		// Counts a just-persisted task twice for up to recentWindow, which
-		// errs toward kie, never toward BytePlus's queue.
+		// errs toward refusing, never toward BytePlus's queue.
 		if n+len(r.recent) >= r.MaxInflight {
-			r.logger().Info("byteplus: at max in-flight, sending this render to kie",
+			r.logger().Info("byteplus: at max in-flight, failing this render",
 				slog.Int("inflight", n+len(r.recent)), slog.Int("max", r.MaxInflight))
-			return "", true, nil
+			return "", fmt.Errorf("BytePlus is already running its limit of %d renders; try again when one finishes", r.MaxInflight)
 		}
 	}
 
 	if wait := minCreateGap - time.Since(r.lastCreate); wait > 0 {
 		select {
 		case <-ctx.Done():
-			return "", false, ctx.Err()
+			return "", ctx.Err()
 		case <-time.After(wait):
 		}
 	}
 	r.lastCreate = time.Now()
 
-	id, err = r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.model))
+	id, err := r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.model))
 	if err != nil {
-		if fallsBackToKie(err) {
-			r.logger().Warn("byteplus: refused for capacity or account reasons, sending this render to kie",
-				slog.String("error", err.Error()))
-			return "", true, nil
-		}
-		return "", false, err
+		return "", err
 	}
 	r.recent = append(r.recent, time.Now())
-	return id, false, nil
+	return id, nil
 }
 
 // parseID splits a persisted id. ok is false for a kie id.

@@ -112,7 +112,7 @@ sequenceDiagram
 | `worker` — kie, queue, ffmpeg | **Go** on Render Singapore (Docker) | $7/mo |
 | Data / Auth / Storage / Realtime | **Supabase** | $0 → $25/mo |
 | Video + image generation | **kie.ai** | $11–137 per 30-scene video, by model |
-| Seedance 2.5, optional | **BytePlus ModelArk** direct, only when the worker has `BYTEPLUS_API_KEY`; off = kie | ~$0.41 per 4s 480p clip (tokens × $10.70/M) |
+| Seedance 2.5, optional | **BytePlus ModelArk** direct, needs the worker's `BYTEPLUS_API_KEY`; never falls back to kie | ~$0.41 per 4s 480p clip (tokens × $10.70/M) |
 | Optional helpers — script compile, reference descriptions | **Anthropic** (Claude, operator picks Haiku or Sonnet) | ~$0.04–0.12 per compiled script; $0 unused |
 
 Fixed infra is **$14–39/mo**. Generation is ~97% of total spend, and on kie the model
