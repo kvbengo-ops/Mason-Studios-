@@ -387,17 +387,52 @@ function firstLine(text: string | null | undefined): string {
 export interface AccountsRunLogRow {
   id: string;
   model: string;
+  /** runs.vendor as a person reads it: "kie", "BytePlus". */
+  provider: string;
   costUsd: number | null;
   error: string | null;
   createdAt: string;
   projectTitle: string | null;
+  thumbnail: BinCardThumbnail;
+}
+
+export function providerLabel(vendor: string): string {
+  return vendor === "byteplus" ? "BytePlus" : vendor;
+}
+
+/**
+ * Where a run's output lives. An image run names its picture (runs.asset_id).
+ * A video run has no such column, but worker store.MarkDone inserts the clip
+ * and the run in ONE transaction, so the clip shares the run's scene_id and
+ * created_at (now() is fixed per transaction) — an exact match, not a guess.
+ */
+export function runPreviewSource(
+  run: { asset_id: string | null; scene_id: string | null; created_at: string },
+  imageKeyByAssetId: ReadonlyMap<string, string>,
+  clipKeyBySceneAndTime: ReadonlyMap<string, string>,
+): { kind: "image" | "video"; storageKey: string } | null {
+  if (run.asset_id) {
+    const key = imageKeyByAssetId.get(run.asset_id);
+    return key ? { kind: "image", storageKey: key } : null;
+  }
+  if (run.scene_id) {
+    const key = clipKeyBySceneAndTime.get(sceneTimeKey(run.scene_id, run.created_at));
+    return key ? { kind: "video", storageKey: key } : null;
+  }
+  return null;
+}
+
+export function sceneTimeKey(sceneId: string, createdAt: string): string {
+  return `${sceneId}|${new Date(createdAt).getTime()}`;
 }
 
 /**
  * One page of every run in the same `windowDays` window as the overview — the
  * log that used to live on /spend behind its own date picker. `projects` is
  * embedded off runs.project_id (not through scenes) so a scene-less run still
- * names its project.
+ * names its project. Each row carries its provider and a preview of what it
+ * made; a preview that cannot be found or signed is a placeholder, never an
+ * error, because the run log matters more than its pictures.
  */
 export async function loadAccountsRunLog(
   windowDays: AccountsControlWindowDays,
@@ -409,7 +444,10 @@ export async function loadAccountsRunLog(
   const windowStart = addUtcDays(startOfUtcDay(now), -(windowDays - 1));
   const { data, error, count } = await supabase
     .from("runs")
-    .select("id, model, cost_usd, error, created_at, projects ( title )", { count: "exact" })
+    .select(
+      "id, model, vendor, cost_usd, error, created_at, scene_id, asset_id, projects ( title )",
+      { count: "exact" },
+    )
     .gte("created_at", windowStart.toISOString())
     .lt("created_at", tomorrowStart.toISOString())
     .order("created_at", { ascending: false })
@@ -418,19 +456,75 @@ export async function loadAccountsRunLog(
   const rows = (data ?? []) as unknown as {
     id: string;
     model: string;
+    vendor: string;
     cost_usd: number | null;
     error: string | null;
     created_at: string;
+    scene_id: string | null;
+    asset_id: string | null;
     projects: { title: string } | null;
   }[];
+
+  const assetIds = [...new Set(rows.flatMap((run) => (run.asset_id ? [run.asset_id] : [])))];
+  const videoRuns = rows.filter((run) => !run.asset_id && run.scene_id && run.cost_usd !== null);
+  const sceneIds = [...new Set(videoRuns.map((run) => run.scene_id!))];
+  const times = videoRuns.map((run) => run.created_at).sort();
+
+  const [images, clips] = await Promise.all([
+    assetIds.length > 0
+      ? supabase.from("assets").select("id, storage_key").in("id", assetIds)
+      : null,
+    sceneIds.length > 0
+      ? supabase
+          .from("assets")
+          .select("scene_id, created_at, storage_key")
+          .eq("kind", "clip")
+          .in("scene_id", sceneIds)
+          .gte("created_at", times[0]!)
+          .lte("created_at", times[times.length - 1]!)
+      : null,
+  ]);
+  if (images?.error) console.error(`loadAccountsRunLog: image previews: ${images.error.message}`);
+  if (clips?.error) console.error(`loadAccountsRunLog: clip previews: ${clips.error.message}`);
+  const imageKeyByAssetId = new Map(
+    (images?.data ?? []).map((asset) => [asset.id, asset.storage_key] as const),
+  );
+  const clipKeyBySceneAndTime = new Map(
+    (clips?.data ?? []).flatMap((asset) =>
+      asset.scene_id
+        ? [[sceneTimeKey(asset.scene_id, asset.created_at), asset.storage_key] as const]
+        : [],
+    ),
+  );
+
+  const thumbnails = await Promise.all(
+    rows.map(async (run): Promise<BinCardThumbnail> => {
+      const source = runPreviewSource(run, imageKeyByAssetId, clipKeyBySceneAndTime);
+      if (!source) return { kind: "placeholder" };
+      try {
+        return source.kind === "image"
+          ? {
+              kind: "image",
+              url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS, { quality: 80 }),
+            }
+          : { kind: "video", url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS) };
+      } catch (err) {
+        console.error(`loadAccountsRunLog: could not sign preview for run ${run.id}`, err);
+        return { kind: "placeholder" };
+      }
+    }),
+  );
+
   return {
-    rows: rows.map((run) => ({
+    rows: rows.map((run, i) => ({
       id: run.id,
       model: run.model,
+      provider: providerLabel(run.vendor),
       costUsd: run.cost_usd,
       error: run.error,
       createdAt: run.created_at,
       projectTitle: run.projects?.title ?? null,
+      thumbnail: thumbnails[i]!,
     })),
     total: count ?? 0,
   };
