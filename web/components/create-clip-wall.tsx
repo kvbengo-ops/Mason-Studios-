@@ -6,7 +6,16 @@ import { useRouter } from "next/navigation";
 import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
-import { Copy, Download, FolderPlus, Link2, Plus, RotateCcw, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Download,
+  FolderPlus,
+  Link2,
+  MusicIcon,
+  Plus,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { shareClipLink } from "@/actions/clip-actions";
 import { deleteClipScene, deleteClipVersion, regenerateClip } from "@/actions/ugc";
 import {
@@ -19,6 +28,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatAverageBitrate } from "@/lib/average-bitrate";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { asAttachment } from "@/lib/download-url";
+import { findElementByTag, type ElementTag } from "@/lib/elements";
 import { DEFAULT_TILE_RATIO, WALL_CLASS, tileBox } from "@/lib/tile-box";
 import { requestVideoIterate } from "@/lib/video-iterate";
 import { cn } from "@/lib/utils";
@@ -71,11 +81,14 @@ export function CreateClipWall({
   items,
   projects,
   initialVersionId,
+  elements = [],
 }: {
   items: readonly WallItem[];
   /** The caller's own clip projects, for Add to project. */
   projects: readonly ClipProjectOption[];
   initialVersionId?: string | null;
+  /** The caller's saved Elements, so the viewer can show a take's references as thumbnails. */
+  elements?: readonly ElementTag[];
 }): JSX.Element {
   const [openKey, setOpenKey] = useState<string | null>(initialVersionId ?? null);
   const open = items.find((item) => item.kind === "clip" && item.key === openKey) ?? null;
@@ -113,10 +126,7 @@ export function CreateClipWall({
               style={tileBox(DEFAULT_TILE_RATIO)}
             >
               {item.kind === "rendering" ? (
-                <CreationLoading
-                  kind="video"
-                  status={item.queued ? "Queued" : "Rendering"}
-                />
+                <CreationLoading kind="video" status={item.queued ? "Queued" : "Rendering"} />
               ) : (
                 <>
                   <FailedTile item={item} />
@@ -132,7 +142,7 @@ export function CreateClipWall({
         <DialogContent className="flex h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-none flex-col gap-2 overflow-hidden p-2 sm:max-w-none md:flex-row">
           <DialogTitle className="sr-only">Clip</DialogTitle>
           {open && open.kind === "clip" ? (
-            <ClipViewer item={open} onClose={() => setOpenKey(null)} />
+            <ClipViewer item={open} elements={elements} onClose={() => setOpenKey(null)} />
           ) : null}
         </DialogContent>
       </Dialog>
@@ -309,11 +319,64 @@ function FailedTile({ item }: { item: WallItem & { kind: "failed" } }): JSX.Elem
   );
 }
 
+/**
+ * A take's references as thumbnails: picture, a video's first frame, or a
+ * voice tile. Resolved against the operator's CURRENT library by tag name, so
+ * a reference whose element was deleted since falls back to its @name.
+ */
+function ReferenceThumbs({
+  tags,
+  elements,
+}: {
+  tags: readonly string[];
+  elements: readonly ElementTag[];
+}): JSX.Element {
+  const THUMB = "size-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted";
+  return (
+    <ul aria-label="References" className="flex flex-wrap gap-2">
+      {tags.map((tag) => {
+        const element = findElementByTag(elements, tag);
+        const label = `@${tag}`;
+        return (
+          <li key={tag} title={label}>
+            {!element ? (
+              <span className="inline-flex h-7 items-center rounded-md bg-muted px-2 text-xs">
+                {label}
+              </span>
+            ) : element.assetKind === "audio" ? (
+              <span className={cn(THUMB, "grid place-items-center")}>
+                <MusicIcon aria-hidden="true" className="size-5 text-muted-foreground" />
+                <span className="sr-only">{label}</span>
+              </span>
+            ) : element.assetKind === "video_ref" ? (
+              // One viewer open at a time, so a metadata-only fetch for the
+              // first frame is cheap here (unlike the prompt bar's menu).
+              <video
+                src={element.previewUrl}
+                muted
+                playsInline
+                preload="metadata"
+                aria-label={label}
+                className={cn(THUMB, "object-cover")}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- signed Storage URL
+              <img src={element.previewUrl} alt={label} className={cn(THUMB, "object-cover")} />
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function ClipViewer({
   item,
+  elements,
   onClose,
 }: {
   item: WallItem & { kind: "clip" };
+  elements: readonly ElementTag[];
   onClose: () => void;
 }): JSX.Element {
   const router = useRouter();
@@ -347,6 +410,7 @@ function ClipViewer({
   const rows: [string, string | null][] = [
     ["Model", item.modelLabel],
     ["Length", item.durationS ? `${item.durationS}s` : null],
+    ["Resolution", item.resolution],
     ["Size", size ? `${size.width}x${size.height}` : null],
     ["Avg. bitrate", bitrate],
     ["Created", dateTimeFormatter.format(new Date(item.createdAt))],
@@ -400,9 +464,7 @@ function ClipViewer({
               {item.prompt || "No prompt was recorded for this take."}
             </p>
             {item.referenceTags.length > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                References: {item.referenceTags.map((tag) => `@${tag}`).join(", ")}
-              </p>
+              <ReferenceThumbs tags={item.referenceTags} elements={elements} />
             ) : null}
           </section>
           <section className="flex flex-col gap-1.5 rounded-xl bg-muted/40 p-3">

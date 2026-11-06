@@ -211,13 +211,14 @@ export async function CreateVideoConsole({
   const sortedTakes = [...versions].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const takes = sortedTakes.slice(0, WALL_TAKES);
   const initialVersionId = initialSceneId
-    ? sceneById.get(initialSceneId)?.active_version_id ?? null
+    ? (sceneById.get(initialSceneId)?.active_version_id ?? null)
     : null;
   const requestedTake = initialVersionId
     ? sortedTakes.find((version) => version.id === initialVersionId)
     : null;
   // Keep a notification-targeted active take outside the recent wall limit.
-  if (requestedTake && !takes.some((version) => version.id === requestedTake.id)) takes.push(requestedTake);
+  if (requestedTake && !takes.some((version) => version.id === requestedTake.id))
+    takes.push(requestedTake);
   const { data: assetRows } =
     takes.length > 0
       ? await supabase
@@ -300,6 +301,7 @@ export async function CreateVideoConsole({
         items={[...liveItems, ...clipItems]}
         projects={projects.filter((p) => !p.is_personal).map((p) => ({ id: p.id, title: p.title }))}
         initialVersionId={initialVersionId}
+        elements={elements}
       />
 
       {/* Same sticky dock as the image bar: <main> is the scroll container. */}
