@@ -312,6 +312,23 @@ services:
       # 45-90s slower completion via the reconcile poll instead).
       - key: KIE_WEBHOOK_SECRET
         sync: false
+      # Optional. Set = Seedance 2.5 renders go to BytePlus ModelArk directly
+      # (worker/internal/byteplus); unset = everything stays on kie.
+      - key: BYTEPLUS_API_KEY
+        sync: false
+      # Model or endpoint id; empty = dreamina-seedance-2-5-260628. Set an
+      # "ep-..." endpoint id if the account refuses model-id access.
+      - key: BYTEPLUS_MODEL
+        sync: false
+      # "0" stops NEW BytePlus renders but keeps polling ones already there —
+      # the safe off switch. Removing the key instead strands them.
+      - key: BYTEPLUS_ROUTE
+        value: "1"
+      # BytePlus tasks at once (Individual 3, Enterprise 10). Over its limit
+      # BytePlus QUEUES rather than refusing, so the worker sends the
+      # overflow to kie instead.
+      - key: BYTEPLUS_MAX_INFLIGHT
+        value: "3"
       - key: APP_BASE_URL
         sync: false # this service's own public URL — kie's webhook callback target; worker.internal/config.Load fails startup without it
       - key: RENDER_CONCURRENCY

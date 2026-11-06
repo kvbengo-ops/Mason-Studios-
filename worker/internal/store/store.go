@@ -665,6 +665,24 @@ WHERE s.status = 'rendering'
 	return scenes, nil
 }
 
+// RenderingWithTaskPrefix counts this mode's scenes in 'rendering' whose
+// persisted task id starts with prefix — byteplus.Router's in-flight count
+// (kie.BytePlusTaskPrefix), which caps BytePlus at BYTEPLUS_MAX_INFLIGHT.
+func (s *Store) RenderingWithTaskPrefix(ctx context.Context, prefix string) (int, error) {
+	const q = `
+SELECT count(*)
+FROM scenes
+WHERE status = 'rendering'
+  AND dev = $2
+  AND kie_task_id LIKE $1 || '%'`
+
+	var n int64
+	if err := s.pool.QueryRow(ctx, q, prefix, s.dev).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: rendering with task prefix: %w", err)
+	}
+	return int(n), nil
+}
+
 // ---------------------------------------------------------------------------
 // assemble
 // ---------------------------------------------------------------------------
