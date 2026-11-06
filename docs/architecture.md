@@ -356,10 +356,13 @@ commit it.
 
 ---
 
-## The prompt compiler
+## The prompt compiler (optional)
 
-Lives in `web`, because it runs synchronously inside the operator's request. The only
-component that thinks; everything else is CRUD.
+**Not on the render path any more.** Editors write prompts directly in `/ugc`; Claude is
+reached only from the project Script page (this compiler) and when describing a
+reference image. With `ANTHROPIC_API_KEY` unset those helpers fail and nothing else does.
+
+Lives in `web`, because it runs synchronously inside the operator's request.
 
 ```ts
 const Brief = z.object({

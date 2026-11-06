@@ -4,8 +4,12 @@ Turns an ad script into a set of generated video clips, with human review gates
 before any money is spent.
 
 ```
-script.txt → Claude writes per-scene prompts → reference frames → kie renders clips → deliver
+scene prompt → reference frames → kie renders clips → deliver
 ```
+
+kie is the only vendor on the render path. Claude (Anthropic) is an optional helper, not a
+step: it compiles a script into prompts on the project Script page and describes
+reference images. Leave `ANTHROPIC_API_KEY` unset and nothing else changes.
 
 ## Architecture
 
@@ -29,14 +33,12 @@ flowchart TB
         RT["Realtime"]
     end
 
-    CLAUDE["🧠 Anthropic<br/>~$0.04–0.12/video"]
     KIE["🎬 kie.ai<br/>$11–137/video, by model"]
 
     UI <--> CF
     CF <--> WEB
     WEB --> AUTH
     WEB -- "read · write<br/><i>draft → queued</i>" --> PG
-    WEB -- "script → 30 prompts" --> CLAUDE
 
     GO -- "poll · write<br/><i>queued → done</i>" --> PG
     GO -- "submit render" --> KIE
@@ -54,7 +56,7 @@ flowchart TB
     classDef cdn fill:#5c3a12,stroke:#c77f2a,color:#fff
     class WEB,GO ours
     class PG,AUTH,STORE,RT data
-    class CLAUDE,KIE ext
+    class KIE ext
     class CF cdn
 ```
 
@@ -110,7 +112,7 @@ sequenceDiagram
 | `worker` — kie, queue, ffmpeg | **Go** on Render Singapore (Docker) | $7/mo |
 | Data / Auth / Storage / Realtime | **Supabase** | $0 → $25/mo |
 | Video + image generation | **kie.ai** | $11–137 per 30-scene video, by model |
-| Prompt compiler | **Anthropic** (Claude, operator picks Haiku or Sonnet) | ~$0.04–0.12 per video |
+| Optional helpers — script compile, reference descriptions | **Anthropic** (Claude, operator picks Haiku or Sonnet) | ~$0.04–0.12 per compiled script; $0 unused |
 
 Fixed infra is **$14–39/mo**. Generation is ~97% of total spend, and on kie the model
 matters more than the scene count: the same 30-scene, 240-second ad is **$10.80** on
