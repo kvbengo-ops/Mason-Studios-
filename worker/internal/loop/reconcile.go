@@ -38,13 +38,16 @@ const staleAfter = 45 * time.Second
 // resolving to COMPLETED/ERROR) before reconcile gives up and marks it
 // failed outright, so a wedged kie request doesn't block a project forever.
 //
-// Left at 20 minutes despite staleAfter and the tick both shrinking: this
-// threshold is about detecting a genuinely wedged render (~80s observed
-// inference time, so 20 minutes is already ~15x that), not about polling
-// cadence, so a faster tick doesn't change what "stuck" means — it only
-// means a wedged scene now gets ~40 status checks instead of ~10 before
-// this fires, all of them cheap.
-const timeoutAfter = 20 * time.Minute
+// 90 MINUTES, up from 20 (2026-11-06). This only fires while kie is still
+// ANSWERING "in progress" — a request kie cannot find or keeps erroring on
+// goes through giveUp instead — so it is not catching a wedged request, it
+// is cutting off a slow one. 20 minutes (~15x the ~80s picture render) was
+// too short for Seedance with a reference video, which sat in kie's queue
+// past it while kie's dashboard still showed it running. Failing it then
+// LOSES the result: MarkDone only accepts a scene still in 'rendering', so
+// kie's late success lands on a 'failed' row and is dropped, after kie has
+// already billed it. Holding a concurrency slot longer is the cheaper error.
+const timeoutAfter = 90 * time.Minute
 
 // finalVersionLeaseStaleAfter is how long a final_versions lease
 // (claimed_at) may stand before reconcile assumes the worker holding it

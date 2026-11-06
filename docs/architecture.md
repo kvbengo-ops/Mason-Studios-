@@ -176,7 +176,7 @@ http.ListenAndServe(...)  // POST /webhooks/kie, GET /health (+ /mock/clip.mp4 i
 
 All three intervals are 30s (`cmd/worker/main.go`); what differs is the age a row must
 reach before a loop will touch it — `staleAfter = 45s` for reconcile, `timeoutAfter =
-20m` before a stuck render is failed.
+90m` before a render kie still reports as in progress is failed.
 
 The HTTP server exists for kie's callback and Render's health check. Nothing else calls
 the worker. In `MODE=development` it also serves `/mock/clip.mp4`, the fixture a mocked
@@ -231,7 +231,7 @@ WHERE status = 'rendering'
   AND submitted_at < now() - interval '45 seconds';
 ```
 
-For each, ask kie directly: completed → ingest, past 20 minutes → mark failed.
+For each, ask kie directly: completed → ingest, past 90 minutes → mark failed.
 
 **This is not the slow path here, it is the only path.** The kie webhook has never once
 been delivered to this deployment — kie's signing is opt-in and `KIE_WEBHOOK_SECRET` is
