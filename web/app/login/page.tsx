@@ -105,6 +105,7 @@ export default function LoginPage(): JSX.Element {
                 <Input
                   id="email"
                   type="email"
+                  suppressHydrationWarning
                   placeholder="you@example.com"
                   autoComplete="email"
                   aria-invalid={errors.email ? true : undefined}
@@ -121,6 +122,7 @@ export default function LoginPage(): JSX.Element {
                 <Input
                   id="password"
                   type="password"
+                  suppressHydrationWarning
                   autoComplete="current-password"
                   aria-invalid={errors.password ? true : undefined}
                   {...register("password")}
@@ -133,7 +135,7 @@ export default function LoginPage(): JSX.Element {
             </div>
           </CardContent>
           <CardFooter className="flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={isPending}>
+            <Button type="submit" className="w-full" disabled={isPending} suppressHydrationWarning>
               {isPending ? "Signing in..." : "Sign in"}
             </Button>
             <p className="text-center text-sm text-muted-foreground">

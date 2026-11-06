@@ -17,9 +17,9 @@ import type { JSX, ReactNode } from "react";
 import type { ImageAttempt } from "@/actions/image-generator";
 import { isImageAttemptUnfinished, type ImageAttemptStatus } from "@/lib/image-attempt";
 import { PendingButton } from "@/components/pending-button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { RunsTrigger } from "@/components/runs-trigger";
+import { Spinner } from "@/components/spinner";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { formatCredits } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
@@ -57,8 +57,8 @@ const STATUS_LABEL: Record<ImageAttemptStatus, string> = {
 };
 
 const STATUS_TONE: Record<ImageAttemptStatus, string> = {
-  queued: "text-muted-foreground",
-  generating: "text-muted-foreground",
+  queued: "text-foreground",
+  generating: "text-foreground",
   completed: "text-foreground",
   failed: "text-destructive",
   billing_unknown: "text-destructive",
@@ -177,104 +177,117 @@ export function ImageAttemptPanel({
     <ImageAttemptsContext.Provider value={attempts}>
       {children}
       <Dialog>
-          <RunsTrigger
-            total={attempts.length}
-            active={unfinished.length}
-            activeLabel="Generating"
-            ariaLabel={
-              hasUnfinished
-                ? `${unfinished.length} image generation in progress — view recent image attempts`
-                : `View ${attempts.length} recent image attempts`
-            }
-          />
-          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-            <DialogTitle>Recent attempts</DialogTitle>
-            <DialogDescription>
-              Every image generation for this account, including work that finished after you left
-              the page.
-            </DialogDescription>
-            <Card className="border-0 shadow-none">
-              <CardHeader className="hidden" />
-              <CardContent id="image-attempt-list" className="flex flex-col gap-3 p-0">
-                <p className="text-xs text-muted-foreground">
-                  Every generation this account has charged for, whether or not the page was open
-                  when it finished.
-                </p>
-                {attempts.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No runs yet.</p>
-                ) : null}
-                <ul className="flex flex-col gap-3">
-                  {attempts.map((attempt) => (
-                    <li
-                      key={attempt.runId}
-                      className="flex items-start gap-3 rounded-md border border-border p-3"
-                    >
-                      {attempt.image ? (
-                        /* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static import */
-                        <img
-                          src={attempt.image.url}
-                          alt=""
-                          className="h-16 w-16 shrink-0 rounded object-cover"
-                        />
-                      ) : (
-                        <div
-                          className={cn(
-                            "h-16 w-16 shrink-0 rounded bg-muted",
-                            isImageAttemptUnfinished(attempt.status) && "animate-pulse",
-                          )}
-                          aria-hidden="true"
-                        />
+        <RunsTrigger
+          total={attempts.length}
+          active={unfinished.length}
+          activeLabel="Generating"
+          ariaLabel={
+            hasUnfinished
+              ? `${unfinished.length} image generation in progress — view recent image runs`
+              : `View ${attempts.length} recent image runs`
+          }
+        />
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+          <DialogTitle>Recent image runs</DialogTitle>
+          <DialogDescription>
+            Every image attempt for this account and the credits it spent, including work that
+            finished after you left.
+          </DialogDescription>
+          {attempts.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No runs yet.</p>
+          ) : null}
+          <ul className="flex flex-col gap-3">
+            {attempts.map((attempt) => {
+              const unfinished = isImageAttemptUnfinished(attempt.status);
+              const showCost =
+                attempt.costUsd !== null || (!unfinished && attempt.status !== "billing_unknown");
+              return (
+                <li
+                  key={attempt.runId}
+                  className={cn(
+                    "flex flex-col gap-1 rounded-md border p-3",
+                    unfinished ? "border-primary/60" : "border-border",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-2 text-sm font-medium",
+                        STATUS_TONE[attempt.status],
                       )}
-
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <span className={cn("text-sm font-medium", STATUS_TONE[attempt.status])}>
-                          {STATUS_LABEL[attempt.status]}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {attempt.model} · {dateTimeFormatter.format(new Date(attempt.createdAt))}
-                          {attempt.costUsd !== null ? ` · ${formatCredits(attempt.costUsd)}` : null}
-                        </span>
-                        {attempt.reason ? (
-                          <span className="break-words text-xs text-muted-foreground">
-                            {attempt.reason}
-                          </span>
-                        ) : null}
-                        {/* Only when billing is unknown. That is the one case where a
-                        human has to look the task up on kie's dashboard before
-                        deciding whether to pay again — the same reason lib/kie.ts's
-                        timeout error carries it. */}
-                        {attempt.kieTaskId ? (
-                          <span className="break-all font-mono text-xs text-muted-foreground">
-                            kie task {attempt.kieTaskId}
-                          </span>
-                        ) : null}
-                        {attempt.kieTaskId &&
-                        !attempt.image &&
-                        (attempt.status === "billing_unknown" || attempt.status === "completed") ? (
-                          <PendingButton
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="self-start"
-                            // Only THIS row's button is pending. `checking` still
-                            // disables the others through `disabled` below, because
-                            // recover() serialises on one ref — but a spinner on a
-                            // row nobody pressed says the wrong thing about which
-                            // task is being checked.
-                            pending={checking === attempt.runId}
-                            disabled={checking !== null}
-                            onClick={() => void recover(attempt.runId)}
-                          >
-                            Check status / Recover image
-                          </PendingButton>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </DialogContent>
+                    >
+                      {unfinished ? <Spinner /> : null}
+                      {STATUS_LABEL[attempt.status]}
+                    </span>
+                    {showCost ? (
+                      <span className="text-sm font-medium tabular-nums">
+                        {attempt.costUsd !== null ? formatCredits(attempt.costUsd) : "Not billed"}
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {attempt.model} · {dateTimeFormatter.format(new Date(attempt.createdAt))}
+                  </span>
+                  {attempt.reason ? (
+                    <span className="break-words text-xs text-muted-foreground">
+                      {attempt.reason}
+                    </span>
+                  ) : null}
+                  {attempt.image ? (
+                    /* eslint-disable-next-line @next/next/no-img-element -- signed URL, not a static import */
+                    <img
+                      src={attempt.image.url}
+                      alt=""
+                      className="mt-1 h-16 w-16 rounded object-cover"
+                    />
+                  ) : unfinished ? (
+                    <div
+                      className="mt-1 h-16 w-16 animate-pulse rounded bg-muted"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {/* Only when billing is unknown. That is the one case where a
+                      human has to look the task up on kie's dashboard before
+                      deciding whether to pay again — the same reason lib/kie.ts's
+                      timeout error carries it. */}
+                  {attempt.kieTaskId ? (
+                    <span className="break-all font-mono text-xs text-muted-foreground">
+                      kie task {attempt.kieTaskId}
+                    </span>
+                  ) : null}
+                  {attempt.kieTaskId &&
+                  !attempt.image &&
+                  (attempt.status === "billing_unknown" || attempt.status === "completed") ? (
+                    <PendingButton
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="self-start"
+                      // Only THIS row's button is pending. `checking` still
+                      // disables the others through `disabled` below, because
+                      // recover() serialises on one ref — but a spinner on a
+                      // row nobody pressed says the wrong thing about which
+                      // task is being checked.
+                      pending={checking === attempt.runId}
+                      disabled={checking !== null}
+                      onClick={() => void recover(attempt.runId)}
+                    >
+                      Check status / Recover image
+                    </PendingButton>
+                  ) : null}
+                  {attempt.status === "failed" && attempt.costUsd === null ? (
+                    <span
+                      role="status"
+                      className="self-start rounded-md bg-primary/10 px-2 py-1 text-xs font-medium text-primary"
+                    >
+                      Not charged — the credits went back to your allowance.
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </DialogContent>
       </Dialog>
     </ImageAttemptsContext.Provider>
   );
