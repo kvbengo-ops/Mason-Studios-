@@ -2169,12 +2169,26 @@ export function UgcColumn({
                 }}
               />
               {geminiSourceVideoUnavailable ? (
-                <p className={cn("text-center text-xs text-muted-foreground", bar && "text-right")}>
+                <p
+                  className={cn(
+                    "text-center text-xs text-muted-foreground",
+                    // Capped to the room the bar's prompt box reserves (pr-32),
+                    // or the hint spreads left over the text being typed.
+                    bar && "w-28 text-right text-[10px] leading-snug",
+                  )}
+                >
                   A paid Gemini video-input receipt is required for this resolution before this
                   scene can be regenerated with its saved source video.
                 </p>
               ) : geminiAudioReference ? (
-                <p className={cn("text-center text-xs text-muted-foreground", bar && "text-right")}>
+                <p
+                  className={cn(
+                    "text-center text-xs text-muted-foreground",
+                    // Capped to the room the bar's prompt box reserves (pr-32),
+                    // or the hint spreads left over the text being typed.
+                    bar && "w-28 text-right text-[10px] leading-snug",
+                  )}
+                >
                   {option.label} can&apos;t use audio references. Remove the audio reference, or
                   switch to Seedance to use your audio.
                 </p>
@@ -2287,7 +2301,14 @@ export function UgcColumn({
                       videoPriceUnknown ||
                       geminiAudioReference ||
                       promptOverBy > 0)))) ? (
-                <p className={cn("text-center text-xs text-muted-foreground", bar && "text-right")}>
+                <p
+                  className={cn(
+                    "text-center text-xs text-muted-foreground",
+                    // Capped to the room the bar's prompt box reserves (pr-32),
+                    // or the hint spreads left over the text being typed.
+                    bar && "w-28 text-right text-[10px] leading-snug",
+                  )}
+                >
                   {!prompt.trim()
                     ? "Write a prompt to generate."
                     : promptOverBy > 0
@@ -2315,7 +2336,7 @@ export function UgcColumn({
                               ? "That video's length was never measured, so this render cannot be priced. Re-upload it, or remove the tag."
                               : hasNonImageTagOnly
                                 ? "A voice tag can’t carry a clip on its own. Tag a picture or a video too — the voice still reaches the render."
-                                : "Attach a reference image to generate — the prompt&rsquo;s @tag points at it."}
+                                : "Attach a reference image to generate — the prompt’s @tag points at it."}
                 </p>
               ) : !bar && promptOnlyAllowed ? (
                 <p className="text-center text-xs text-muted-foreground">
