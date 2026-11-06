@@ -157,7 +157,7 @@ const BYTEPLUS_UNPAID_OPTIONS: readonly UgcOption[] = [
 ];
 
 function renderColumn(
-  selectedScene: { id: string; idx: number; prompt: string } | null,
+  selectedScene: { id: string; idx: number; prompt: string; modelId?: string } | null,
   options: readonly UgcOption[] = OPTIONS,
 ) {
   return render(
