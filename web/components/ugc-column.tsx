@@ -1984,7 +1984,7 @@ export function UgcColumn({
                       <span className="flex-1">{ugcTierLabel(option.modelId, resolution)}</span>
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {tier
-                          ? rate === null
+                          ? rate == null
                             ? "Price unavailable"
                             : rateLabel(option.modelId, rate)
                           : "Price unverified"}
