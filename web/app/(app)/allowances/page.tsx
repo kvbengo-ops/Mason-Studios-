@@ -17,6 +17,7 @@ import type { ParsedSort } from "@/lib/sort-params";
 import { decisionBlockReason, defaultGrantAmountUsd } from "@/lib/allowance";
 import { formatUsd } from "@/lib/format-usd";
 import { getKieAccountBalanceUsd, formatAccountFundsUsd } from "@/lib/kie-balance";
+import { getBytePlusBalanceUsd } from "@/lib/byteplus-balance";
 import { getOutstandingAllowanceUsd, getUserActiveGrantsTotals } from "@/lib/db-aggregates";
 import { LiveSearch } from "@/components/live-search";
 import { PageSizeControl } from "@/components/page-size-control";
@@ -294,7 +295,14 @@ export default async function AllowancesPage({
   // Admin-only (CX-2): getKieAccountBalanceUsd is a /spend-grade figure and
   // /spend stays admin-only. Not called at all for a peer rather than called
   // and discarded.
-  const kieBalanceUsd = adminViewer ? await getKieAccountBalanceUsd() : null;
+  const [kieBalanceUsd, bytePlusBalanceUsd] = adminViewer
+    ? await Promise.all([getKieAccountBalanceUsd(), getBytePlusBalanceUsd()])
+    : [null, null];
+  // Allowance can be spent on either vendor now (Seedance 2.5 on BytePlus,
+  // everything else on kie), so funds are the two together. Unknown while
+  // kie's is unknown; BytePlus unreadable (no IAM keys) counts as kie alone,
+  // and the card says so.
+  const accountFundsUsd = kieBalanceUsd !== null ? kieBalanceUsd + (bytePlusBalanceUsd ?? 0) : null;
 
   // Per-requester "current allowance / used this week" for the approve
   // dialog (Part 3: "their current allowance and what they have used this
@@ -387,10 +395,16 @@ export default async function AllowancesPage({
             </CardHeader>
             <CardContent>
               <p className="text-3xl font-semibold text-foreground">
-                {kieBalanceUsd !== null ? formatUsd(kieBalanceUsd) : formatAccountFundsUsd(null)}
+                {accountFundsUsd !== null
+                  ? formatUsd(accountFundsUsd)
+                  : formatAccountFundsUsd(null)}
               </p>
               <p className="text-xs text-muted-foreground">
-                kie&apos;s real credit balance and its USD equivalent.
+                kie {kieBalanceUsd !== null ? formatUsd(kieBalanceUsd) : "unavailable"} · BytePlus{" "}
+                {bytePlusBalanceUsd !== null ? formatUsd(bytePlusBalanceUsd) : "unavailable"}
+                {bytePlusBalanceUsd === null && kieBalanceUsd !== null
+                  ? " (not counted — set BYTEPLUS_ACCESS_KEY_ID / BYTEPLUS_SECRET_ACCESS_KEY to read it)"
+                  : ""}
               </p>
             </CardContent>
           </Card>
@@ -407,8 +421,8 @@ export default async function AllowancesPage({
                 full allowance. Admins excluded — see 0035_outstanding_allowance.sql.
               </p>
               {outstandingAllowanceUsd !== null &&
-              kieBalanceUsd !== null &&
-              outstandingAllowanceUsd > kieBalanceUsd ? (
+              accountFundsUsd !== null &&
+              outstandingAllowanceUsd > accountFundsUsd ? (
                 <p className="mt-2 text-sm font-medium text-warning">
                   Outstanding allowance exceeds account funds — approving more without funding the
                   account risks everyone failing at once.
@@ -556,7 +570,7 @@ export default async function AllowancesPage({
                                 peerMaxGrantUsd={peerMaxGrantUsd}
                                 currentAllowanceUsd={currentAllowanceUsd}
                                 usedThisWeekUsd={usedThisWeekUsd}
-                                accountFundsUsd={kieBalanceUsd}
+                                accountFundsUsd={accountFundsUsd}
                                 outstandingAllowanceUsd={outstandingAllowanceUsd}
                               />
                             );
