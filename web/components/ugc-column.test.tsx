@@ -554,25 +554,28 @@ describe("only a picture can be the clip's starting frame", () => {
     expect(screen.getByText(/references are optional/i)).toBeTruthy();
   });
 
-  it("keeps Generate off when the only tag is a video", () => {
+  // Seedance's multimodal reference mode takes a video with no picture
+  // (kie's bytedance/seedance-2-5 schema, read 2026-11-06). The video rides
+  // out in reference_video_urls; nothing is sent as a frame.
+  it("turns Generate on when the only tag is a video", () => {
     renderWith("@new_video1 in a kitchen", [video]);
 
     expect(
       screen.getByRole("button", { name: /^generate/i }).hasAttribute("disabled"),
-      "offered Generate on a video-only prompt — the press would send an MP4 as reference_image_urls",
-    ).toBe(true);
+      "refused a video-only prompt — Seedance takes a video reference without a picture",
+    ).toBe(false);
   });
 
-  it("says WHY it is off, rather than asking for a reference already attached", () => {
-    renderWith("@new_video1 in a kitchen", [video]);
+  it("says WHY a voice-only prompt is off, rather than asking for a reference already attached", () => {
+    renderWith("@narrator reads the line", [voice]);
 
     // The generic copy is a riddle here: the operator HAS attached a
     // reference and can see its card. Naming the kind is the whole point.
-    const note = screen.getByText(/starting frame/i);
-    expect(note.textContent).toMatch(/tag a picture too/i);
+    const note = screen.getByText(/voice tag/i);
+    expect(note.textContent).toMatch(/tag a picture or a video too/i);
     expect(
       note.textContent,
-      "told the operator the video is ignored — it is not, it rides out in reference_video_urls",
+      "told the operator the voice is ignored — it is not, it rides out in reference_audio_urls",
     ).toMatch(/still reaches the render/i);
   });
 

@@ -1588,7 +1588,18 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
     if (
       !hasUpload &&
       !elementId &&
-      (!supportsPromptOnlyVideo(modelId) || tagsInOrder(prompt).length > 0)
+      (!supportsPromptOnlyVideo(modelId) || tagsInOrder(prompt).length > 0) &&
+      // A TAGGED VIDEO WITH NO PICTURE IS ALLOWED. kie's bytedance/seedance-2-5
+      // schema (read 2026-11-06) has no required input: a video alone is its
+      // "Multimodal Reference-to-Video" scenario, which only refuses a
+      // first/last frame alongside it — and no frame is sent here. The worker
+      // already submits with an empty reference_image_urls (see its
+      // TestDispatchAcceptsAVoiceWithNoPicture). A model with no video rate is
+      // still refused below, by estimateCost pricing it as unpriceable.
+      !(
+        supportsPromptOnlyVideo(modelId) &&
+        (await taggedVideoInputDurationsS(admin, user.id, prompt)).length > 0
+      )
     ) {
       return {
         error:

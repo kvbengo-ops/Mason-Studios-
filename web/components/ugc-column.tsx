@@ -781,9 +781,15 @@ export function UgcColumn({
   const aspectRatios = kieModel(option.modelId)?.aspectRatios ?? [];
   const activeAspectRatio = aspectRatios.find((r) => r === aspectRatio);
   const promptOnlyAllowed = supportsPromptOnlyVideo(option.modelId);
+  // A tagged video needs no picture beside it — Seedance's multimodal
+  // reference mode (see generateClip's matching rule in actions/ugc.ts). A
+  // model that cannot take a video is still stopped by the video-rate check.
+  const tagsAVideo = promptTags.some(
+    (tag) => findElementByTag(boxElements, tag)?.assetKind === "video_ref",
+  );
   const missingRequiredReference = isKling
     ? !startElement && (!promptOnlyAllowed || !!endElement)
-    : !effectiveReference && (!promptOnlyAllowed || promptTags.length > 0);
+    : !effectiveReference && (!promptOnlyAllowed || (promptTags.length > 0 && !tagsAVideo));
 
   // See isBadKlingFrameExt's own comment. Computed unconditionally (cheap:
   // two nullable checks) rather than gated on isKling, the same reasoning
@@ -1306,7 +1312,9 @@ export function UgcColumn({
                       {boxTags.length}/{MAX_REFERENCES}
                     </span>
                   </Label>
-                  {boxTags.length > 0 ? (
+                  {/* Not in the bar: Generate sits on top of this corner there,
+                      and the bar's own "+" / "@" open the same picker. */}
+                  {boxTags.length > 0 && !bar ? (
                     <button
                       type="button"
                       onClick={() => setBoxPickerOpen(true)}
@@ -2306,7 +2314,7 @@ export function UgcColumn({
                             : videoLengthUnmeasured
                               ? "That video's length was never measured, so this render cannot be priced. Re-upload it, or remove the tag."
                               : hasNonImageTagOnly
-                                ? "A video or voice tag can’t be the starting frame. Tag a picture too — the video still reaches the render."
+                                ? "A voice tag can’t carry a clip on its own. Tag a picture or a video too — the voice still reaches the render."
                                 : "Attach a reference image to generate — the prompt&rsquo;s @tag points at it."}
                 </p>
               ) : !bar && promptOnlyAllowed ? (
