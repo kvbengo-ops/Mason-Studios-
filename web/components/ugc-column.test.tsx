@@ -41,6 +41,9 @@ vi.mock("next/navigation", () => ({
 
 afterEach(() => {
   cleanup();
+  // The new-scene prompt draft persists in localStorage; one test's typing
+  // must not refill the next test's box.
+  window.localStorage.clear();
   vi.mocked(generateClip).mockReset();
   vi.mocked(generateClip).mockResolvedValue(undefined);
   vi.mocked(regenerateClip).mockReset();
@@ -462,7 +465,9 @@ describe("Length is a control, and it reprices the button", () => {
 
     // 28 cr/s x 8s, quoted before the press rather than discovered after it.
     expect(screen.getByRole("button", { name: /Generate · 224 credits/ })).toBeTruthy();
-    expect(screen.getByRole("slider", { name: "Length in seconds" }).getAttribute("aria-valuetext")).toBe("8 seconds");
+    expect(
+      screen.getByRole("slider", { name: "Length in seconds" }).getAttribute("aria-valuetext"),
+    ).toBe("8 seconds");
   });
 });
 
@@ -963,7 +968,13 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
         projectId="proj-1"
         options={[
           KLING_STD_OPTION,
-          { ...KLING_STD_OPTION, resolution: "1080p", creditsPerSecond: 27, soundCreditsPerSecond: 27, silentCreditsPerSecond: 18 },
+          {
+            ...KLING_STD_OPTION,
+            resolution: "1080p",
+            creditsPerSecond: 27,
+            soundCreditsPerSecond: 27,
+            silentCreditsPerSecond: 18,
+          },
         ]}
         selectedScene={null}
         budget={BUDGET}
@@ -980,7 +991,9 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
     expect(screen.queryByRole("menuitem", { name: /4K/ })).toBeNull();
     await user.click(screen.getByRole("menuitem", { name: /1080p.*27 cr\/s/ }));
 
-    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe("1080p");
+    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
+      "1080p",
+    );
     expect(screen.getByRole("button", { name: /generate.*108 cr/i })).toBeTruthy();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -990,9 +1003,19 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
     const { container } = renderColumn(null, [OPTIONS[1]!]);
 
     await user.click(screen.getByRole("button", { name: "Resolution: 480p" }));
-    expect(screen.getByRole("menuitem", { name: /720p.*Price unverified/ }).getAttribute("aria-disabled")).toBe("true");
-    expect(screen.getByRole("menuitem", { name: /1080p.*Price unverified/ }).getAttribute("aria-disabled")).toBe("true");
-    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe("480p");
+    expect(
+      screen
+        .getByRole("menuitem", { name: /720p.*Price unverified/ })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("menuitem", { name: /1080p.*Price unverified/ })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
+      "480p",
+    );
   });
 
   it("changes aspect ratio from the menu without changing the price", async () => {
@@ -1002,7 +1025,9 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
     await user.click(screen.getByRole("button", { name: /Aspect ratio:/ }));
     await user.click(screen.getByRole("menuitem", { name: "16:9" }));
 
-    expect((container.querySelector('input[name="aspectRatio"]') as HTMLInputElement).value).toBe("16:9");
+    expect((container.querySelector('input[name="aspectRatio"]') as HTMLInputElement).value).toBe(
+      "16:9",
+    );
     expect(screen.getByRole("button", { name: /^generate · 80 credits$/i })).toBeTruthy();
   });
 
@@ -1322,14 +1347,16 @@ describe("Kling 4.0 Reference tags", () => {
     category: "audio",
     assetKind: "audio",
   };
-  const options: readonly UgcOption[] = [{
-    ...OPTIONS[0]!,
-    modelId: "kling-4.0-reference",
-    label: "Kling 4.0 Reference",
-    resolution: "720p",
-    creditsPerSecond: 28.5,
-    videoCreditsPerSecond: null,
-  }];
+  const options: readonly UgcOption[] = [
+    {
+      ...OPTIONS[0]!,
+      modelId: "kling-4.0-reference",
+      label: "Kling 4.0 Reference",
+      resolution: "720p",
+      creditsPerSecond: 28.5,
+      videoCreditsPerSecond: null,
+    },
+  ];
 
   it("keeps one Kling model choice and switches endpoints from the prompt's mode controls", async () => {
     const user = userEvent.setup();
@@ -1342,8 +1369,16 @@ describe("Kling 4.0 Reference tags", () => {
       silentCreditsPerSecond: 28.5,
     };
     const { container } = render(
-      <UgcColumn projectId="proj-1" options={[frames, ...options]} selectedScene={null}
-        budget={BUDGET} vendor="kie" audioEnabled elements={[image]} layout="bar" />,
+      <UgcColumn
+        projectId="proj-1"
+        options={[frames, ...options]}
+        selectedScene={null}
+        budget={BUDGET}
+        vendor="kie"
+        audioEnabled
+        elements={[image]}
+        layout="bar"
+      />,
     );
     await user.click(screen.getByRole("button", { name: "Model: Kling 4.0" }));
     const menu = within(screen.getByRole("menu"));
@@ -1354,28 +1389,52 @@ describe("Kling 4.0 Reference tags", () => {
     await user.click(menu.getByRole("menuitem", { name: /Kling 4.0/ }));
     const modes = within(screen.getByRole("group", { name: "Kling 4.0 mode" }));
     await user.click(modes.getByRole("button", { name: "References" }));
-    expect(container.querySelector('input[name="modelId"]')?.getAttribute("value")).toBe("kling-4.0-reference");
+    expect(container.querySelector('input[name="modelId"]')?.getAttribute("value")).toBe(
+      "kling-4.0-reference",
+    );
 
     await user.click(modes.getByRole("button", { name: "Start/end frames" }));
-    expect(container.querySelector('input[name="modelId"]')?.getAttribute("value")).toBe("kling-4.0");
+    expect(container.querySelector('input[name="modelId"]')?.getAttribute("value")).toBe(
+      "kling-4.0",
+    );
   });
 
   it("lets an image tag enter the References box without requiring start/end frames", () => {
     const { container } = render(
-      <UgcColumn projectId="proj-1" options={options} selectedScene={null}
-        budget={BUDGET} vendor="kie" audioEnabled elements={[image]} />,
+      <UgcColumn
+        projectId="proj-1"
+        options={options}
+        selectedScene={null}
+        budget={BUDGET}
+        vendor="kie"
+        audioEnabled
+        elements={[image]}
+      />,
     );
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "@person runs" } });
     expect(screen.getByRole("button", { name: /^generate/i }).hasAttribute("disabled")).toBe(false);
-    expect(container.querySelector('input[name="referenceTag"]')?.getAttribute("value")).toBe("person");
+    expect(container.querySelector('input[name="referenceTag"]')?.getAttribute("value")).toBe(
+      "person",
+    );
     expect(container.querySelector('input[name="startElementId"]')).toBeNull();
   });
 
   it("explains why an audio tag disables regeneration with Kling 4.0 Reference", () => {
     render(
-      <UgcColumn projectId="proj-1" options={options}
-        selectedScene={{ id: "scene-1", idx: 1, prompt: "@person runs with @voice", referenceTags: ["person", "voice"] }}
-        budget={BUDGET} vendor="kie" audioEnabled elements={[image, voice]} />,
+      <UgcColumn
+        projectId="proj-1"
+        options={options}
+        selectedScene={{
+          id: "scene-1",
+          idx: 1,
+          prompt: "@person runs with @voice",
+          referenceTags: ["person", "voice"],
+        }}
+        budget={BUDGET}
+        vendor="kie"
+        audioEnabled
+        elements={[image, voice]}
+      />,
     );
     expect(screen.getByRole("button", { name: /regenerate/i }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByText(/Kling 4.0 Reference can't use audio references/)).toBeTruthy();
@@ -1493,7 +1552,11 @@ describe("UgcColumn's References box", () => {
 
     expect(screen.getByRole("button", { name: "Remove @jen" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Remove @mia" })).toBeTruthy();
-    expect([...container.querySelectorAll('input[name="referenceTag"]')].map((input) => (input as HTMLInputElement).value)).toEqual(["jen", "mia"]);
+    expect(
+      [...container.querySelectorAll('input[name="referenceTag"]')].map(
+        (input) => (input as HTMLInputElement).value,
+      ),
+    ).toEqual(["jen", "mia"]);
     expect(
       screen.getByRole("button", { name: /^generate/i }).hasAttribute("disabled"),
       "Generate stayed off after valid personal tags joined the box",
@@ -1501,7 +1564,11 @@ describe("UgcColumn's References box", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Remove @jen" }));
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain("jen and @mia");
-    expect([...container.querySelectorAll('input[name="referenceTag"]')].map((input) => (input as HTMLInputElement).value)).toEqual(["mia"]);
+    expect(
+      [...container.querySelectorAll('input[name="referenceTag"]')].map(
+        (input) => (input as HTMLInputElement).value,
+      ),
+    ).toEqual(["mia"]);
   });
 
   it("dims a box tile whose tag is not currently in the prompt", () => {
@@ -1572,7 +1639,9 @@ describe("UgcColumn's References box", () => {
     });
 
     expect(screen.getByText(/at most 10 references/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /regenerate scene/i }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: /regenerate scene/i }).hasAttribute("disabled")).toBe(
+      true,
+    );
   });
 });
 

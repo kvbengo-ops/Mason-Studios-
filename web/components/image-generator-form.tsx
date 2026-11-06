@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { FormEvent, JSX } from "react";
 import { useRouter } from "next/navigation";
 import type { GenerateProjectImageResult, ImageAttempt } from "@/actions/image-generator";
@@ -249,8 +249,13 @@ export function ImageGeneratorForm({
 
   const DRAFT_KEY = `image-generator:draft:${projectId ?? "personal"}`;
   // Restore happens once, and must not be written back over by the save effect
-  // before it has run — hence a flag rather than ordering luck.
-  const restored = useRef(false);
+  // before it has run. STATE, not a ref: a ref flipped inside the restore effect
+  // let the save effect in the SAME commit write the empty initial prompt over
+  // the draft — and under StrictMode's double effect run the second restore
+  // then read that empty draft back. Switching Image ⇄ Video on /create lost
+  // the prompt that way. As state, the first save runs a render later, with
+  // the restored values.
+  const [restored, setRestored] = useState(false);
 
   // react-hooks/set-state-in-effect is disabled for THIS effect only, and the
   // reason is server rendering rather than convenience.
@@ -280,7 +285,7 @@ export function ImageGeneratorForm({
       // forgotten draft is a far smaller problem than a console that will not
       // start because of a storage preference.
     } finally {
-      restored.current = true;
+      setRestored(true);
     }
     // Once, on mount. DRAFT_KEY is derived from a prop that cannot change for
     // the life of this page, and `models` is a server-rendered constant.
@@ -289,7 +294,7 @@ export function ImageGeneratorForm({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!restored.current) return;
+    if (!restored) return;
     try {
       window.localStorage.setItem(
         DRAFT_KEY,
@@ -299,7 +304,7 @@ export function ImageGeneratorForm({
       // Out of quota, or blocked. The console still works; only the draft is
       // forgotten, which is what would have happened anyway.
     }
-  }, [DRAFT_KEY, prompt, modelId, aspectRatio, imageCount]);
+  }, [restored, DRAFT_KEY, prompt, modelId, aspectRatio, imageCount]);
 
   /**
    * Appends the picked reference as an @tag.

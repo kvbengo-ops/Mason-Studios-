@@ -550,6 +550,38 @@ export function UgcColumn({
     const sceneIdx = sceneOptionIdx(selectedScene);
     if (sceneIdx !== -1) setModelIdx(sceneIdx);
   }
+
+  // UNSENT NEW-SCENE PROMPT SURVIVES LEAVING THE TAB. Switching Image ⇄ Video
+  // on /create unmounts this column, and the half-written prompt went with it.
+  // Only the NEW scene's box is kept: a saved scene reloads its own prompt.
+  // Restored after mount (a lazy initializer would break hydration), and the
+  // loaded flag is STATE so the first save runs a render later — see
+  // image-generator-form.tsx's `restored` for the race a ref allowed.
+  const isNewScene = selectedScene === null || selectedScene === undefined;
+  const draftKey = `ugc:draft:${ensureProject ? "create" : projectId}`;
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect -- restore after mount, see above */
+  useEffect(() => {
+    try {
+      const saved = isNewScene ? window.localStorage.getItem(draftKey) : null;
+      if (saved) setPrompt(saved);
+    } catch {
+      // Site data blocked: a forgotten draft, nothing worse.
+    }
+    setDraftLoaded(true);
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!draftLoaded || !isNewScene) return;
+    try {
+      window.localStorage.setItem(draftKey, prompt);
+    } catch {
+      // Out of quota or blocked — only the draft is lost.
+    }
+  }, [draftLoaded, isNewScene, draftKey, prompt]);
+
   // Which reference this generation uses — a fresh upload, or a saved
   // Element (0065_elements.sql) picked from ugc-reference-picker.tsx's
   // Elements tab. `fileRef` is the hidden file input this form actually
@@ -1044,6 +1076,12 @@ export function UgcColumn({
         clearGeneratePending(pid);
         router.refresh();
       } else {
+        // Sent: the draft is now a scene, so it must not refill the next one.
+        try {
+          window.localStorage.removeItem(draftKey);
+        } catch {
+          // Blocked storage — nothing to clear.
+        }
         router.push(`/ugc/${pid}?scene=${result.sceneId}`);
       }
       return result.notice ? { notice: result.notice } : undefined;
