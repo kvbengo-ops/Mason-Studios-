@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDailySpendSeries,
+  buildModelUsage,
   mergeAccountSpendRanking,
   parseWindowDays,
   type AccountControlDirectoryRow,
@@ -74,6 +75,24 @@ describe("mergeAccountSpendRanking", () => {
     expect(ranked.map((r) => r.id)).toEqual(["ed-2", "admin-1", "ed-1"]);
     expect(ranked[0]?.rangeRenderUsd).toBe(3.5);
     expect(ranked[0]?.rangeIterateUsd).toBe(0.5);
+  });
+});
+
+describe("buildModelUsage", () => {
+  it("labels runs by model, merges ids with one label, and ranks by run count", () => {
+    const usage = buildModelUsage([
+      { model: "kling-3.0/video", cost_usd: 0.5 },
+      { model: "seedance-2.5", cost_usd: 0.56 },
+      { model: "kling-3.0-pro", cost_usd: 0.5 },
+      { model: "mystery-model", cost_usd: 0.1 },
+    ]);
+
+    expect(usage.map((u) => [u.label, u.runs])).toEqual([
+      ["Kling 3.0", 2],
+      ["Seedance 2.5", 1],
+      ["mystery-model", 1],
+    ]);
+    expect(usage[0]?.costUsd).toBeCloseTo(1.0, 5);
   });
 });
 

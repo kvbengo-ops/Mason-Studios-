@@ -17,7 +17,8 @@ import {
   type UserSpendCategoryTotal,
 } from "@/lib/db-aggregates";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
-import { getModel, IMAGE_MODELS, mergeRenderSettings } from "@/lib/models";
+import { KIE_MODELS } from "@/lib/kie/models";
+import { COMPILER_MODELS, getModel, IMAGE_MODELS, mergeRenderSettings } from "@/lib/models";
 import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/runway";
 import { getGlobalSpendSnapshot, type GlobalSpendCapSettings } from "@/lib/spend";
 import { extFromFilename, signedUrl } from "@/lib/storage";
@@ -71,7 +72,14 @@ export interface AccountsControlOverview {
   runwayEstimate: RunwayEstimate;
   rangeCategoryTotals: SpendCategoryTotals;
   dailySeries: DailySpendPoint[];
+  modelUsage: ModelUsage[];
   accounts: AccountSpendSummary[];
+}
+
+export interface ModelUsage {
+  label: string;
+  runs: number;
+  costUsd: number;
 }
 
 export interface AccountControlDeletedScene {
@@ -177,6 +185,37 @@ export function buildDailySpendSeries(
 }
 
 /**
+ * A display name for `runs.model`, which holds whatever each writer sent:
+ * kie's wire name for worker renders, a kie image id for personal images, an
+ * Anthropic id for compiles. Not getModel() — it falls back to Seedance 2.5
+ * and would credit every unknown model to it. Unknown ids show as-is.
+ */
+export function runModelLabel(model: string): string {
+  return (
+    KIE_MODELS.find((m) => m.id === model || m.kieModelName === model)?.label ??
+    IMAGE_MODELS.find((m) => m.id === model || m.textToImageId === model || m.editId === model)
+      ?.label ??
+    COMPILER_MODELS.find((m) => m.id === model)?.label ??
+    model
+  );
+}
+
+/** Billed runs per model in the window, most-used first, then by spend. */
+export function buildModelUsage(
+  runs: readonly { model: string; cost_usd: number | null }[],
+): ModelUsage[] {
+  const byLabel = new Map<string, ModelUsage>();
+  for (const run of runs) {
+    const label = runModelLabel(run.model);
+    const usage = byLabel.get(label) ?? { label, runs: 0, costUsd: 0 };
+    usage.runs += 1;
+    usage.costUsd += run.cost_usd ?? 0;
+    byLabel.set(label, usage);
+  }
+  return Array.from(byLabel.values()).sort((a, b) => b.runs - a.runs || b.costUsd - a.costUsd);
+}
+
+/**
  * Merges `user_directory` rows with per-user spend category totals for the
  * selected date window and sorts accounts by window spend (highest first),
  * then all-time spend.
@@ -188,9 +227,7 @@ export function mergeAccountSpendRanking(
   const rangeByUserId = new Map(rangeTotals.map((row) => [row.userId, row]));
 
   return directoryRows
-    .filter(
-      (row) => row.role === "admin" || row.role === "editor" || row.role === "trusted_editor",
-    )
+    .filter((row) => row.role === "admin" || row.role === "editor" || row.role === "trusted_editor")
     .map((row) => {
       const range = rangeByUserId.get(row.id);
       return {
@@ -268,11 +305,16 @@ export async function loadAccountsControlOverview(
   // Paged fetch of runs in [windowStart, tomorrowStart) so PostgREST's
   // max_rows = 1000 never truncates the daily chart series.
   const PAGE = 1000;
-  const windowRuns: { created_at: string; cost_usd: number | null; scene_id: string | null }[] = [];
+  const windowRuns: {
+    created_at: string;
+    cost_usd: number | null;
+    scene_id: string | null;
+    model: string;
+  }[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const { data: runBatch, error: runsError } = await supabase
       .from("runs")
-      .select("created_at, cost_usd, scene_id")
+      .select("created_at, cost_usd, scene_id, model")
       .gte("created_at", windowStart.toISOString())
       .lt("created_at", tomorrowStart.toISOString())
       .not("cost_usd", "is", null)
@@ -305,6 +347,7 @@ export async function loadAccountsControlOverview(
     runwayEstimate,
     rangeCategoryTotals,
     dailySeries,
+    modelUsage: buildModelUsage(windowRuns),
     accounts,
   };
 }

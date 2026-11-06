@@ -128,6 +128,7 @@ describe("AccountsControlPage", () => {
         iterateUsd: 2.0,
         totalUsd: 12.0,
       },
+      modelUsage: [],
       dailySeries: [
         {
           date: "2026-10-30",
@@ -212,6 +213,7 @@ describe("AccountsControlPage", () => {
       kieBalanceUsd: 50.0,
       runwayEstimate: { status: "ok", days: 70 },
       rangeCategoryTotals: { renderUsd: 5.0, iterateUsd: 0, totalUsd: 5.0 },
+      modelUsage: [],
       dailySeries: [],
       accounts: [
         {
@@ -276,6 +278,7 @@ describe("AccountsControlPage", () => {
       kieBalanceUsd: 50.0,
       runwayEstimate: { status: "ok", days: 70 },
       rangeCategoryTotals: { renderUsd: 0, iterateUsd: 0.04, totalUsd: 0.04 },
+      modelUsage: [],
       dailySeries: [],
       accounts: [
         {

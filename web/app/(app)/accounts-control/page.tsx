@@ -834,6 +834,40 @@ export default async function AccountsControlPage({
             </Tabs>
           </ViewPanel>
 
+          <ViewPanel
+            id="accounts-control-models-heading"
+            title="Models used"
+            meta={`${overview.modelUsage.reduce((sum, m) => sum + m.runs, 0)} billed runs in ${windowDays} days`}
+          >
+            {overview.modelUsage.length === 0 ? (
+              <EmptyState>No billed runs in this window.</EmptyState>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {overview.modelUsage.map((usage) => (
+                  <li
+                    key={usage.label}
+                    className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-3 text-sm sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto]"
+                  >
+                    <span className="truncate" title={usage.label}>
+                      {usage.label}
+                    </span>
+                    <div className="h-2">
+                      <div
+                        className="h-full min-w-1 rounded-r-[4px] bg-chart-1"
+                        style={{
+                          width: `${(usage.runs / (overview.modelUsage[0]?.runs ?? 1)) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {`${usage.runs} run${usage.runs === 1 ? "" : "s"} · ${formatCredits(usage.costUsd)}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ViewPanel>
+
           {claudeSpend?.status === "ok" ? (
             <p className="text-xs tabular-nums text-muted-foreground">
               Claude API this month: {formatUsd(claudeSpend.usd)}
