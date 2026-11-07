@@ -17,11 +17,13 @@ import (
 // would silently defeat both.
 type claimRecorder struct {
 	Store
-	ceilings []int
+	ceilings     []int
+	byteplusCaps []int
 }
 
-func (c *claimRecorder) ClaimQueuedScenes(ctx context.Context, ceiling int) ([]store.Scene, error) {
+func (c *claimRecorder) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]store.Scene, error) {
 	c.ceilings = append(c.ceilings, ceiling)
+	c.byteplusCaps = append(c.byteplusCaps, byteplusCap)
 	return nil, nil
 }
 
@@ -51,5 +53,25 @@ func TestDispatchPassesTheCeilingNotTheSlots(t *testing.T) {
 	}
 	if rec.ceilings[0] != 7 {
 		t.Errorf("ClaimQueuedScenes(ceiling = %d), want 7 (RenderConcurrency)", rec.ceilings[0])
+	}
+}
+
+// The BytePlus cap has to reach the claim: it is what keeps an over-cap
+// BytePlus scene queued instead of claimed and then failed by the router.
+func TestDispatchHandsTheBytePlusCapToTheClaim(t *testing.T) {
+	rec := &claimRecorder{}
+	deps := Deps{
+		Store:            rec,
+		Config:           &config.Config{RenderConcurrency: 7},
+		Logger:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Balance:          &BalanceGate{},
+		BytePlusClaimCap: 3,
+	}
+
+	if err := Dispatch(context.Background(), deps); err != nil {
+		t.Fatalf("Dispatch returned error %v, want nil", err)
+	}
+	if len(rec.byteplusCaps) != 1 || rec.byteplusCaps[0] != 3 {
+		t.Errorf("ClaimQueuedScenes byteplusCap = %v, want [3]", rec.byteplusCaps)
 	}
 }
