@@ -21,6 +21,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"ugc-pipeline/worker/internal/kie"
 )
 
 // ErrNotFound is returned by lookup methods when no matching row exists.
@@ -252,6 +254,14 @@ func (s *Store) NotifyWeeklyCreditRenewal(ctx context.Context) error {
 // worker instances — or a restart racing itself — cannot double-submit the
 // same scene to kie.
 //
+// byteplusCap (BYTEPLUS_MAX_INFLIGHT; 0 = no separate cap) bounds the
+// Seedance 2.5 · BytePlus scenes in flight. Over it, BytePlus scenes are
+// simply not claimed — they stay 'queued' for a later tick, since the
+// worker can never move a claimed scene back — and the free slots go to
+// every other model, so a congested BytePlus never starves kie. Which
+// BytePlus scenes get the slots is oldest-first across all users, so a
+// held-back scene cannot be overtaken by a newer one on a later tick.
+//
 // The round-robin shape: scenes are ranked within each owner by age, then
 // taken in rank order, so the batch interleaves users while still filling
 // every free slot. One editor queueing hundreds of clips cannot starve the
@@ -272,7 +282,7 @@ func (s *Store) NotifyWeeklyCreditRenewal(ctx context.Context) error {
 // nothing more than which process's 30s timer fires first; with it, a
 // development worker's candidate CTE never even selects a row a production
 // web app wrote, so there is no race left to lose.
-func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling int) ([]Scene, error) {
+func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]Scene, error) {
 	if ceiling <= 0 {
 		return nil, nil
 	}
@@ -295,14 +305,40 @@ func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling int) ([]Scene, er
 	// row under lock still sees 'queued', so the second claims nothing and cannot
 	// double-submit a paid render.
 	const q = `
-WITH ranked AS (
+WITH queued AS (
     SELECT s.id,
            s.created_at,
-           row_number() OVER (PARTITION BY p.user_id ORDER BY s.created_at) AS rn
+           p.user_id,
+           -- coalesce: a NULL render_settings makes the merge NULL, and NULL
+           -- here would drop the scene from eligible below instead of
+           -- reading it as "not BytePlus".
+           coalesce((p.render_settings || coalesce(s.render_settings_override, '{}'::jsonb)) ->> 'model' = $2, false)
+               AS byteplus
     FROM scenes s
     JOIN projects p ON p.id = s.project_id
     WHERE s.status = 'queued'
-      AND s.dev = $2
+      AND s.dev = $1
+),
+byteplus_queue AS (
+    -- Oldest first across every user, id as the total-order tiebreaker (the
+    -- same reason the candidates ORDER BY carries one).
+    SELECT id, row_number() OVER (ORDER BY created_at, id) AS place
+    FROM queued
+    WHERE byteplus
+),
+eligible AS (
+    SELECT q.id, q.created_at, q.user_id
+    FROM queued q
+    LEFT JOIN byteplus_queue b ON b.id = q.id
+    WHERE NOT q.byteplus
+       OR $5 <= 0
+       OR b.place <= $5 - ` + bytePlusRenderingCount + `
+),
+ranked AS (
+    SELECT id,
+           created_at,
+           row_number() OVER (PARTITION BY user_id ORDER BY created_at) AS rn
+    FROM eligible
 ),
 candidates AS (
     SELECT id FROM ranked
@@ -325,12 +361,12 @@ candidates AS (
     -- fewer slots) or picks the same candidates and loses them all to the
     -- status re-check below.
     --
-    -- The count carries the same dev = $2 filter as the candidate CTE, for
+    -- The count carries the same dev = $1 filter as the candidate CTE, for
     -- the reason the CountRendering it replaced was scoped that way: without
     -- it a development worker's ceiling is eaten by production renders it can
     -- never see or finish, and vice versa — two workers sharing one
     -- concurrency count for work neither can dispatch for the other.
-    LIMIT greatest(0, $1 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $2))
+    LIMIT greatest(0, $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1))
 )
 UPDATE scenes
 SET status = 'rendering', submitted_at = now()
@@ -352,7 +388,7 @@ FROM candidates, projects settings
 WHERE scenes.id = candidates.id
   AND settings.id = scenes.project_id
   AND scenes.status = 'queued'
-  AND scenes.dev = $2
+  AND scenes.dev = $1
 RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
           scenes.video_prompt, scenes.is_talking_head, scenes.duration_s,
           scenes.status, scenes.kie_task_id, scenes.submitted_at,
@@ -360,7 +396,7 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
           settings.kind,
           settings.render_settings || coalesce(scenes.render_settings_override, '{}'::jsonb)`
 
-	rows, err := s.pool.Query(ctx, q, ceiling, s.dev)
+	rows, err := s.pool.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap)
 	if err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: %w", err)
 	}
@@ -665,20 +701,37 @@ WHERE s.status = 'rendering'
 	return scenes, nil
 }
 
-// RenderingWithTaskPrefix counts this mode's scenes in 'rendering' whose
-// persisted task id starts with prefix — byteplus.Router's in-flight count
-// (kie.BytePlusTaskPrefix), which caps BytePlus at BYTEPLUS_MAX_INFLIGHT.
-func (s *Store) RenderingWithTaskPrefix(ctx context.Context, prefix string) (int, error) {
-	const q = `
-SELECT count(*)
-FROM scenes
-WHERE status = 'rendering'
-  AND dev = $2
-  AND kie_task_id LIKE $1 || '%'`
+// bytePlusRenderingCount is the BytePlus in-flight count, as a scalar
+// subquery over $1 (dev), $2 (kie.BytePlusSeedance25ID) and $3
+// (kie.BytePlusTaskPrefix): this mode's 'rendering' scenes that are on
+// BytePlus (a byteplus: task id) or bound for it (claimed, no task id yet,
+// BytePlus model). The second half is what a task-prefix count alone
+// missed: between claim and submit a scene holds a slot no other worker
+// could see. A worker that dies there holds it only until reconcile fails
+// the task-less scene (StaleRendering, staleAfter).
+//
+// One definition, shared by the claim and BytePlusInflight, so the claim's
+// cap and the router's backstop can never disagree about the same rows.
+const bytePlusRenderingCount = `(
+    SELECT count(*)
+    FROM scenes rs
+    JOIN projects rp ON rp.id = rs.project_id
+    WHERE rs.status = 'rendering'
+      AND rs.dev = $1
+      AND (rs.kie_task_id LIKE $3 || '%'
+           OR (coalesce(rs.kie_task_id, '') = ''
+               AND (rp.render_settings || coalesce(rs.render_settings_override, '{}'::jsonb)) ->> 'model' = $2))
+)`
+
+// BytePlusInflight is byteplus.Router's in-flight count: every BytePlus
+// scene in 'rendering', submitted or merely claimed — so it includes the
+// scene the router is submitting right now.
+func (s *Store) BytePlusInflight(ctx context.Context) (int, error) {
+	const q = `SELECT ` + bytePlusRenderingCount
 
 	var n int64
-	if err := s.pool.QueryRow(ctx, q, prefix, s.dev).Scan(&n); err != nil {
-		return 0, fmt.Errorf("store: rendering with task prefix: %w", err)
+	if err := s.pool.QueryRow(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store: byteplus inflight: %w", err)
 	}
 	return int(n), nil
 }

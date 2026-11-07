@@ -232,18 +232,39 @@ func TestRouterKeepsOtherModelsOnKie(t *testing.T) {
 	}
 }
 
-func TestAtMaxInflightTheRenderFailsInsteadOfGoingToKie(t *testing.T) {
+// Inflight includes the scene being submitted (it was claimed into
+// 'rendering' first), so the cap is exceeded only at MaxInflight+1.
+func TestOverMaxInflightTheRenderFailsInsteadOfGoingToKie(t *testing.T) {
+	ark := &fakeArk{task: `{}`}
+	k := &fakeKie{}
+	r := router(k, ark.client(t))
+	r.Inflight = func(context.Context) (int, error) { return 4, nil }
+
+	_, err := r.Submit(context.Background(), seedanceRequest())
+	if !errors.Is(err, ErrAtCapacity) || !strings.Contains(err.Error(), "try again") {
+		t.Fatalf("err = %v; want ErrAtCapacity with a try-again reason", err)
+	}
+	if len(ark.created) != 0 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %v over the cap; want neither", len(ark.created), k.submitted)
+	}
+}
+
+// The claim let in exactly MaxInflight scenes, this one among them: every
+// one of them must submit. The old count (database + a 15s in-memory window)
+// read the third of three as four and refused it.
+func TestAClaimAtExactlyTheCapStillSubmits(t *testing.T) {
 	ark := &fakeArk{task: `{}`}
 	k := &fakeKie{}
 	r := router(k, ark.client(t))
 	r.Inflight = func(context.Context) (int, error) { return 3, nil }
 
-	_, err := r.Submit(context.Background(), seedanceRequest())
-	if err == nil || !strings.Contains(err.Error(), "try again") {
-		t.Fatalf("err = %v; want a try-again failure", err)
+	for i := 0; i < 3; i++ {
+		if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
+			t.Fatalf("Submit %d at n == MaxInflight: %v", i+1, err)
+		}
 	}
-	if len(ark.created) != 0 || len(k.submitted) != 0 {
-		t.Errorf("BytePlus creates %d, kie submits %v at the cap; want neither", len(ark.created), k.submitted)
+	if len(ark.created) != 3 || len(k.submitted) != 0 {
+		t.Errorf("BytePlus creates %d, kie submits %d; want 3 and 0", len(ark.created), len(k.submitted))
 	}
 }
 
@@ -260,20 +281,28 @@ func TestMissingInflightCounterFailsClosed(t *testing.T) {
 	}
 }
 
-func TestRecentSubmissionsCountBeforeTheyArePersisted(t *testing.T) {
-	ark := &fakeArk{task: `{}`}
-	k := &fakeKie{}
-	r := router(k, ark.client(t))
-	r.MaxInflight = 1 // the database still says 0 after the first create
+// Only the cap is ErrAtCapacity. A missing key, routing off and BytePlus's own
+// refusals keep failing the scene as before, so none may carry it.
+func TestOnlyTheCapIsErrAtCapacity(t *testing.T) {
+	noKey := router(&fakeKie{}, nil)
+	noKey.BytePlus = nil
+	_, err := noKey.Submit(context.Background(), seedanceRequest())
+	if err == nil || errors.Is(err, ErrAtCapacity) {
+		t.Errorf("no key: err = %v; want a failure that is not ErrAtCapacity", err)
+	}
 
-	if _, err := r.Submit(context.Background(), seedanceRequest()); err != nil {
-		t.Fatalf("first Submit: %v", err)
+	off := router(&fakeKie{}, (&fakeArk{task: `{}`}).client(t))
+	off.Route = false
+	_, err = off.Submit(context.Background(), seedanceRequest())
+	if err == nil || errors.Is(err, ErrAtCapacity) {
+		t.Errorf("routing off: err = %v; want a failure that is not ErrAtCapacity", err)
 	}
-	if _, err := r.Submit(context.Background(), seedanceRequest()); err == nil {
-		t.Fatal("second Submit succeeded; want the just-created task to fill the cap")
-	}
-	if len(ark.created) != 1 || len(k.submitted) != 0 {
-		t.Errorf("BytePlus creates %d, kie submits %d; want 1 and 0", len(ark.created), len(k.submitted))
+
+	refused := router(&fakeKie{}, (&fakeArk{createStatus: 404,
+		createBody: `{"error":{"code":"ModelNotOpen","message":"not activated"}}`}).client(t))
+	_, err = refused.Submit(context.Background(), seedanceRequest())
+	if err == nil || errors.Is(err, ErrAtCapacity) {
+		t.Errorf("refusal: err = %v; want a failure that is not ErrAtCapacity", err)
 	}
 }
 

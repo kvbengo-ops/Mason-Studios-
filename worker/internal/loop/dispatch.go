@@ -94,7 +94,7 @@ func Dispatch(ctx context.Context, deps Deps) error {
 		return nil
 	}
 
-	scenes, err := deps.Store.ClaimQueuedScenes(ctx, deps.Config.RenderConcurrency)
+	scenes, err := deps.Store.ClaimQueuedScenes(ctx, deps.Config.RenderConcurrency, deps.BytePlusClaimCap)
 	if err != nil {
 		return fmt.Errorf("dispatch: claim queued scenes: %w", err)
 	}

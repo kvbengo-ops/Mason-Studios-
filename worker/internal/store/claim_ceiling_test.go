@@ -61,7 +61,7 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 		t.Fatalf("count rendering: %v", err)
 	}
 
-	claimed, err := s.ClaimQueuedScenes(ctx, rendering+2)
+	claimed, err := s.ClaimQueuedScenes(ctx, rendering+2, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes: %v", err)
 	}
@@ -71,7 +71,7 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 
 	// Now full. A second dispatch tick — or a second instance — gets nothing,
 	// even though three scenes are still queued.
-	again, err := s.ClaimQueuedScenes(ctx, rendering+2)
+	again, err := s.ClaimQueuedScenes(ctx, rendering+2, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes (second): %v", err)
 	}

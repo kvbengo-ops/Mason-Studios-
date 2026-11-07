@@ -40,17 +40,18 @@ func (e *submissionError) SubmissionVendor() string { return kie.BytePlusVendor 
 // written where it will be read back: in the id we persist.
 const videoMarker = "video:"
 
-const (
-	// minCreateGap spaces BytePlus creates ~5/s. Seedance 2.x has burst
-	// protection (RequestBurstTooFast) on top of its per-minute limit
-	// (Individual 180 RPM, Enterprise 600), and one dispatch tick can claim
-	// RENDER_CONCURRENCY scenes at once.
-	minCreateGap = 200 * time.Millisecond
-	// recentWindow covers the gap between a create returning and dispatch
-	// persisting the id (markRenderingWithRetry — milliseconds), during which
-	// Inflight's database count cannot see the task yet.
-	recentWindow = 15 * time.Second
-)
+// minCreateGap spaces BytePlus creates ~5/s. Seedance 2.x has burst
+// protection (RequestBurstTooFast) on top of its per-minute limit
+// (Individual 180 RPM, Enterprise 600), and one dispatch tick can claim
+// RENDER_CONCURRENCY scenes at once.
+const minCreateGap = 200 * time.Millisecond
+
+// ErrAtCapacity is the in-flight cap refusing a render — and only that; a
+// missing key, BYTEPLUS_ROUTE=0 and BytePlus's own refusals are other errors.
+// The claim (store.ClaimQueuedScenes) already keeps over-cap scenes queued,
+// so this is a backstop that fires only if something got past it; the scene
+// then fails like any other refused submission, never goes to kie.
+var ErrAtCapacity = errors.New("BytePlus is at its in-flight render limit")
 
 // Router is the worker's one video vendor: the Seedance 2.5 · BytePlus pick
 // goes to BytePlus and ONLY BytePlus; every other model goes to Kie. A
@@ -77,17 +78,17 @@ type Router struct {
 	// MaxInflight caps BytePlus tasks running at once (BYTEPLUS_MAX_INFLIGHT;
 	// Individual accounts get 3, Enterprise 10). Over the account's limit
 	// BytePlus does not refuse — it QUEUES, and the queued time counts toward
-	// execution_expires_after — so the cap is enforced here and the overflow
-	// fails with "try again".
+	// execution_expires_after — so the cap is enforced, first by the claim
+	// (over-cap scenes stay queued) and then here as a backstop.
 	MaxInflight int
-	// Inflight counts BytePlus tasks still rendering (scenes in 'rendering'
-	// whose task id carries kie.BytePlusTaskPrefix).
+	// Inflight counts BytePlus scenes in 'rendering', submitted or merely
+	// claimed (store.BytePlusInflight) — so it already includes the scene
+	// being submitted, and a claim at exactly the cap reads as n == MaxInflight.
 	Inflight func(ctx context.Context) (int, error)
 	Log      *slog.Logger
 
 	mu         sync.Mutex
 	lastCreate time.Time
-	recent     []time.Time
 }
 
 func (r *Router) logger() *slog.Logger {
@@ -122,22 +123,12 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 	return kie.BytePlusTaskPrefix + marker + id, nil
 }
 
-// submitBytePlus holds the lock across the capacity check and the create, so
-// two goroutines from one dispatch tick cannot both see the last free slot.
-//
-// shortcut: the cap is per process; use a shared Postgres claim before running multiple workers.
+// submitBytePlus holds the lock across the capacity check and the create
+// only to space creates (minCreateGap); the cap itself is the database's,
+// so it holds across worker instances.
 func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
-	now := time.Now()
-	kept := r.recent[:0]
-	for _, t := range r.recent {
-		if now.Sub(t) < recentWindow {
-			kept = append(kept, t)
-		}
-	}
-	r.recent = kept
 
 	if r.MaxInflight > 0 {
 		if r.Inflight == nil {
@@ -147,12 +138,11 @@ func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (str
 		if err != nil {
 			return "", fmt.Errorf("could not count BytePlus renders in flight; try again: %w", err)
 		}
-		// Counts a just-persisted task twice for up to recentWindow, which
-		// errs toward refusing, never toward BytePlus's queue.
-		if n+len(r.recent) >= r.MaxInflight {
-			r.logger().Info("byteplus: at max in-flight, failing this render",
-				slog.Int("inflight", n+len(r.recent)), slog.Int("max", r.MaxInflight))
-			return "", fmt.Errorf("BytePlus is already running its limit of %d renders; try again when one finishes", r.MaxInflight)
+		// > not >=: n includes this scene, claimed into 'rendering' already.
+		if n > r.MaxInflight {
+			r.logger().Info("byteplus: over max in-flight, failing this render",
+				slog.Int("inflight", n), slog.Int("max", r.MaxInflight))
+			return "", fmt.Errorf("%w: %d renders against a limit of %d; try again when one finishes", ErrAtCapacity, n, r.MaxInflight)
 		}
 	}
 
@@ -165,12 +155,7 @@ func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (str
 	}
 	r.lastCreate = time.Now()
 
-	id, err := r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.model))
-	if err != nil {
-		return "", err
-	}
-	r.recent = append(r.recent, time.Now())
-	return id, nil
+	return r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.model))
 }
 
 // parseID splits a persisted id. ok is false for a kie id.

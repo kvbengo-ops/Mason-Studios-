@@ -124,11 +124,9 @@ func run() error {
 		router.BytePlus = byteplus.NewClient(cfg.BytePlusAPIKey, cfg.BytePlusModel, nil)
 		router.Route = cfg.BytePlusRoute
 		router.MaxInflight = cfg.BytePlusMaxInflight
-		router.Inflight = func(ctx context.Context) (int, error) {
-			return st.RenderingWithTaskPrefix(ctx, kie.BytePlusTaskPrefix)
-		}
+		router.Inflight = st.BytePlusInflight
 		if router.Route {
-			logger.Info("BYTEPLUS_API_KEY is set: the BytePlus ModelArk model choice renders on BytePlus only (overflow and refusals fail, never kie); the kie model choice remains on kie",
+			logger.Info("BYTEPLUS_API_KEY is set: the BytePlus ModelArk model choice renders on BytePlus only (over the cap it waits queued; refusals fail, never kie); the kie model choice remains on kie",
 				slog.Int("byteplus_max_inflight", router.MaxInflight))
 		} else {
 			logger.Info("BYTEPLUS_ROUTE=0: no new renders go to BytePlus (BytePlus picks fail); tasks already there are still polled")
@@ -143,6 +141,9 @@ func run() error {
 		Logger: logger,
 		Media:  mediaRunner,
 		Kie:    router,
+		// The same cap, applied at claim time: over it a BytePlus scene stays
+		// queued rather than being claimed and failed.
+		BytePlusClaimCap: router.MaxInflight,
 		// One gate for the process, shared by every dispatch tick — `deps`
 		// is captured by value in the loop closures below, so this has to be
 		// a pointer or each tick would get a fresh, always-open copy.

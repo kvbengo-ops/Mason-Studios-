@@ -67,7 +67,7 @@ UPDATE scenes SET status = 'queued', render_settings_override = $1::jsonb WHERE 
 		t.Fatalf("set scene override: %v", err)
 	}
 
-	claimed, err := s.ClaimQueuedScenes(ctx, 10)
+	claimed, err := s.ClaimQueuedScenes(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -133,7 +133,7 @@ UPDATE scenes SET status = 'queued', render_settings_override = NULL WHERE id = 
 		t.Fatalf("queue scene: %v", err)
 	}
 
-	claimed, err := s.ClaimQueuedScenes(ctx, 10)
+	claimed, err := s.ClaimQueuedScenes(ctx, 10, 0)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}

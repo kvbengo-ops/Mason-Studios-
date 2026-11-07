@@ -56,7 +56,7 @@ type Config struct {
 	BytePlusRoute bool
 	// BytePlusMaxInflight (BYTEPLUS_MAX_INFLIGHT, default 3 — an Individual
 	// account's limit; Enterprise is 10) caps BytePlus tasks running at once.
-	// Over it, Seedance 2.5 goes to kie instead of queueing at BytePlus.
+	// Over it, BytePlus scenes stay queued for a later tick — never kie.
 	BytePlusMaxInflight int
 	// AppBaseURL is this worker's own publicly-reachable base URL (e.g.
 	// https://worker.example.com), used to build the webhook callback
