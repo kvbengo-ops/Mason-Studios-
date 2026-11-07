@@ -1,9 +1,22 @@
-app.kvbengodev.cloud {
+app.kvbengodev.cloud, app.vbgstudio.site {
 	encode zstd gzip
 	reverse_proxy web:9000
 }
 
-worker.kvbengodev.cloud {
-	reverse_proxy /webhooks/* worker:8080
-	respond 404
+vbgstudio.site, www.vbgstudio.site {
+	redir https://app.vbgstudio.site{uri} permanent
+}
+
+worker.kvbengodev.cloud, hook.kvbengodev.cloud, worker.vbgstudio.site, hook.vbgstudio.site {
+	handle /webhooks/* {
+		reverse_proxy worker:8080
+	}
+
+	handle /health {
+		reverse_proxy worker:8080
+	}
+
+	handle {
+		respond 404
+	}
 }

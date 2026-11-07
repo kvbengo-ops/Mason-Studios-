@@ -50,3 +50,8 @@ web/CLAUDE.md
 # Supabase CLI scratch
 supabase/.temp/
 supabase/.branches/
+
+# Server-side Caddy/compose backups
+Caddyfile.bak*
+Caddyfile.broken-*
+docker-compose.override.yml.bak
