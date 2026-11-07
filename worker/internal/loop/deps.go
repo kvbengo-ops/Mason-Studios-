@@ -20,6 +20,7 @@ import (
 type Store interface {
 	ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]store.Scene, error)
 	MarkRendering(ctx context.Context, sceneID, kieTaskID string) error
+	ReleaseUnsubmittedClaim(ctx context.Context, sceneID string) error
 	MarkDone(ctx context.Context, sceneID string, asset store.Asset, run store.Run) error
 	MarkFailed(ctx context.Context, sceneID string, run store.Run) error
 	InsertAsset(ctx context.Context, asset store.Asset) (string, error)
@@ -72,9 +73,9 @@ type Deps struct {
 	// loop.Every-driven loop.
 	Media *media.Runner
 
-	// BytePlusClaimCap is the router's MaxInflight, handed to the claim so
+	// BytePlusClaimCap is byteplus.Router.ClaimCap, handed to the claim so
 	// over-cap BytePlus scenes stay queued instead of being claimed and
-	// failed. 0 = no separate cap: no key, or development (mocked on kie).
+	// failed. 0 = no separate cap: no key, BYTEPLUS_ROUTE=0, or development.
 	BytePlusClaimCap int
 
 	// Kie submits/polls renders through the configured video vendor router.

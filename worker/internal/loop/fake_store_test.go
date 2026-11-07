@@ -29,6 +29,9 @@ type fakeStore struct {
 
 	insertRunCalls []store.Run
 
+	releaseCalls []string
+	releaseErr   error
+
 	// references overrides the RefFrameURL fallback with explicit
 	// scene_references rows.
 	references   []store.SceneReference
@@ -66,6 +69,11 @@ func (f *fakeStore) MarkRendering(ctx context.Context, sceneID, kieTaskID string
 	f.markRenderingCalls++
 	f.markRenderingRequestIDs = append(f.markRenderingRequestIDs, kieTaskID)
 	return f.markRenderingErr
+}
+
+func (f *fakeStore) ReleaseUnsubmittedClaim(ctx context.Context, sceneID string) error {
+	f.releaseCalls = append(f.releaseCalls, sceneID)
+	return f.releaseErr
 }
 
 func (f *fakeStore) MarkFailed(ctx context.Context, sceneID string, run store.Run) error {

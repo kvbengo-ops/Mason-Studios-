@@ -51,11 +51,16 @@ type fakeVideoVendor struct {
 	lastRequestID string
 	// lastWebhookURL records Submit's most recent WebhookURL.
 	lastWebhookURL string
+	// submitErr, when set, is what Submit returns instead of an id.
+	submitErr error
 }
 
 func (f *fakeVideoVendor) Submit(ctx context.Context, req kie.SubmitRequest) (string, error) {
 	f.submitCalls++
 	f.lastWebhookURL = req.WebhookURL
+	if f.submitErr != nil {
+		return "", f.submitErr
+	}
 	return f.name, nil
 }
 func (f *fakeVideoVendor) Status(ctx context.Context, requestID string) (kie.Status, error) {

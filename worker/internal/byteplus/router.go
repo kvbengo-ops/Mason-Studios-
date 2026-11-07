@@ -123,6 +123,18 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 	return kie.BytePlusTaskPrefix + marker + id, nil
 }
 
+// ClaimCap is the BytePlus slice store.ClaimQueuedScenes may claim: MaxInflight
+// when new renders really go to BytePlus, else 0 (no separate cap). With no
+// key or BYTEPLUS_ROUTE=0 every BytePlus pick fails at Submit anyway, so
+// holding those scenes queued at a cap would only delay telling the editor;
+// in development (Mock) they render on kie's mock and need no cap.
+func (r *Router) ClaimCap() int {
+	if r.Mock || r.BytePlus == nil || !r.Route || r.MaxInflight <= 0 {
+		return 0
+	}
+	return r.MaxInflight
+}
+
 // submitBytePlus holds the lock across the capacity check and the create
 // only to space creates (minCreateGap); the cap itself is the database's,
 // so it holds across worker instances.

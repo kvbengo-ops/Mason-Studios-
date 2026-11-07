@@ -192,3 +192,222 @@ func TestAClaimedButUnsubmittedBytePlusSceneGoesStale(t *testing.T) {
 	}
 	t.Fatalf("claimed-but-unsubmitted BytePlus scene %s is not in StaleRendering", bp[0])
 }
+
+// Two workers claiming at once must never take more BytePlus scenes than
+// byteplusCap between them. The interleaving that used to break it, forced
+// deterministically: worker A snapshots the queue {s1, s2} and stalls on a
+// row lock; an OLDER scene s0 is re-queued in place (created_at is when a
+// scene was made, not queued); worker B snapshots {s0, s1, s2} with nothing
+// in flight yet and picks {s0, s1}. A then takes s1 and s2, B takes s0 — three
+// against a cap of two. The advisory lock makes B wait for A's commit before
+// it takes its snapshot, so B sees two in flight and claims none.
+func TestConcurrentClaimsNeverOverClaimBytePlusAfterARequeue(t *testing.T) {
+	dsn := requireTestDB(t)
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.Close)
+
+	ids := seedQueuedScenesForNewUser(ctx, t, s, 3) // oldest first
+	s0, s1, s2 := ids[0], ids[1], ids[2]
+	if _, err := s.pool.Exec(ctx, `
+UPDATE scenes SET render_settings_override = jsonb_build_object('model', $1::text)
+WHERE id = ANY($2)`, kie.BytePlusSeedance25ID, ids); err != nil {
+		t.Fatalf("mark BytePlus scenes: %v", err)
+	}
+	// s0 starts out of the queue: a finished scene about to be re-rendered.
+	if _, err := s.pool.Exec(ctx, `UPDATE scenes SET status = 'failed' WHERE id = $1`, s0); err != nil {
+		t.Fatalf("park s0: %v", err)
+	}
+	limit := inflight(ctx, t, s) + 2
+
+	waiting := func() int {
+		var n int
+		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&n); err != nil {
+			t.Fatalf("read pg_locks: %v", err)
+		}
+		return n
+	}
+	waitFor := func(want int, what string) {
+		t.Helper()
+		deadline := time.Now().Add(10 * time.Second)
+		for waiting() < want {
+			if time.Now().After(deadline) {
+				t.Fatalf("timed out waiting for %s (%d lock waiters, want %d)", what, waiting(), want)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+
+	// Hold s1 so A stalls after taking its snapshot.
+	hold, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin hold: %v", err)
+	}
+	// Released on every path: a failure that left s1 locked would hang the
+	// seed cleanup's DELETE forever instead of reporting.
+	defer func() { _ = hold.Rollback(context.Background()) }()
+	if _, err := hold.Exec(ctx, `SELECT 1 FROM scenes WHERE id = $1 FOR UPDATE`, s1); err != nil {
+		t.Fatalf("lock s1: %v", err)
+	}
+
+	type result struct {
+		scenes []Scene
+		err    error
+	}
+	claim := func(out chan<- result) {
+		sc, err := s.ClaimQueuedScenes(ctx, 1000, limit)
+		out <- result{sc, err}
+	}
+	aDone, bDone := make(chan result, 1), make(chan result, 1)
+
+	go claim(aDone)
+	waitFor(1, "worker A to stall on s1")
+	if _, err := s.pool.Exec(ctx, `UPDATE scenes SET status = 'queued' WHERE id = $1`, s0); err != nil {
+		t.Fatalf("re-queue s0: %v", err)
+	}
+	go claim(bDone)
+	waitFor(2, "worker B to block")
+	if err := hold.Rollback(ctx); err != nil {
+		t.Fatalf("release s1: %v", err)
+	}
+
+	a, b := <-aDone, <-bDone
+	if a.err != nil || b.err != nil {
+		t.Fatalf("claims: A %v, B %v", a.err, b.err)
+	}
+	got := claimedAmong(append(a.scenes, b.scenes...), ids)
+	if len(got) > 2 {
+		t.Fatalf("two concurrent claims took %d BytePlus scenes %v against a cap of 2", len(got), got)
+	}
+	if !got[s1] || !got[s2] || got[s0] {
+		t.Errorf("claimed %v; want A's s1 and s2, and the re-queued s0 left for a later tick", got)
+	}
+	if st := statusOf(ctx, t, s, s0); st != "queued" {
+		t.Errorf("s0 is %q, want queued", st)
+	}
+}
+
+func renderingCount(ctx context.Context, t *testing.T, s *Store) int {
+	t.Helper()
+	var n int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&n); err != nil {
+		t.Fatalf("count rendering: %v", err)
+	}
+	return n
+}
+
+// The BytePlus slots follow the same per-user round-robin as the batch: one
+// editor queueing many Seedance scenes cannot take every slot ahead of
+// another editor's single one, even though all of theirs are older.
+func TestClaimRoundRobinsBytePlusSlotsAcrossUsers(t *testing.T) {
+	dsn := requireTestDB(t)
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.Close)
+
+	busy := seedQueuedScenesForNewUser(ctx, t, s, 5) // seeded first: all older
+	quiet := seedQueuedScenesForNewUser(ctx, t, s, 1)
+	all := append(append([]string{}, busy...), quiet...)
+	if _, err := s.pool.Exec(ctx, `
+UPDATE scenes SET render_settings_override = jsonb_build_object('model', $1::text)
+WHERE id = ANY($2)`, kie.BytePlusSeedance25ID, all); err != nil {
+		t.Fatalf("mark BytePlus scenes: %v", err)
+	}
+
+	claimed, err := s.ClaimQueuedScenes(ctx, 1000, inflight(ctx, t, s)+2)
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	got := claimedAmong(claimed, all)
+	if len(got) != 2 || !got[busy[0]] || !got[quiet[0]] {
+		t.Errorf("claimed %v; want the busy editor's oldest and the quiet editor's one", got)
+	}
+}
+
+// RENDER_CONCURRENCY and the BytePlus cap are separate limits on one batch;
+// whichever is tighter wins, and the BytePlus slice never grows past its own.
+func TestClaimCeilingTighterThanTheBytePlusCap(t *testing.T) {
+	dsn := requireTestDB(t)
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.Close)
+
+	bp, kieIDs := seedBytePlusAndKieQueue(ctx, t, s)
+	mine := append(append([]string{}, bp...), kieIDs...)
+
+	// One free slot under the ceiling, five under the BytePlus cap: the
+	// ceiling wins and the single slot goes to the oldest scene.
+	first, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+1, inflight(ctx, t, s)+5)
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	if got := claimedAmong(first, mine); len(got) != 1 || !got[bp[0]] {
+		t.Errorf("first claim took %v; want only %s — the ceiling is the tighter limit", got, bp[0])
+	}
+
+	// Both bind: two free slots, one BytePlus slot. bp[2] and bp[3] are over
+	// the BytePlus cap, so the second slot falls to the oldest kie scene.
+	second, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+2, inflight(ctx, t, s)+1)
+	if err != nil {
+		t.Fatalf("second claim: %v", err)
+	}
+	if got := claimedAmong(second, mine); len(got) != 2 || !got[bp[1]] || !got[kieIDs[0]] {
+		t.Errorf("second claim took %v; want %s (the one BytePlus slot) and %s", got, bp[1], kieIDs[0])
+	}
+}
+
+// ReleaseUnsubmittedClaim may only ever un-claim a scene nothing was
+// submitted for: a task id means a vendor may have started (and billed) it.
+func TestReleaseUnsubmittedClaimOnlyTouchesTaskLessClaims(t *testing.T) {
+	dsn := requireTestDB(t)
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(s.Close)
+
+	ids := seedQueuedScenesForNewUser(ctx, t, s, 3)
+	free, submitted, queued := ids[0], ids[1], ids[2]
+	if _, err := s.pool.Exec(ctx, `
+UPDATE scenes SET status = 'rendering', submitted_at = now() WHERE id = ANY($1)`,
+		[]string{free, submitted}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := s.MarkRendering(ctx, submitted, kie.BytePlusTaskPrefix+"task-1"); err != nil {
+		t.Fatalf("MarkRendering: %v", err)
+	}
+
+	if err := s.ReleaseUnsubmittedClaim(ctx, free); err != nil {
+		t.Fatalf("release task-less claim: %v", err)
+	}
+	var st string
+	var submittedAt *time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT status, submitted_at FROM scenes WHERE id = $1`, free).
+		Scan(&st, &submittedAt); err != nil {
+		t.Fatalf("read released scene: %v", err)
+	}
+	if st != "queued" || submittedAt != nil {
+		t.Errorf("released scene is %q with submitted_at %v; want queued with none", st, submittedAt)
+	}
+
+	for name, id := range map[string]string{"submitted": submitted, "never claimed": queued} {
+		before := statusOf(ctx, t, s, id)
+		if err := s.ReleaseUnsubmittedClaim(ctx, id); err == nil {
+			t.Errorf("%s scene: release succeeded, want ErrNotFound", name)
+		}
+		if after := statusOf(ctx, t, s, id); after != before {
+			t.Errorf("%s scene: status %q -> %q, want unchanged", name, before, after)
+		}
+	}
+}

@@ -467,3 +467,23 @@ func TestVendorOf(t *testing.T) {
 		t.Errorf("VendorOf(kie id) = %q", got)
 	}
 }
+
+// The claim holds BytePlus scenes queued at the cap only while BytePlus is
+// really taking renders; otherwise they would wait just to fail at Submit.
+func TestClaimCapIsZeroUnlessBytePlusTakesRenders(t *testing.T) {
+	live := router(&fakeKie{}, (&fakeArk{task: `{}`}).client(t))
+	if got := live.ClaimCap(); got != 3 {
+		t.Errorf("key + routing on: ClaimCap = %d, want MaxInflight 3", got)
+	}
+
+	noKey := router(&fakeKie{}, nil)
+	off := router(&fakeKie{}, (&fakeArk{task: `{}`}).client(t))
+	off.Route = false
+	mock := router(&fakeKie{}, (&fakeArk{task: `{}`}).client(t))
+	mock.Mock = true
+	for name, r := range map[string]*Router{"no key": noKey, "BYTEPLUS_ROUTE=0": off, "development": mock} {
+		if got := r.ClaimCap(); got != 0 {
+			t.Errorf("%s: ClaimCap = %d, want 0", name, got)
+		}
+	}
+}

@@ -10,6 +10,10 @@
 // 'rendering', 'done', or 'failed' to scenes.status. It must NEVER write
 // 'draft' or 'frame_ready' — that half of the contract belongs to the web
 // app. Every method here that transitions status must respect this split.
+//
+// One narrow way back: ReleaseUnsubmittedClaim returns a claimed scene to
+// 'queued', and only while it has no task id — nothing was submitted, so
+// nothing can have been billed.
 package store
 
 import (
@@ -258,9 +262,9 @@ func (s *Store) NotifyWeeklyCreditRenewal(ctx context.Context) error {
 // Seedance 2.5 · BytePlus scenes in flight. Over it, BytePlus scenes are
 // simply not claimed — they stay 'queued' for a later tick, since the
 // worker can never move a claimed scene back — and the free slots go to
-// every other model, so a congested BytePlus never starves kie. Which
-// BytePlus scenes get the slots is oldest-first across all users, so a
-// held-back scene cannot be overtaken by a newer one on a later tick.
+// every other model, so a congested BytePlus never starves kie. The
+// BytePlus slots go round-robin across users like the rest of the batch,
+// and oldest first within each user's own scenes.
 //
 // The round-robin shape: scenes are ranked within each owner by age, then
 // taken in rank order, so the batch interleaves users while still filling
@@ -300,10 +304,10 @@ func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int)
 	// calling fal would sit in 'rendering' forever, invisible to the very loop that
 	// exists to catch it. The dispatch caller overwrites this on real submission.
 	//
-	// The status re-check in the UPDATE is what makes concurrent dispatchers safe:
-	// two instances may select the same candidate, but only the first to reach the
-	// row under lock still sees 'queued', so the second claims nothing and cannot
-	// double-submit a paid render.
+	// Concurrent dispatchers are serialized by the advisory lock below, so each
+	// claim sees the previous one's rows as rendering. The status re-check in the
+	// UPDATE stays as the second line: only a row still 'queued' is claimed, so
+	// nothing can double-submit a paid render.
 	const q = `
 WITH queued AS (
     SELECT s.id,
@@ -319,12 +323,20 @@ WITH queued AS (
     WHERE s.status = 'queued'
       AND s.dev = $1
 ),
-byteplus_queue AS (
-    -- Oldest first across every user, id as the total-order tiebreaker (the
-    -- same reason the candidates ORDER BY carries one).
-    SELECT id, row_number() OVER (ORDER BY created_at, id) AS place
+byteplus_by_user AS (
+    -- Each user's own BytePlus scenes, oldest first.
+    SELECT id, created_at,
+           row_number() OVER (PARTITION BY user_id ORDER BY created_at, id) AS user_rn
     FROM queued
     WHERE byteplus
+),
+byteplus_queue AS (
+    -- The same round-robin the batch uses (ranked/candidates below), applied
+    -- to the BytePlus slots: one user's fifty scenes cannot take every slot
+    -- ahead of another user's one. id is the total-order tiebreaker, for the
+    -- reason the candidates ORDER BY carries one.
+    SELECT id, row_number() OVER (ORDER BY user_rn, created_at, id) AS place
+    FROM byteplus_by_user
 ),
 eligible AS (
     SELECT q.id, q.created_at, q.user_id
@@ -343,23 +355,18 @@ ranked AS (
 candidates AS (
     SELECT id FROM ranked
     -- id is a tiebreaker, not an ordering preference: (rn, created_at) alone
-    -- is not a total order, and two dispatchers that resolve a tie differently
-    -- select DIFFERENT candidate sets. That is the one way the ceiling below
-    -- can still be overshot — each claims rows the other did not, so neither
-    -- loses anything to the status re-check. The tie needs two users' k-th
-    -- scenes to share a created_at to the microsecond, which is why this has
-    -- never been observed; it costs one column to make it impossible instead
-    -- of unlikely.
+    -- is not a total order. Ties and re-queued old scenes once let two
+    -- concurrent dispatchers pick DIFFERENT candidate sets and overshoot the
+    -- ceiling; the advisory lock (see the Go below) now closes both.
     ORDER BY rn, created_at, id
     -- The ceiling is subtracted here, inside the claiming statement, rather
     -- than read by the caller first. As two statements (count, then claim)
     -- there was nothing held between them: two worker instances could each
     -- read rendering = 0 and each claim a full batch, overshooting the global
     -- limit by a factor of however many replicas are running. As one
-    -- statement, the count and the candidate set share a snapshot, so a
-    -- concurrent claimer either sees this one's rows as rendering (and gets
-    -- fewer slots) or picks the same candidates and loses them all to the
-    -- status re-check below.
+    -- statement, the count and the candidate set share a snapshot, and the
+    -- advisory lock makes sure that snapshot already includes the previous
+    -- claim's rows.
     --
     -- The count carries the same dev = $1 filter as the candidate CTE, for
     -- the reason the CountRendering it replaced was scoped that way: without
@@ -396,17 +403,69 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
           settings.kind,
           settings.render_settings || coalesce(scenes.render_settings_override, '{}'::jsonb)`
 
-	rows, err := s.pool.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store: claim queued scenes: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // no-op after Commit
+
+	// One claimer at a time per MODE, taken immediately before the claim so
+	// the serialized window is just this one statement. Without it, two
+	// workers can each snapshot a different queue and both fill the same
+	// slots: created_at is when a scene was made, not when it was queued, and
+	// the web app re-queues old scenes in place, so a re-queue landing
+	// between two snapshots changes what the second one picks and the
+	// ceiling (and byteplusCap) overshoot. Under the lock, the claim's
+	// READ COMMITTED snapshot is taken after the previous claim committed.
+	//
+	// _xact_, never plain pg_advisory_lock: it releases on commit or
+	// rollback, including when this connection dies mid-claim. A
+	// session-level lock held by a dead worker would wedge every other
+	// worker's dispatch until that session was killed. Keyed on dev, like
+	// every claim filter, so production and development never wait on each
+	// other.
+	if _, err := tx.Exec(ctx,
+		`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('scene-claim:' || $1::boolean::text))`,
+		s.dev); err != nil {
+		return nil, fmt.Errorf("store: claim queued scenes: lock: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap)
 	if err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: %w", err)
 	}
-	defer rows.Close()
-
 	scenes, err := scanScenes(rows)
+	rows.Close()
 	if err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("store: claim queued scenes: commit: %w", err)
 	}
 	return scenes, nil
+}
+
+// ReleaseUnsubmittedClaim puts a scene this worker claimed back in the queue
+// for a later tick — only for a capacity refusal (byteplus.ErrAtCapacity),
+// where no vendor ever saw the job. Guarded in SQL to a 'rendering' scene of
+// this MODE with no task id, so it can never un-claim a submitted (possibly
+// billed) render. submitted_at goes back to NULL with the claim it stamped,
+// or reconcile would see a queued scene's stale claim time.
+func (s *Store) ReleaseUnsubmittedClaim(ctx context.Context, sceneID string) error {
+	tag, err := s.pool.Exec(ctx, `
+UPDATE scenes
+SET status = 'queued', submitted_at = NULL
+WHERE id = $1
+  AND dev = $2
+  AND status = 'rendering'
+  AND coalesce(kie_task_id, '') = ''`, sceneID, s.dev)
+	if err != nil {
+		return fmt.Errorf("store: release unsubmitted claim %s: %w", sceneID, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("store: release unsubmitted claim %s: %w", sceneID, ErrNotFound)
+	}
+	return nil
 }
 
 // MarkRendering attaches kieTaskID and submitted_at to a scene already

@@ -13,6 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"ugc-pipeline/worker/internal/byteplus"
 	"ugc-pipeline/worker/internal/kie"
 	"ugc-pipeline/worker/internal/store"
 )
@@ -419,6 +420,20 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		HasAudio: withSpeech(scene, model),
 	})
 	if err != nil {
+		// The BytePlus cap's backstop: nothing reached BytePlus and nothing
+		// was billed, so the scene goes back in the queue rather than
+		// failing. The claim's own cap makes this rare (see
+		// store.ClaimQueuedScenes); still never kie.
+		if errors.Is(err, byteplus.ErrAtCapacity) {
+			recCtx, cancel := recoveryCtx(ctx)
+			defer cancel()
+			if rerr := deps.Store.ReleaseUnsubmittedClaim(recCtx, scene.ID); rerr != nil {
+				failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w (and could not return it to the queue: %v)", err, rerr))
+				return
+			}
+			logger.Info("dispatch: BytePlus at capacity, scene returned to the queue", slog.String("error", err.Error()))
+			return
+		}
 		// web/lib/spend.ts's pre-flight balance check (part 1b) is a
 		// snapshot and always racy: several renders can pass it and still
 		// drain the account before kie actually submits this one. This is
