@@ -1,0 +1,9 @@
+app.kvbengodev.cloud {
+	encode zstd gzip
+	reverse_proxy web:9000
+}
+
+worker.kvbengodev.cloud {
+	reverse_proxy /webhooks/* worker:8080
+	respond 404
+}
