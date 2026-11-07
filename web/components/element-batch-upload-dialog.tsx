@@ -227,8 +227,12 @@ export function ElementBatchUploadDialog(): JSX.Element {
                 disabled={busy}
                 className="w-full rounded-md border bg-background p-2 text-sm text-foreground"
               >
-                <option value="shared">Shared</option>
-                <option value="mine">Mine</option>
+                <option value="shared" className="bg-popover text-popover-foreground">
+                  Shared
+                </option>
+                <option value="mine" className="bg-popover text-popover-foreground">
+                  Mine
+                </option>
               </select>
               <p className="text-xs text-muted-foreground">
                 Mine stays private and appears under the Mine filter.
