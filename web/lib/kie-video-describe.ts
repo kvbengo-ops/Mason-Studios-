@@ -110,7 +110,7 @@ const CREDIT_USD = 0.005;
  * MAX_DESCRIBABLE_VIDEO_BYTES actually costs rather than assume every clip
  * prices like the sampled ones.
  */
-export const VIDEO_DESCRIBE_ESTIMATE_USD = 0.0002;
+export { VIDEO_DESCRIBE_ESTIMATE_USD } from "./element-describe-cost";
 
 /**
  * The hard ceiling on a clip this module will even ATTEMPT to send to kie,

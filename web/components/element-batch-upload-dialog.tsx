@@ -5,9 +5,11 @@ import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { registerElement } from "@/actions/elements";
+import { uploadDescribeEstimateUsd } from "@/lib/element-describe-cost";
 import { stageFiles } from "@/lib/stage-files";
 import { checkElementUploadName } from "@/actions/check-element-upload-name";
 import { ElementTagNameField } from "@/components/element-tag-name-field";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { PendingButton } from "@/components/pending-button";
 import {
@@ -65,6 +67,7 @@ function FilePreview({
 export function ElementBatchUploadDialog(): JSX.Element {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<UploadRow[]>([]);
+  const [destination, setDestination] = useState<"shared" | "mine">("shared");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -118,7 +121,7 @@ export function ElementBatchUploadDialog(): JSX.Element {
             return "This tag is used by another file in this batch. Rename one of them.";
           }
           try {
-            return await checkElementUploadName(row.name);
+            return await checkElementUploadName(row.name, destination === "shared");
           } catch (error) {
             unstable_rethrow(error);
             return "Could not check this tag. Try again.";
@@ -135,12 +138,22 @@ export function ElementBatchUploadDialog(): JSX.Element {
         toast.error("Fix the highlighted tags before uploading.");
         return;
       }
+      const estimate = batch.reduce(
+        (total, row) => total + uploadDescribeEstimateUsd(row.file),
+        0,
+      );
+      if (
+        !window.confirm(
+          `Upload and describe ${batch.length} element${batch.length === 1 ? "" : "s"}? Estimated description cost: $${estimate.toFixed(4)}. Voice and video retries may cost more.`,
+        )
+      ) return;
       let saved = 0;
       setProgress({ done: 0, total: batch.length });
       for (const [index, row] of batch.entries()) {
         patch(row.id, { status: "uploading", error: undefined });
         const formData = new FormData();
         formData.set("name", row.name.trim());
+        formData.set("destination", destination);
         formData.set("image", row.file);
         if (row.duration && Number.isFinite(row.duration))
           formData.set("durationS", String(row.duration));
@@ -159,7 +172,9 @@ export function ElementBatchUploadDialog(): JSX.Element {
         }
         setProgress({ done: index + 1, total: batch.length });
       }
-      toast(`${saved} of ${batch.length} elements uploaded.`);
+      toast(
+        `${saved} of ${batch.length} elements uploaded to ${destination === "shared" ? "Shared" : "Mine"}.`,
+      );
     } finally {
       setRows((current) => current.filter((row) => row.status !== "saved"));
       if (inputRef.current) inputRef.current.value = "";
@@ -203,6 +218,22 @@ export function ElementBatchUploadDialog(): JSX.Element {
                 event.target.value = "";
               }}
             />
+            <div className="space-y-2">
+              <Label htmlFor="element-upload-destination">Save to</Label>
+              <select
+                id="element-upload-destination"
+                value={destination}
+                onChange={(event) => setDestination(event.target.value === "mine" ? "mine" : "shared")}
+                disabled={busy}
+                className="w-full rounded-md border bg-background p-2 text-sm text-foreground"
+              >
+                <option value="shared">Shared</option>
+                <option value="mine">Mine</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Mine stays private and appears under the Mine filter.
+              </p>
+            </div>
             <div
               className="rounded-lg border border-dashed p-5 text-center"
               onDragOver={(event) => event.preventDefault()}
@@ -243,6 +274,7 @@ export function ElementBatchUploadDialog(): JSX.Element {
                     <ElementTagNameField
                       label={`Tag for ${row.file.name}`}
                       value={row.name}
+                      shared={destination === "shared"}
                       disabled={busy || row.status === "saved"}
                       onChange={(name) =>
                         patch(row.id, { name, error: undefined, status: "ready" })
@@ -254,7 +286,9 @@ export function ElementBatchUploadDialog(): JSX.Element {
                       </p>
                     ) : null}
                     {row.status === "saved" ? (
-                      <p className="text-sm text-green-700">Saved to Shared</p>
+                      <p className="text-sm text-green-700">
+                        Saved to {destination === "shared" ? "Shared" : "Mine"}
+                      </p>
                     ) : null}
                     {row.status === "uploading" ? (
                       <p role="status" className="text-sm">
