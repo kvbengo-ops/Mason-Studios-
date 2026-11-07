@@ -1266,6 +1266,16 @@ export default async function AccountsControlPage({
           title="All runs"
           meta={`${runLog.total} in the last ${windowDays} days`}
         >
+          <div className="flex justify-end">
+            <a
+              href="/api/accounts-control/runs-csv"
+              download="all-runs.csv"
+              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <DownloadIcon aria-hidden="true" className="size-3.5" />
+              Export all runs CSV
+            </a>
+          </div>
           {runLog.rows.length === 0 ? (
             <EmptyState>No runs in this window.</EmptyState>
           ) : (
