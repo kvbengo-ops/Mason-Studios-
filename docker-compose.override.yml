@@ -1,0 +1,25 @@
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  web:
+    restart: unless-stopped
+    cpus: "1.5"
+    mem_limit: 3g
+
+  worker:
+    restart: unless-stopped
+    cpus: "2"
+    mem_limit: 6g
+
+volumes:
+  caddy_data:
+  caddy_config:
