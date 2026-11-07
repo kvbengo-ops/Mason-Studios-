@@ -16,21 +16,9 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
-      "seedance-2.5/480p",
-      "seedance-2.5/720p",
-      "seedance-2.5/1080p",
       "seedance-2.5-byteplus/480p",
       "seedance-2.5-byteplus/720p",
       "seedance-2.5-byteplus/1080p",
-      "seedance-2/480p",
-      "seedance-2/720p",
-      "seedance-2/1080p",
-      "seedance-2-fast/480p",
-      "seedance-2-fast/720p",
-      "seedance-2-mini/480p",
-      "seedance-2-mini/720p",
-      "kling-3.0-pro/720p",
-      "kling-3.0-pro/1080p",
       "kling-4.0/720p",
       "kling-4.0/1080p",
       "kling-4.0-reference/720p",
@@ -51,12 +39,7 @@ describe("ugcOptions(true) — the sound picker", () => {
     );
     const bySecond = Object.fromEntries(firsts.map((o) => [o.modelId, o.videoCreditsPerSecond]));
     expect(bySecond).toEqual({
-      "seedance-2.5": 17,
       "seedance-2.5-byteplus": 12.2976,
-      "seedance-2": null,
-      "seedance-2-fast": null,
-      "seedance-2-mini": null,
-      "kling-3.0-pro": null,
       "kling-4.0": null,
       "kling-4.0-reference": null,
       "wan-3.0": null,
@@ -64,14 +47,13 @@ describe("ugcOptions(true) — the sound picker", () => {
     });
   });
 
-  it("prices Kling at its cheaper std/720p receipt, not pro/1080p, over its full duration range, and sellable", () => {
-    const kling = options.find((o) => o.modelId === "kling-3.0-pro");
-    expect(kling).toBeTruthy();
-    expect(kling!.label).toBe("Kling 3.0");
-    expect(kling!.resolution).toBe("720p");
-    expect(kling!.creditsPerSecond).toBe(20);
-    expect(kling!.durationsS).toEqual([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-    expect(kling!.unpaid).toBe(false);
+  it("never shows a hidden model, even one offerable() still prices", () => {
+    for (const id of ["seedance-2.5", "seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
+      expect(
+        options.some((o) => o.modelId === id),
+        id,
+      ).toBe(false);
+    }
   });
 
   it("never offers Hailuo — it has no sound rate at all", () => {
@@ -87,33 +69,11 @@ describe("ugcOptions(true) — the sound picker", () => {
     expect(reference.every((o) => o.nativeAudio === false)).toBe(true);
   });
 
-  it("flags Kling nativeAudio true, and carries BOTH its sound and silent rates regardless of this route's own withSound", () => {
-    // The column's Sound On/Off control (ugc-column.tsx) has to be able to
-    // quote either rate for Kling, whichever way this option's own
-    // creditsPerSecond was built — see UgcOption.soundCreditsPerSecond's own
-    // comment for why that has to be a second, separate number.
-    const kling = options.find((o) => o.modelId === "kling-3.0-pro")!;
-    expect(kling.nativeAudio).toBe(true);
-    expect(kling.soundCreditsPerSecond).toBe(20);
-    expect(kling.silentCreditsPerSecond).toBe(14);
-  });
-
   it("flags every Seedance/Hailuo nativeAudio false, with no sound/silent rate to read", () => {
     for (const option of options) {
       if (option.modelId === "kling-3.0-pro" || option.modelId === "kling-4.0") continue;
       expect(option.nativeAudio, `${option.modelId} should not be nativeAudio`).toBe(false);
     }
-  });
-
-  it("sells published Seedance 2.5 tiers and marks them unpaid", () => {
-    expect(
-      options
-        .filter((o) => o.modelId === "seedance-2.5" && o.resolution !== "480p")
-        .map((o) => [o.resolution, o.creditsPerSecond, o.unpaid]),
-    ).toEqual([
-      ["720p", 63, true],
-      ["1080p", 158, true],
-    ]);
   });
 
   it("each model starts at its cheapest offerable tier", () => {
@@ -136,42 +96,19 @@ describe("ugcOptions(true) — the sound picker", () => {
 describe("ugcOptions(false) — the silent picker", () => {
   const options = ugcOptions(false);
 
-  it("prices the Kling option (if present) at its cheaper silent std/720p receipt, not pro/1080p", () => {
-    // std/720p (14 cr/s) undercuts pro/1080p (18) silent too, as of the
-    // 2026-09-10 silent receipt that let the scripted wizard's B-roll
-    // scenes price a std/720p Kling project at all.
-    const kling = options.find((o) => o.modelId === "kling-3.0-pro");
-    expect(kling).toBeTruthy();
-    expect(kling!.resolution).toBe("720p");
-    expect(kling!.creditsPerSecond).toBe(14);
-  });
-
-  // The silent route also has measured receipts for seedance-2.5 at 480p
-  // (28 cr/s) and 720p (63 cr/s), so the cheapest-tier assertion below checks
-  // tier selection against receipts as well as the published sound rates.
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
-      "seedance-2.5/480p/28",
-      "seedance-2.5/720p/63",
-      "seedance-2.5/1080p/158",
       "seedance-2.5-byteplus/480p/20.56005",
       "seedance-2.5-byteplus/720p/46.224",
       "seedance-2.5-byteplus/1080p/113.724",
-      "kling-3.0-pro/720p/14",
-      "kling-3.0-pro/1080p/18",
       "kling-4.0/720p/28.5",
       "kling-4.0/1080p/42.5",
       "kling-4.0-reference/720p/28.5",
       "kling-4.0-reference/1080p/42.5",
-      "hailuo-2.3-pro/768P/9",
       "gemini-omni-video/720p/15.75",
       "gemini-omni-video/1080p/15.75",
       "gemini-omni-video/4k/36.75",
     ]);
-  });
-
-  it("offers seedance-2.5 at 720p because its silent price has a receipt", () => {
-    expect(options.some((o) => o.modelId === "seedance-2.5" && o.resolution === "720p")).toBe(true);
   });
 
   it("each model starts at its cheapest offerable tier", () => {

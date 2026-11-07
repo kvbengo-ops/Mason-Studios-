@@ -36,8 +36,20 @@ import {
 import { getModel } from "@/lib/models";
 import type { UgcOption } from "@/components/ugc-column";
 
+// The only models the picker shows (owner's call, 2026-11-07). Display only:
+// offerable() still prices and validates the rest, so old scenes stay readable.
+// kling-4.0-reference is Kling 4.0's References mode, not a separate model.
+const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
+  "seedance-2.5-byteplus",
+  "kling-4.0",
+  "kling-4.0-reference",
+  "wan-3.0",
+  "gemini-omni-video",
+]);
+
 export function ugcOptions(withSound: boolean): UgcOption[] {
-  return offerable(withSound).map((offer) => {
+  const shown = offerable(withSound).filter((offer) => SHOWN_MODEL_IDS.has(offer.model.id));
+  return shown.map((offer) => {
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;
     return {
       modelId: offer.model.id,

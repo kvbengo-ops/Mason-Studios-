@@ -90,7 +90,7 @@ const OPTIONS: readonly UgcOption[] = [
     ...NOT_KLING,
   },
   {
-    modelId: "seedance-2.5",
+    modelId: "seedance-2.5-byteplus",
     label: "Seedance 2.5",
     resolution: "480p",
     durationsS: [4, 8],
@@ -101,7 +101,7 @@ const OPTIONS: readonly UgcOption[] = [
     ...NOT_KLING,
   },
   {
-    modelId: "seedance-2.5",
+    modelId: "seedance-2.5-byteplus",
     label: "Seedance 2.5",
     resolution: "720p",
     durationsS: [4, 8],
@@ -144,7 +144,7 @@ const BUDGET = {
  * that carries a receipt must not be described as lacking one.
  */
 const UNPAID_OPTIONS: readonly UgcOption[] = OPTIONS.map((o) =>
-  o.modelId === "seedance-2.5" && o.resolution === "480p" ? { ...o, unpaid: true } : o,
+  o.modelId === "seedance-2.5-byteplus" && o.resolution === "480p" ? { ...o, unpaid: true } : o,
 );
 const BYTEPLUS_UNPAID_OPTIONS: readonly UgcOption[] = [
   {
@@ -341,7 +341,7 @@ describe("UgcColumn pins its settings, but the model follows the scene", () => {
     id: "scene-1",
     idx: 3,
     prompt: "a cat knocks a glass over",
-    modelId: "seedance-2.5",
+    modelId: "seedance-2.5-byteplus",
     resolution: "480p",
     durationS: 6,
   };
@@ -386,8 +386,12 @@ describe("UgcColumn pins its settings, but the model follows the scene", () => {
     // The column already says it, but a caveat on the page is one the
     // operator has scrolled past by the time they approve. This is where the
     // money is committed, so the qualification has to travel with the number.
+    // A kie model: the pinned BytePlus pair names BytePlus instead (next test).
     const user = userEvent.setup();
-    renderColumn(SEEDANCE_SCENE, UNPAID_OPTIONS);
+    renderColumn(
+      { ...SEEDANCE_SCENE, modelId: "hailuo-2.3-pro", resolution: "768P" },
+      OPTIONS.map((o) => (o.modelId === "hailuo-2.3-pro" ? { ...o, unpaid: true } : o)),
+    );
 
     await user.click(screen.getByRole("button", { name: /regenerate/i }));
     expect(await screen.findByText(/published figure, not a receipt/i)).toBeTruthy();
@@ -411,7 +415,9 @@ describe("UgcColumn pins its settings, but the model follows the scene", () => {
     render(
       <UgcColumn
         projectId="proj-1"
-        options={OPTIONS.filter((o) => !(o.modelId === "seedance-2.5" && o.resolution === "480p"))}
+        options={OPTIONS.filter(
+          (o) => !(o.modelId === "seedance-2.5-byteplus" && o.resolution === "480p"),
+        )}
         selectedScene={null}
         budget={BUDGET}
         vendor="kie"
@@ -729,7 +735,7 @@ describe("UgcColumn — Generate confirms before it spends", () => {
     const submitted = vi.mocked(generateClip).mock.calls[0]?.[0] as FormData;
     // The settings that were CONFIRMED, not whatever the pickers might read
     // by the time the action runs.
-    expect(submitted.get("modelId")).toBe("seedance-2.5");
+    expect(submitted.get("modelId")).toBe("seedance-2.5-byteplus");
     expect(submitted.get("resolution")).toBe("480p");
     expect(submitted.get("durationS")).toBe("4");
   });

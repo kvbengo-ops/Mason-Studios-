@@ -315,7 +315,7 @@ export function UgcColumn({
   // about that measurement was wasted: it is a receipt now, so the model can
   // be pinned again, or offered beside this one, without spending anything
   // further. What it is not is the default.
-  const PINNED_MODEL_ID = "seedance-2.5";
+  const PINNED_MODEL_ID = "seedance-2.5-byteplus";
   const PINNED_RESOLUTION = "480p";
   const PINNED_DURATION_S = 4;
 
