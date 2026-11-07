@@ -21,6 +21,7 @@ describe("categorizeRun", () => {
     // the model id varies (whichever Claude model is configured), but the
     // vendor alone already settles this bucket.
     expect(categorizeRun("anthropic", "claude-sonnet-5")).toBe("iterate");
+    expect(categorizeRun("kie", "gemini-3-8-flash")).toBe("iterate");
     expect(categorizeRun("anthropic", "claude-haiku-4.5")).toBe("iterate");
   });
 

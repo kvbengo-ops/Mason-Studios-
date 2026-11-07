@@ -27,12 +27,8 @@ import type { ElementTag } from "@/lib/elements";
 // below then covers BOTH the title and the description, so a message that
 // keeps its heading and loses the sentence explaining what to do about it
 // fails rather than passing on the half that survived.
-// A NOTICE (registerElement reporting an audio describe that failed) is
-// surfaced through the bare `toast(message, opts)` call, same as action-
-// form.tsx's own ActionNotice handling — real sonner's `toast` IS a callable
-// function with `.error` (and others) hung off it, not a plain object, so
-// the mock has to be shaped the same way or calling it directly throws
-// "toast is not a function" the moment this file exercises that path.
+// Real sonner's `toast` is callable and also has `.error`; the mock needs
+// the same shape for upload outcome messages and refusals.
 //
 // vi.hoisted, not a plain top-level const: vi.mock's factory below is
 // hoisted above every other statement in this file, so a `const` declared
@@ -62,7 +58,7 @@ vi.mock("@/actions/elements", () => ({
 }));
 
 // The describe actions are mocked so the panel's "Describe again" can be
-// pressed without a Claude call — and so the test below can say exactly what
+// pressed without a Kie call — and so the test below can say exactly what
 // came back.
 vi.mock("@/actions/ugc", () => ({
   redescribeElement: vi.fn(async () => ({ description: "a woman in a red coat, mid-stride" })),
@@ -97,7 +93,6 @@ let revokeObjectURL: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   let n = 0;
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   createObjectURL = vi.fn(() => `blob:fake/${++n}`);
   revokeObjectURL = vi.fn();
   // jsdom implements neither, so they are installed rather than spied on.
@@ -387,7 +382,7 @@ describe("UgcReferencePicker's two ways in stay distinct", () => {
 
     await waitFor(() => expect(registerElement).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("$0.0150"));
+    expect(screen.queryByRole("button", { name: "Confirm upload" })).toBeNull();
 
     const picked = onPick.mock.calls[0]?.[0] as PickedReference;
     if (picked.kind !== "upload") throw new Error("expected an upload");
@@ -400,56 +395,6 @@ describe("UgcReferencePicker's two ways in stay distinct", () => {
     // What tells them the job is done is the line that says so.
     expect(screen.getByRole("dialog")).toBeTruthy();
     expect(await screen.findByText(/1 reference saved/i)).toBeTruthy();
-  });
-
-  it("toasts a notice, and still saves, when registerElement reports a failed describe", async () => {
-    // registerElement's own tests (actions/elements.test.ts) pin the server
-    // half: an audio upload that could not be described comes back an
-    // ActionNotice, never an ActionResult error — the upload worked, only
-    // the describe did not. This is the client half: a notice must reach
-    // the operator (toast, the same "not toast.error" treatment action-
-    // form.tsx gives every ActionNotice) and must NOT be treated as a
-    // reason to hold the file back or leave it in the retry queue.
-    stubAudioDuration(6);
-    vi.mocked(registerElement).mockResolvedValueOnce({
-      notice:
-        "@new_audio1 saved, but its voice could not be described — press Describe on its card to try again.",
-    });
-    const user = userEvent.setup();
-    const { onPick } = renderPicker();
-
-    const { fileInput } = await openPicker(user, /^upload$/i);
-    await user.upload(fileInput, anAudio("lena.mp3"));
-    await submitPendingFiles(user);
-
-    // THIS TEST USED TO ASSERT THE OPPOSITE, and it was wrong about the
-    // server the whole time. It required onPick to fire with lena.mp3 —
-    // attaching the voice to the clip as its conditioning frame. generateClip
-    // refuses exactly that: a raw file upload is checked against
-    // ACCEPTED_IMAGE_TYPES and an audio/mpeg comes back "audio/mpeg is not a
-    // JPG, PNG or WebP", so the attach this asserted could never have
-    // produced a render. The test only ever exercised the client half.
-    //
-    // A voice DOES reach a clip — as a saved element by @name, the path
-    // actions/ugc.test.ts's "copies a picked voice as audio" covers, which
-    // goes through elementId and skips the image check entirely. That is the
-    // route, and it is unaffected here.
-    //
-    // What this test is actually for survives untouched: a describe failure
-    // is a notice, not an error, and it must not hold the file back.
-    await waitFor(() => expect(registerElement).toHaveBeenCalled());
-    expect(
-      onPick,
-      "attached an MP3 as the conditioning frame — the server refuses that upload outright",
-    ).not.toHaveBeenCalled();
-
-    expect(toastNotice).toHaveBeenCalledWith(
-      expect.stringMatching(/could not be described.*Describe/i),
-    );
-    // NOT toastError — a describe failure that still saved the upload is
-    // not the same event as a refusal, and dressing it as one would teach
-    // an operator to distrust an upload that landed fine.
-    expect(toastError).not.toHaveBeenCalled();
   });
 });
 
@@ -886,7 +831,8 @@ describe("UgcReferencePicker's detail panel", () => {
     await openDetail(user);
 
     await user.click(screen.getByRole("button", { name: /describe again/i }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("$0.0150"));
+    expect(screen.getByRole("dialog", { name: /describe @jen/i }).textContent).toContain("$0.0010");
+    await user.click(screen.getByRole("button", { name: "Confirm description" }));
 
     await waitFor(() =>
       expect((screen.getByLabelText(/^description$/i) as HTMLTextAreaElement).value).toBe(
@@ -896,12 +842,12 @@ describe("UgcReferencePicker's detail panel", () => {
   });
 
   it("does not describe when the cost prompt is declined", async () => {
-    vi.mocked(window.confirm).mockReturnValue(false);
     const user = userEvent.setup();
     renderPicker();
     await openDetail(user);
 
     await user.click(screen.getByRole("button", { name: /describe again/i }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(redescribeElement).not.toHaveBeenCalled();
   });
 

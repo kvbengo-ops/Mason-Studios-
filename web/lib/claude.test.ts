@@ -688,11 +688,8 @@ describe("describePhotoAppearance (MODE=development)", () => {
 });
 
 describe("describeReferenceImage's system prompt forbids transcribing text", () => {
-  // A behavioural test is impossible here — this is a real vendor call, not
-  // something MODE=development stands in for the way it does elsewhere in
-  // this file. So this guards the INSTRUCTION itself, the way
-  // lib/vendor-gate-seam.test.ts asserts things about source text rather than
-  // running the code.
+  // This guards the INSTRUCTION itself; request behaviour is checked in
+  // kie-image-describe.test.ts without calling the vendor.
   //
   // If this instruction is ever dropped from the system prompt, a vision call
   // is free to read a logo or label out loud — "a pouch reading KINOKO" — and
@@ -702,21 +699,12 @@ describe("describeReferenceImage's system prompt forbids transcribing text", () 
   // /ugc sends the reference image too now, which does not make this safe:
   // the description is still prose the model reads, and a quoted word in
   // prose is a word it draws.
-  it("tells Claude never to transcribe text it sees in the picture", () => {
-    const source = readFileSync(new URL("./claude.ts", import.meta.url), "utf8");
+  it("tells Gemini never to transcribe text it sees in the picture", () => {
+    const source = readFileSync(new URL("./kie-image-describe.ts", import.meta.url), "utf8");
 
     const start = source.indexOf("export async function describeReferenceImage");
     expect(start, "describeReferenceImage was renamed or removed").toBeGreaterThan(-1);
-    // Bounded by whatever is declared NEXT, not by a named neighbour. It
-    // used to look for "export const RefinedPrompt", which was deleted with
-    // Refine — and because the miss fell back to "to the end of the file",
-    // the assertion below quietly widened to the whole module instead of
-    // failing. A guard that broadens when its landmark disappears is worse
-    // than one that breaks.
-    const end = source.indexOf("\nexport ", start + 1);
-    expect(end, "describeReferenceImage is the last export; the bound below reads the whole file")
-      .toBeGreaterThan(-1);
-    const body = source.slice(start, end);
+    const body = source.slice(start);
 
     expect(body).toMatch(/never transcribe text/i);
   });

@@ -46,6 +46,11 @@ function read(relativePath: string): string {
  */
 const VENDOR_CALLS: readonly { file: string; marker: string; what: string }[] = [
   { file: "lib/claude.ts", marker: "new Anthropic(", what: "a Claude compile" },
+  {
+    file: "lib/kie-image-describe.ts",
+    marker: "https://api.kie.ai/gemini/v1/models",
+    what: "a kie image description",
+  },
   { file: "lib/kie.ts", marker: "createTask", what: "a kie image generation" },
   { file: "lib/kie-balance.ts", marker: "KIE_CREDIT_URL", what: "a kie balance read" },
 ];
@@ -108,21 +113,19 @@ describe("every vendor call site is gated on MODE", () => {
       ).toBeGreaterThan(0);
     }
 
-    // Six Claude call sites today. Pinned as a number so a SEVENTH one has to
+    // Five Claude call sites today. Pinned as a number so a sixth one has to
     // come past this test, which is the whole point: the next one is the one
     // written by someone not thinking about MODE.
     //
-    // It has moved both ways. refineClipPromptText arrived as the fifth and
-    // describeReferenceImage as the sixth; refine was later deleted with its
-    // UI, and compileImageSequence (the Image Generator sequence compiler) is
-    // the sixth now. Each time the count failed while the "gates every
+    // It has moved both ways. describeReferenceImage moved to kie Gemini;
+    // each time the count failed while the "gates every
     // exported function" case beside it kept passing, which together say a new
     // vendor call appeared AND it was correctly gated.
     const claude = found.find((f) => f.file === "lib/claude.ts");
     expect(
       claude?.hits,
       "the number of Claude call sites changed — add the new one's gate, then update this count",
-    ).toBe(6);
+    ).toBe(5);
   });
 
   it("gates every exported function that can reach a vendor", () => {

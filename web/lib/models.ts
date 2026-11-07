@@ -329,22 +329,6 @@ export function applySceneCostUsd(model: CompilerModelDescriptor): number {
 }
 
 /**
- * What describing ONE reference image costs.
- *
- * Shorter than the refinement (max_tokens 300) but it carries an image, and
- * images are not free — so it is not scaled further down. Charged per
- * picture, because that is how it is spent: a press with three uncached
- * references makes three of these calls.
- *
- * Cached descriptions cost nothing and are not counted. That is the whole
- * point of elements.ai_description (0072), and it means a second press on the
- * same references is priced at the refinement alone.
- */
-export function describeReferenceCostUsd(model: CompilerModelDescriptor): number {
-  return compileCostUsd(model) / 8;
-}
-
-/**
  * The compiler model a project gets when render_settings.compileModel has
  * never been set — CLAUDE_MODEL (render.yaml) read here, and ONLY here, so
  * it can never become a hard override. Mirrors pickModel's own "settings.model

@@ -71,7 +71,8 @@ import { checkElementUploadName } from "@/actions/check-element-upload-name";
 import { deleteElement, registerElement, updateElement } from "@/actions/elements";
 import { stageFiles } from "@/lib/stage-files";
 import { redescribeElement } from "@/actions/ugc";
-import { elementDescribeEstimateUsd, uploadDescribeEstimateUsd } from "@/lib/element-describe-cost";
+import { elementDescribeEstimateUsd } from "@/lib/element-describe-cost";
+import { useCostConfirmation } from "@/components/cost-confirmation-dialog";
 import { Spinner } from "@/components/spinner";
 import { useUploadProgress, useUploadProgressSetter } from "@/components/upload-progress-store";
 import {
@@ -192,8 +193,7 @@ async function audioDurationSeconds(file: File): Promise<number | null> {
  * audioDurationSeconds' own twin, one <video> element in place of one
  * <audio>, same null-on-failure discipline and the same reason for it: a
  * container this browser decodes oddly is not evidence the file is bad, and
- * refusing locally on that guess would block an upload kie's describe step
- * (lib/kie-video-describe.ts) would have accepted anyway.
+ * refusing locally on that guess would block a valid upload.
  *
  * UNLIKE THE AUDIO TWIN, THIS NUMBER IS NEVER A REJECTION — there is no
  * MIN/MAX_REFERENCE_VIDEO_SECONDS the way there is for a voice clip, so
@@ -303,11 +303,8 @@ const CATEGORY_LABEL: Record<ElementCategory, string> = {
 /**
  * Kinds whose card must SAY when a description is missing.
  *
- * All three kinds are described automatically at upload now — pictures via
- * Claude, voices via lib/kie-audio-describe.ts since #94, clips via
- * lib/kie-video-describe.ts — so this is no longer "the kinds that arrive
- * undescribed", which is what it used to mean and what its old comment still
- * claimed after audio stopped being one of them.
+ * All three kinds arrive without a description. Editors add one from the
+ * element detail panel when they need it.
  *
  * What actually separates these two from a picture is that THE CARD SHOWS
  * NOTHING ABOUT THEM. A picture's tile is the picture, so an operator can see
@@ -383,12 +380,6 @@ function joinNames(names: readonly string[]): string {
  * version of this message that tells the operator what to do next without
  * making them go look.
  *
- * SEPARATE FROM registerElement's OWN NOTICE (a picture/clip that saved but
- * could not be described — see the `notice` branches in saveElement and
- * retryOne). "Could not upload" and "uploaded but not described" are
- * different failures with different remedies (retry the upload vs. press
- * Describe on the card), and collapsing them into one toast would leave an
- * operator retrying an upload that already succeeded.
  */
 function reportUploadOutcome(fileNames: readonly string[], errors: Record<number, string>): void {
   const total = fileNames.length;
@@ -543,6 +534,7 @@ export function UgcReferencePicker({
   const [uploadNames, setUploadNames] = useState<Map<File, string>>(new Map());
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingPreviewUrls, setPendingPreviewUrls] = useState<string[]>([]);
+  const [confirmCost, costConfirmationDialog] = useCostConfirmation();
   // Which saved element is being described again, and what the last attempt
   // said. Keyed by id because the grid can hold many and only one is in
   // flight at a time.
@@ -616,9 +608,7 @@ export function UgcReferencePicker({
    * How far through the batch the save is, or null when nothing is saving.
    *
    * REAL PROGRESS, not a spinner. The batch is a sequential loop over known
-   * files, so "3 of 5" is a fact rather than an animation — and with a
-   * Claude describe on every picture, a five-file upload is long enough that
-   * an operator needs to know it is moving and roughly how much is left.
+   * files, so "3 of 5" is a fact rather than an animation.
    *
    * LIVES IN upload-progress-store.tsx'S STORE, NOT IN A `useState` HERE.
    * This used to be local state, and that was the bug: `saveElement` awaits
@@ -819,10 +809,9 @@ export function UgcReferencePicker({
    */
   async function retryOne(index: number): Promise<void> {
     const f = pendingFiles[index];
-    if (!f || uploadProgress !== null) return;
+    if (!f || uploadProgress !== null || isSavingRef.current) return;
 
     isSavingRef.current = true;
-    setUploadProgress({ done: index, total: pendingFiles.length });
     try {
       const fd = new FormData();
       addProjectId(fd);
@@ -834,11 +823,7 @@ export function UgcReferencePicker({
         toast.error(nameError);
         return;
       }
-      if (
-        !window.confirm(
-          `Upload and describe @${name}? Estimated description cost: $${uploadDescribeEstimateUsd(f).toFixed(4)}. Voice and video retries may cost more.`,
-        )
-      ) return;
+      setUploadProgress({ done: index, total: pendingFiles.length });
       fd.set("name", name);
       await attachVideoDuration(fd, f);
       await stageFiles(fd);
@@ -848,16 +833,6 @@ export function UgcReferencePicker({
         setFileErrors((old) => ({ ...old, [index]: one.error }));
         reportUploadOutcome([f.name], { 0: one.error });
         return;
-      }
-      // NOT toast.error — the upload landed. This is registerElement saying a
-      // voice clip could not be described, the same "not toast.error"
-      // reasoning action-form.tsx's own handler follows for an ActionNotice:
-      // the work happened, and the element's card already carries a visible
-      // "not described yet" state, so this toast is the immediate half of that
-      // — the operator does not have to go find the card to learn something
-      // needs a second look.
-      if (one && "notice" in one && one.notice) {
-        toast(one.notice, { duration: 8000 });
       }
       reportUploadOutcome([f.name], {});
       setSavedCount((n) => n + 1);
@@ -1002,10 +977,13 @@ export function UgcReferencePicker({
           ? "video"
           : "image";
     if (
-      !window.confirm(
-        `Describe @${element.name}? Estimated cost: $${elementDescribeEstimateUsd(kind).toFixed(4)}.`,
-      )
-    ) return;
+      !(await confirmCost({
+        title: `Describe @${element.name}?`,
+        estimateUsd: elementDescribeEstimateUsd(kind),
+        action: "Confirm description",
+      }))
+    )
+      return;
     const elementId = element.id;
     setRedescribing(elementId);
     setRedescribeError(null);
@@ -1264,9 +1242,7 @@ export function UgcReferencePicker({
   /**
    * Saves the whole batch, one registerElement call per file, in order.
    *
-   * SEQUENTIAL, NOT PARALLEL. Each picture costs a Claude describe, and
-   * registerElement derives its own default name from a count of what already
-   * exists — five at once would race for the same newN. Order also survives:
+   * SEQUENTIAL, NOT PARALLEL. Order survives:
    * the operator sees them appear in the order they dropped them.
    *
    * EVERY FILE IS ATTEMPTED — this does NOT stop at the first failure, despite
@@ -1318,13 +1294,6 @@ export function UgcReferencePicker({
     const file = attachIndex === -1 ? null : (files[attachIndex] ?? null);
     const previewUrl = attachIndex === -1 ? null : (pendingPreviewUrls[attachIndex] ?? null);
     if (files.length === 0) return undefined;
-    const estimate = files.reduce((total, item) => total + uploadDescribeEstimateUsd(item), 0);
-    if (
-      !window.confirm(
-        `Upload and describe ${files.length} reference${files.length === 1 ? "" : "s"}? Estimated description cost: $${estimate.toFixed(4)}. Voice and video retries may cost more.`,
-      )
-    ) return undefined;
-
     isSavingRef.current = true;
     setUploadProgress({ done: 0, total: files.length });
     setFileErrors({});
@@ -1350,11 +1319,6 @@ export function UgcReferencePicker({
         await stageFiles(fd);
         const one = await registerElement(fd);
         if (one && "error" in one && one.error) errors[i] = one.error;
-        // Same "not toast.error" reasoning as retryOne above: the file this
-        // notice is about already landed in the library, so it counts toward
-        // `saved` below and does not go in `errors` — a describe failure is
-        // never a reason to keep it in the retry queue.
-        else if (one && "notice" in one && one.notice) toast(one.notice, { duration: 8000 });
         setUploadProgress({ done: i + 1, total: files.length });
       }
 
@@ -2806,6 +2770,7 @@ export function UgcReferencePicker({
               )}
             </TabsContent>
           </Tabs>
+          {costConfirmationDialog}
         </DialogContent>
       </Dialog>
 

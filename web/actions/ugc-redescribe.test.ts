@@ -8,9 +8,9 @@
 //
 // WHAT THIS PINS. Before this change, redescribeElement only ever called
 // describeReferenceImage — pointed at an audio element it either sent an
-// mp3 to Claude as a picture (bad) or (before the UI gate that hid the
+// mp3 to an image describer as a picture (bad) or (before the UI gate that hid the
 // button) was simply unreachable. It now branches on assets.kind: an image
-// keeps going to Claude, an audio element goes to kie's Gemini pass
+// now goes to kie Gemini, as an audio element already does
 // (lib/kie-audio-describe.ts). These tests pin that routing, the vendor/
 // model recorded for each branch, and that a failure never fails silently.
 
@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { redescribeElement } from "./ugc";
 import { requireProject } from "@/actions/guard";
 import { createAdminClient } from "@/lib/supabase/server";
-import { describeReferenceImage } from "@/lib/claude";
+import { describeReferenceImage } from "@/lib/kie-image-describe";
 import { AudioDescribeUnusableError, describeReferenceAudio } from "@/lib/kie-audio-describe";
 import {
   MAX_DESCRIBABLE_VIDEO_BYTES,
@@ -43,10 +43,25 @@ vi.mock("@/lib/spend", () => ({
   assertWithinSpendCaps: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/claude", () => ({
-  CLAUDE_VENDOR: "anthropic",
-  describeReferenceImage: vi.fn(async () => ({ description: "a woman in a linen shirt" })),
-}));
+vi.mock("@/lib/kie-image-describe", () => {
+  class KieImageDescribeError extends Error {
+    constructor(
+      message: string,
+      readonly costUsd: number | null = null,
+    ) {
+      super(message);
+    }
+  }
+  return {
+    IMAGE_DESCRIBE_MODEL: "gemini-3-8-flash",
+    IMAGE_DESCRIBE_ESTIMATE_USD: 0.001,
+    KieImageDescribeError,
+    describeReferenceImage: vi.fn(async () => ({
+      description: "a woman in a linen shirt",
+      costUsd: 0.00015,
+    })),
+  };
+});
 
 // A REAL class in the mock, not a stub: redescribeElement decides whether to
 // record the metered cost with `err instanceof AudioDescribeUnusableError`,
@@ -180,7 +195,7 @@ afterEach(() => {
 });
 
 describe("redescribeElement — routes by assets.kind", () => {
-  it("sends a ref_frame element to describeReferenceImage, billed at the fixed compiler estimate", async () => {
+  it("sends a ref_frame element to kie Gemini and records its receipt", async () => {
     mockAdmin({
       elementRow: {
         id: "element-1",
@@ -202,7 +217,7 @@ describe("redescribeElement — routes by assets.kind", () => {
     );
     expect(describeReferenceAudio).not.toHaveBeenCalled();
     expect(vi.mocked(recordRun)).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: "anthropic", model: "claude-sonnet-5" }),
+      expect.objectContaining({ vendor: "kie", model: "gemini-3-8-flash", costUsd: 0.00015 }),
     );
   });
 

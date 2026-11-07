@@ -358,9 +358,10 @@ commit it.
 
 ## The prompt compiler (optional)
 
-**Not on the render path any more.** Editors write prompts directly in `/ugc`; Claude is
-reached only from the project Script page (this compiler) and when describing a
-reference image. With `ANTHROPIC_API_KEY` unset those helpers fail and nothing else does.
+**Not on the render path any more.** Editors write prompts directly in `/ugc`; Claude
+handles the project Script compiler, while reference image descriptions use kie Gemini.
+The compiler needs `ANTHROPIC_API_KEY`; explicit image descriptions from the
+element editor need `KIE_API_KEY`. Uploading an element makes no vendor call.
 
 Lives in `web`, because it runs synchronously inside the operator's request.
 

@@ -112,6 +112,7 @@ describe("the SQL render-category predicate", () => {
       "claude-haiku-4-5",
       "claude-sonnet-5",
       "claude-opus-5",
+      "gemini-3-8-flash",
     ]) {
       expect(
         renderModelIds.includes(notVideo),

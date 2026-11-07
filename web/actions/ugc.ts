@@ -96,8 +96,12 @@ import { offerable } from "@/lib/kie/offerable";
 import { videoAspectRatioFor } from "@/lib/kie/models";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
-import { CLAUDE_SONNET_5, describeReferenceCostUsd, getCompilerModel } from "@/lib/models";
-import { CLAUDE_VENDOR, describeReferenceImage } from "@/lib/claude";
+import {
+  IMAGE_DESCRIBE_ESTIMATE_USD,
+  IMAGE_DESCRIBE_MODEL,
+  KieImageDescribeError,
+  describeReferenceImage,
+} from "@/lib/kie-image-describe";
 import { geminiVoiceFor } from "@/lib/gemini-voices";
 import {
   AUDIO_DESCRIBE_ESTIMATE_USD,
@@ -179,12 +183,10 @@ export async function describeUploadedReference(formData: FormData): Promise<Des
   const category = String(formData.get("category") ?? "").trim() || null;
   const name = String(formData.get("name") ?? "").trim() || undefined;
 
-  // THE CAP, BEFORE THE SPEND. One describe is cents, but a cap that only
+  // THE CAP, BEFORE THE SPEND. One describe is cheap, but a cap that only
   // some spending paths respect is not a cap — refineClipPrompt shipped
   // without this once and the money was invisible to every page that counts.
-  const compilerModel = getCompilerModel(CLAUDE_SONNET_5.id);
-  const costUsd = describeReferenceCostUsd(compilerModel);
-  const capResult = await assertWithinSpendCaps(user.id, profile, costUsd);
+  const capResult = await assertWithinSpendCaps(user.id, profile, IMAGE_DESCRIBE_ESTIMATE_USD);
   if (capResult) {
     return { error: "error" in capResult ? capResult.error : "That would go over your spend cap." };
   }
@@ -198,19 +200,19 @@ export async function describeUploadedReference(formData: FormData): Promise<Des
     });
     await recordRun({
       projectId,
-      vendor: CLAUDE_VENDOR,
-      model: CLAUDE_SONNET_5.id,
-      costUsd,
+      vendor: "kie",
+      model: IMAGE_DESCRIBE_MODEL,
+      costUsd: described.costUsd,
     });
     return { description: described.description };
   } catch (err) {
     await recordRun({
       projectId,
-      vendor: CLAUDE_VENDOR,
-      model: CLAUDE_SONNET_5.id,
+      vendor: "kie",
+      model: IMAGE_DESCRIBE_MODEL,
       // Null, not zero: a failed call may still have been billed, and zero
       // would assert it was not.
-      costUsd: null,
+      costUsd: err instanceof KieImageDescribeError ? err.costUsd : null,
       error: err instanceof Error ? err.message : "describe failed",
     });
     return {
@@ -245,11 +247,10 @@ export async function describeUploadedReference(formData: FormData): Promise<Des
  * ai_description and its asset id are set alongside so the provenance stays
  * honest about which picture the words came from.
  *
- * TWO VENDORS BEHIND ONE BUTTON. assets.kind decides which: 'ref_frame'
- * still goes to describeReferenceImage (Claude, looking); 'audio' goes to
- * describeReferenceAudio (kie's Gemini pass, listening — lib/kie-audio-
- * describe.ts). Both write the same two columns, so resolveElementTags below
- * cannot tell which vendor wrote a given description and does not need to —
+ * assets.kind decides which Gemini describer to call: 'ref_frame' goes to
+ * describeReferenceImage, 'audio' goes to describeReferenceAudio, and video
+ * goes to describeReferenceVideo. All write the same two columns, so resolveElementTags below
+ * does not need to know which model wrote a description —
  * it substitutes `description` regardless of kind, which is what makes an
  * @voice1 tag reach a prompt at all now that this exists to fill it in.
  *
@@ -326,36 +327,26 @@ export async function redescribeElement(formData: FormData): Promise<DescribeRes
     };
   }
 
-  // THE CAP, BEFORE THE SPEND, at whichever vendor's own price: the fixed
-  // Claude-compiler estimate for a picture, or the measured kie/Gemini
-  // receipt for a clip (lib/kie-audio-describe.ts's AUDIO_DESCRIBE_ESTIMATE_USD,
-  // lib/kie-video-describe.ts's VIDEO_DESCRIBE_ESTIMATE_USD) — never a
-  // different vendor's number, which would either overcharge the cap by
-  // 100x (a describe is a fraction of a cent, not $0.015) or undercharge it.
-  const compilerModel = getCompilerModel(CLAUDE_SONNET_5.id);
+  // THE CAP, BEFORE THE SPEND, using the estimate for the selected media kind.
   const estimatedCostUsd = isAudio
     ? AUDIO_DESCRIBE_ESTIMATE_USD
     : isVideo
       ? VIDEO_DESCRIBE_ESTIMATE_USD
-      : describeReferenceCostUsd(compilerModel);
+      : IMAGE_DESCRIBE_ESTIMATE_USD;
   const capResult = await assertWithinSpendCaps(user.id, profile, estimatedCostUsd);
   if (capResult) {
     return { error: "error" in capResult ? capResult.error : "That would go over your spend cap." };
   }
 
-  const vendor = isAudio || isVideo ? "kie" : CLAUDE_VENDOR;
+  const vendor = "kie";
   const model = isAudio
     ? AUDIO_DESCRIBE_MODEL
     : isVideo
       ? VIDEO_DESCRIBE_MODEL
-      : CLAUDE_SONNET_5.id;
+      : IMAGE_DESCRIBE_MODEL;
 
   try {
-    // costUsd differs in kind, not just in branch: describeReferenceImage
-    // carries no per-call billing figure, so its cost IS the fixed estimate
-    // above — the same number the cap was just checked against.
-    // describeReferenceAudio and describeReferenceVideo's responses carry a
-    // REAL credits_consumed figure, so their cost is the metered charge,
+    // Every describer's response carries a credits_consumed figure, so cost is the metered charge,
     // which may differ from the estimate in either direction and can itself
     // be null (kie reported nothing usable) — never coerced back to the
     // estimate, which would assert a number kie never actually billed.
@@ -380,14 +371,11 @@ export async function redescribeElement(formData: FormData): Promise<DescribeRes
             name: element.name,
             category: element.category,
           })
-        : {
-            ...(await describeReferenceImage({
-              imageUrl: await signedUrl(asset.storage_key),
-              name: element.name,
-              category: element.category,
-            })),
-            costUsd: estimatedCostUsd,
-          };
+        : await describeReferenceImage({
+            imageUrl: await signedUrl(asset.storage_key),
+            name: element.name,
+            category: element.category,
+          });
 
     const { error: writeError } = await admin
       .from("elements")
@@ -424,7 +412,9 @@ export async function redescribeElement(formData: FormData): Promise<DescribeRes
       // failed the size guard above is a plain error, not either class — it
       // never reached kie, so null is the honest answer there too.)
       costUsd:
-        err instanceof AudioDescribeUnusableError || err instanceof VideoDescribeUnusableError
+        err instanceof AudioDescribeUnusableError ||
+        err instanceof VideoDescribeUnusableError ||
+        err instanceof KieImageDescribeError
           ? err.costUsd
           : null,
       error: err instanceof Error ? err.message : "redescribe failed",

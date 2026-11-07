@@ -3,9 +3,10 @@ import { registerElement } from "./elements";
 import { isAdmin, requireProject, requireUser } from "@/actions/guard";
 import { createAdminClient } from "@/lib/supabase/server";
 import { removeStorageObjects, uploadFile } from "@/lib/storage";
-import { describeReferenceImage } from "@/lib/claude";
+import { describeReferenceImage } from "@/lib/kie-image-describe";
 import { assertWithinSpendCaps } from "@/lib/spend";
-import { AudioDescribeUnusableError, describeReferenceAudio } from "@/lib/kie-audio-describe";
+import { describeReferenceAudio } from "@/lib/kie-audio-describe";
+import { describeReferenceVideo } from "@/lib/kie-video-describe";
 import { recordRun } from "@/lib/runs";
 
 // Same fakes-over-the-boundary approach as actions/profile.test.ts: the
@@ -47,68 +48,11 @@ vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
 }));
 
-// registerElement describes the reference itself now, so the modules that
-// cost money go through are faked here too. Their own behaviour is tested
-// where they live; what matters in this file is that a save still happens.
-vi.mock("@/lib/spend", () => ({
-  assertWithinSpendCaps: vi.fn(async () => undefined),
-}));
-
-vi.mock("@/lib/claude", () => ({
-  CLAUDE_VENDOR: "anthropic",
-  describeReferenceImage: vi.fn(async () => ({ description: "a woman in a linen shirt" })),
-}));
-
-// A REAL class in the mock, not a stub — describeAudioOnSave's catch block
-// decides whether to keep the metered cost with `err instanceof
-// AudioDescribeUnusableError`, and a mock missing it reads `instanceof
-// undefined`, a TypeError that would mask the failure being tested. Declared
-// inside the factory: vi.mock is hoisted above every top-level statement in
-// this file, so a class defined outside it is still in the factory's
-// temporal dead zone when it runs (same note as ugc-redescribe.test.ts's).
-vi.mock("@/lib/kie-audio-describe", () => {
-  class AudioDescribeUnusableError extends Error {
-    readonly costUsd: number | null;
-    constructor(message: string, costUsd: number | null) {
-      super(message);
-      this.name = "AudioDescribeUnusableError";
-      this.costUsd = costUsd;
-    }
-  }
-  return {
-    AUDIO_DESCRIBE_MODEL: "gemini-3-8-flash",
-    AUDIO_DESCRIBE_ESTIMATE_USD: 0.001,
-    AudioDescribeUnusableError,
-    describeReferenceAudio: vi.fn(async () => ({
-      description: "a mature female voice, calm and deliberate delivery",
-      costUsd: 0.00015,
-    })),
-  };
-});
-
-// Video's own sibling to the audio mock above, same reason (describeVideoOnSave's
-// catch block checks `err instanceof VideoDescribeUnusableError`) and same
-// hoisting constraint (the class has to be declared inside the factory).
-vi.mock("@/lib/kie-video-describe", () => {
-  class VideoDescribeUnusableError extends Error {
-    readonly costUsd: number | null;
-    constructor(message: string, costUsd: number | null) {
-      super(message);
-      this.name = "VideoDescribeUnusableError";
-      this.costUsd = costUsd;
-    }
-  }
-  return {
-    VIDEO_DESCRIBE_MODEL: "gemini-3-8-flash",
-    VIDEO_DESCRIBE_ESTIMATE_USD: 0.0002,
-    VideoDescribeUnusableError,
-    describeReferenceVideo: vi.fn(async () => ({
-      description: "a woman unboxing a skincare set on a marble counter",
-      costUsd: 0.0002,
-    })),
-  };
-});
-
+// Uploading must not reach any paid describer or spend guard.
+vi.mock("@/lib/spend", () => ({ assertWithinSpendCaps: vi.fn() }));
+vi.mock("@/lib/kie-image-describe", () => ({ describeReferenceImage: vi.fn() }));
+vi.mock("@/lib/kie-audio-describe", () => ({ describeReferenceAudio: vi.fn() }));
+vi.mock("@/lib/kie-video-describe", () => ({ describeReferenceVideo: vi.fn() }));
 vi.mock("@/lib/runs", () => ({
   recordRun: vi.fn(async () => undefined),
 }));
@@ -267,14 +211,7 @@ describe("registerElement — refusals never reach storage or the database", () 
     expect(uploadFile).not.toHaveBeenCalled();
   });
 
-  it("accepts an MP3, stores it as an audio asset, and describes it by kie, never Claude", async () => {
-    // THE TRAP THIS STILL PINS, half of it: an mp3 must never reach
-    // describeReferenceImage — Claude sent bytes that are not a picture
-    // comes back either a vendor error or, worse, a confident paragraph
-    // about a picture that does not exist. What no longer holds is "a voice
-    // tag needs no prose" — bindUITags on the worker deletes an undescribed
-    // audio tag outright, so this asserts the OTHER vendor was reached
-    // instead: kie's Gemini pass, which listens to the clip.
+  it("accepts an MP3 without paying to describe it", async () => {
     vi.mocked(requireProject).mockResolvedValue({
       user: USER,
       profile: {} as never,
@@ -314,218 +251,14 @@ describe("registerElement — refusals never reach storage or the database", () 
     // 0081 — 'voice' and 'audio' had never meant different things here — and
     // the point is unchanged: the FILE decides this, not the form.
     expect(insertedElement?.category).toBe("audio");
-    expect(insertedElement?.description).toBe(
-      "a mature female voice, calm and deliberate delivery",
-    );
-    expect(describeReferenceAudio).toHaveBeenCalledWith(
-      expect.objectContaining({ mediaType: "audio/mpeg", name: "lena_voice", category: "audio" }),
-    );
-    expect(describeReferenceImage).not.toHaveBeenCalled();
-    expect(vi.mocked(recordRun)).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: "kie", model: "gemini-3-8-flash", costUsd: 0.00015 }),
-    );
-    // And it went to storage under the audio kind, not ref_frame.
-    expect(vi.mocked(uploadFile).mock.calls[0]?.[0]).toMatchObject({ kind: "audio" });
-  });
-
-  it("still saves an audio element with no description when the describe fails, and reports the failure as a notice", async () => {
-    vi.mocked(requireProject).mockResolvedValue({
-      user: USER,
-      profile: {} as never,
-      project: PROJECT as never,
-      reached: {} as never,
-    });
-    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "projects/project-1/audio/v.mp3" });
-    vi.mocked(describeReferenceAudio).mockRejectedValueOnce(
-      new AudioDescribeUnusableError(
-        "That clip could not be used as a voice reference (mostly silence) — write the description yourself.",
-        0.00015,
-      ),
-    );
-
-    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
-    const elementBuilder = fakeBuilder({ data: null, error: null });
-    let insertedElement: { description: string | null } | undefined;
-    elementBuilder.insert = vi.fn((row: { description: string | null }) => {
-      insertedElement = row;
-      return elementBuilder;
-    });
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "assets") return assetBuilder;
-        if (table === "elements") return elementBuilder;
-        throw new Error(`Unexpected table in test: ${table}`);
-      }),
-    } as never);
-
-    const formData = okFormData({ name: "lena_voice" });
-    formData.set("image", new File(["ID3"], "lena.mp3", { type: "audio/mpeg" }));
-
-    const result = await registerElement(formData);
-
-    // A FAILED DESCRIBE MUST NOT LOSE THE UPLOAD — the same rule the image
-    // path already followed. The element saves with no description, and the
-    // card's own "Describe" button is what tries again. What's new is that
-    // the caller is TOLD — an ActionNotice, not an error, because the upload
-    // itself succeeded.
-    expect(result).toEqual({
-      notice: expect.stringMatching(/lena_voice.*could not be described.*Describe/i),
-    });
-    expect(insertedElement?.description).toBeNull();
-    // AudioDescribeUnusableError carries a real receipt — kie listened to
-    // the clip and billed for it before saying no — so that figure, not
-    // null, is what gets recorded. And exactly once: a verdict on the clip
-    // itself is never retried, unlike a transient failure below.
-    expect(vi.mocked(recordRun)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(recordRun)).toHaveBeenCalledWith(
-      expect.objectContaining({ vendor: "kie", model: "gemini-3-8-flash", costUsd: 0.00015 }),
-    );
-  });
-
-  it("retries once on a transient describe failure, and succeeds on the second attempt", async () => {
-    vi.mocked(requireProject).mockResolvedValue({
-      user: USER,
-      profile: {} as never,
-      project: PROJECT as never,
-      reached: {} as never,
-    });
-    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "projects/project-1/audio/v.mp3" });
-    vi.mocked(describeReferenceAudio)
-      .mockRejectedValueOnce(new Error("kie Gemini HTTP 503: upstream unavailable"))
-      .mockResolvedValueOnce({
-        description: "a mature female voice, calm and deliberate delivery",
-        costUsd: 0.00015,
-      });
-
-    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
-    const elementBuilder = fakeBuilder({ data: null, error: null });
-    let insertedElement: { description: string | null } | undefined;
-    elementBuilder.insert = vi.fn((row: { description: string | null }) => {
-      insertedElement = row;
-      return elementBuilder;
-    });
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "assets") return assetBuilder;
-        if (table === "elements") return elementBuilder;
-        throw new Error(`Unexpected table in test: ${table}`);
-      }),
-    } as never);
-
-    const formData = okFormData({ name: "lena_voice" });
-    formData.set("image", new File(["ID3"], "lena.mp3", { type: "audio/mpeg" }));
-
-    const result = await registerElement(formData);
-
-    // No notice at all: the retry absorbed the failure, so there is nothing
-    // to tell the operator that a describe went wrong.
-    expect(result).toBeUndefined();
-    expect(describeReferenceAudio).toHaveBeenCalledTimes(2);
-    expect(insertedElement?.description).toBe(
-      "a mature female voice, calm and deliberate delivery",
-    );
-    // BOTH attempts recorded — the first failed one (costUsd null, a network
-    // error carries no receipt) and the second, successful one at its real
-    // metered cost. A ledger that only kept the second would understate what
-    // this upload cost to describe.
-    expect(vi.mocked(recordRun)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(recordRun)).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ vendor: "kie", model: "gemini-3-8-flash", costUsd: null }),
-    );
-    expect(vi.mocked(recordRun)).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ vendor: "kie", model: "gemini-3-8-flash", costUsd: 0.00015 }),
-    );
-  });
-
-  it("gives up after one retry, records both failed attempts, and still saves the upload", async () => {
-    vi.mocked(requireProject).mockResolvedValue({
-      user: USER,
-      profile: {} as never,
-      project: PROJECT as never,
-      reached: {} as never,
-    });
-    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "projects/project-1/audio/v.mp3" });
-    vi.mocked(describeReferenceAudio)
-      .mockRejectedValueOnce(new Error("kie Gemini request failed: fetch failed"))
-      .mockRejectedValueOnce(new Error("kie Gemini HTTP 503: upstream unavailable"));
-
-    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
-    const elementBuilder = fakeBuilder({ data: null, error: null });
-    let insertedElement: { description: string | null } | undefined;
-    elementBuilder.insert = vi.fn((row: { description: string | null }) => {
-      insertedElement = row;
-      return elementBuilder;
-    });
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "assets") return assetBuilder;
-        if (table === "elements") return elementBuilder;
-        throw new Error(`Unexpected table in test: ${table}`);
-      }),
-    } as never);
-
-    const formData = okFormData({ name: "lena_voice" });
-    formData.set("image", new File(["ID3"], "lena.mp3", { type: "audio/mpeg" }));
-
-    const result = await registerElement(formData);
-
-    // ONE RETRY, NOT A LOOP: exactly two calls, never a third.
-    expect(describeReferenceAudio).toHaveBeenCalledTimes(2);
-    expect(insertedElement?.description).toBeNull();
-    expect(result).toEqual({
-      notice: expect.stringMatching(/lena_voice.*could not be described.*Describe/i),
-    });
-    expect(vi.mocked(recordRun)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(recordRun)).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ costUsd: null }),
-    );
-    expect(vi.mocked(recordRun)).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ costUsd: null }),
-    );
-  });
-
-  it("saves an audio element without describing it, and spends nothing, when over the spend cap", async () => {
-    vi.mocked(requireProject).mockResolvedValue({
-      user: USER,
-      profile: {} as never,
-      project: PROJECT as never,
-      reached: {} as never,
-    });
-    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "projects/project-1/audio/v.mp3" });
-    // The cap, checked BEFORE the spend: an operator over cap still gets
-    // their upload, just with no description written for it.
-    vi.mocked(assertWithinSpendCaps).mockResolvedValueOnce({
-      error: "over the weekly cap",
-    } as never);
-
-    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
-    const elementBuilder = fakeBuilder({ data: null, error: null });
-    let insertedElement: { description: string | null } | undefined;
-    elementBuilder.insert = vi.fn((row: { description: string | null }) => {
-      insertedElement = row;
-      return elementBuilder;
-    });
-    vi.mocked(createAdminClient).mockReturnValue({
-      from: vi.fn((table: string) => {
-        if (table === "assets") return assetBuilder;
-        if (table === "elements") return elementBuilder;
-        throw new Error(`Unexpected table in test: ${table}`);
-      }),
-    } as never);
-
-    const formData = okFormData({ name: "lena_voice" });
-    formData.set("image", new File(["ID3"], "lena.mp3", { type: "audio/mpeg" }));
-
-    const result = await registerElement(formData);
-
-    expect(result).toBeUndefined();
     expect(insertedElement?.description).toBeNull();
     expect(describeReferenceAudio).not.toHaveBeenCalled();
+    expect(describeReferenceImage).not.toHaveBeenCalled();
+    expect(describeReferenceVideo).not.toHaveBeenCalled();
+    expect(assertWithinSpendCaps).not.toHaveBeenCalled();
     expect(recordRun).not.toHaveBeenCalled();
+    // And it went to storage under the audio kind, not ref_frame.
+    expect(vi.mocked(uploadFile).mock.calls[0]?.[0]).toMatchObject({ kind: "audio" });
   });
 
   it("refuses an oversized image", async () => {
@@ -587,12 +320,15 @@ describe("registerElement — the happy path", () => {
     expect(elementBuilder.insert).toHaveBeenCalledWith({
       user_id: "user-1",
       name: "jen",
-      description: "the usual talent",
+      description: null,
       category: "character",
       asset_id: "asset-1",
       is_shared: true,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/ugc/project-1");
+    expect(describeReferenceImage).not.toHaveBeenCalled();
+    expect(assertWithinSpendCaps).not.toHaveBeenCalled();
+    expect(recordRun).not.toHaveBeenCalled();
   });
 
   // THE REGRESSION THIS TASK'S OWN BRIEF ASKED FOR: a picture upload — every

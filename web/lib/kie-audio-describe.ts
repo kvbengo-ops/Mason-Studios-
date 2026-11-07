@@ -39,10 +39,8 @@
 // candidates[0].content.parts[0].text, so it has to be JSON.parse'd and
 // validated here rather than read as a nested object.
 //
-// UNLIKE describeReferenceImage (lib/claude.ts), which hands Claude a URL
-// and lets Claude fetch it, this endpoint was only ever verified with
-// inlineData bytes — there is no confirmed "give it a URL" shape to fall
-// back to, so this module downloads the clip itself before calling out.
+// This endpoint was verified with inlineData bytes, so this module downloads
+// the clip itself before calling out, as the image describer now does.
 
 import { z } from "zod";
 import { describeRoleLine } from "./describe-role-line";
@@ -50,7 +48,7 @@ import { isDev } from "./mode";
 
 const BASE_URL = "https://api.kie.ai";
 
-/** kie's own id for the model this module calls. Also what recordRun's `model` column gets, so a ledger row names what actually ran rather than a Claude id left over from copy-pasting the image path. */
+/** kie's own id for the model this module calls and what recordRun's `model` column gets. */
 export const AUDIO_DESCRIBE_MODEL = "gemini-3-8-flash";
 
 /**
@@ -115,16 +113,12 @@ export interface DescribeReferenceAudioArgs {
   /**
    * Signed URL to the stored mp3/wav, for a clip already in storage — the
    * redescribe button (actions/ugc.ts's redescribeElement). This module
-   * downloads the bytes itself rather than handing kie the URL — see file
-   * header, "UNLIKE describeReferenceImage."
+   * downloads the bytes itself rather than handing kie the URL.
    */
   audioUrl?: string;
   /**
-   * The clip itself, base64-encoded, for a file that has NOT been uploaded
-   * yet — registerElement's describeOnSave calls this while the bytes are
-   * still an in-memory File, before uploadFile ever runs, the same reason
-   * describeReferenceImage (lib/claude.ts) takes imageBase64 alongside
-   * imageUrl. Ignored when audioUrl is set.
+   * Inline clip bytes, when the caller already has them. Ignored when
+   * audioUrl is set.
    */
   audioBase64?: string;
   /** Required with audioBase64: the clip's own content type, e.g. "audio/mpeg". */
@@ -138,7 +132,7 @@ export interface DescribeReferenceAudioArgs {
    * is what this said before and why the reach of the value was easy to miss:
    * describeRoleLine interpolates it into `instruction`, and `instruction` is
    * parts[0].text in the POST below. The word travels to kie inside a request
-   * body on every audio upload.
+   * body on every audio description request.
    */
   category?: string | null;
 }

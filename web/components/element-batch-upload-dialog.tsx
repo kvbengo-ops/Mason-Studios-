@@ -5,7 +5,6 @@ import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { registerElement } from "@/actions/elements";
-import { uploadDescribeEstimateUsd } from "@/lib/element-describe-cost";
 import { stageFiles } from "@/lib/stage-files";
 import { checkElementUploadName } from "@/actions/check-element-upload-name";
 import { ElementTagNameField } from "@/components/element-tag-name-field";
@@ -138,15 +137,6 @@ export function ElementBatchUploadDialog(): JSX.Element {
         toast.error("Fix the highlighted tags before uploading.");
         return;
       }
-      const estimate = batch.reduce(
-        (total, row) => total + uploadDescribeEstimateUsd(row.file),
-        0,
-      );
-      if (
-        !window.confirm(
-          `Upload and describe ${batch.length} element${batch.length === 1 ? "" : "s"}? Estimated description cost: $${estimate.toFixed(4)}. Voice and video retries may cost more.`,
-        )
-      ) return;
       let saved = 0;
       setProgress({ done: 0, total: batch.length });
       for (const [index, row] of batch.entries()) {
@@ -164,7 +154,6 @@ export function ElementBatchUploadDialog(): JSX.Element {
           else {
             saved += 1;
             patch(row.id, { status: "saved", error: undefined });
-            if (result?.notice) toast(result.notice);
           }
         } catch (error) {
           unstable_rethrow(error);

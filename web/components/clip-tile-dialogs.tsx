@@ -77,7 +77,7 @@ export function SaveClipDialog({
           setError(result.error);
           return;
         }
-        toast(result?.notice ?? `Saved @${name.trim()} to your elements.`);
+        toast(`Saved @${name.trim()} to your elements.`);
         onClose();
       } catch (err) {
         unstable_rethrow(err);

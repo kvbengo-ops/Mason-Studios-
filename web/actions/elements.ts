@@ -5,18 +5,7 @@
 // (components/ugc-reference-picker.tsx), which has a project, and the
 // Elements Library at /elements, which does not.
 //
-// Spends nothing directly — no vendor is called, nothing is queued — except
-// the one describe registerElement makes on a just-saved reference: Claude for
-// a picture, kie's Gemini pass for a voice clip (lib/kie-audio-describe.ts) and
-// now for a video clip too (lib/kie-video-describe.ts). All three go through
-// assertWithinSpendCaps like every other paid call.
-//
-// The video describer is not a copy of the audio one in the way its filename
-// suggests. kie's Gemini endpoint, handed a clip it cannot decode, does not
-// fail — it returns 200 with a confident and entirely invented description and
-// bills for it. That module refuses anything whose usageMetadata reports too
-// few prompt tokens to have read a video at all; read its header before
-// touching either path.
+// Uploading spends nothing. Descriptions are added explicitly from Edit.
 //
 // -----------------------------------------------------------------------------
 // TWO CALLERS, TWO GUARDS, ONE OWNER
@@ -92,25 +81,9 @@ import {
   MAX_REFERENCE_IMAGE_BYTES,
   MAX_REFERENCE_VIDEO_BYTES,
 } from "@/lib/file-type";
-import type { ActionNotice, ActionResult } from "@/lib/action-result";
+import type { ActionResult } from "@/lib/action-result";
 import type { ElementCategory } from "@/types/db";
-import { assertWithinSpendCaps } from "@/lib/spend";
-import { CLAUDE_SONNET_5, describeReferenceCostUsd, getCompilerModel } from "@/lib/models";
-import { CLAUDE_VENDOR, describeReferenceImage } from "@/lib/claude";
-import {
-  AUDIO_DESCRIBE_ESTIMATE_USD,
-  AUDIO_DESCRIBE_MODEL,
-  AudioDescribeUnusableError,
-  describeReferenceAudio,
-} from "@/lib/kie-audio-describe";
-import {
-  VIDEO_DESCRIBE_ESTIMATE_USD,
-  VIDEO_DESCRIBE_MODEL,
-  VideoDescribeUnusableError,
-  describeReferenceVideo,
-} from "@/lib/kie-video-describe";
 import { elementUploadNameError } from "@/lib/element-upload-name";
-import { recordRun } from "@/lib/runs";
 import { promptMentionsTag, renameTagInPrompt } from "@/lib/rename-tag";
 
 // Mirrors 0073's CHECK. A category the database refuses is a 500 the operator
@@ -139,304 +112,9 @@ function isElementCategory(value: string): value is ElementCategory {
  * summon by typing "@name" into any /ugc prompt (lib/elements.ts resolves
  * the tag; components/ugc-prompt-editor.tsx shows the hover preview).
  *
- * Voice elements accept the same image types as character/product today —
- * there is no audio upload path here. This used to say the reason was that
- * "kie has no known audio input at all"; that is false. kie's schema for
- * bytedance/seedance-2-5 carries reference_audio_urls. The reason is ours:
- * assets.kind has no audio member, so an mp3 has nowhere to be stored, and
- * that is a migration rather than a form change.
- *
- * A "voice" element today is therefore a placeholder an operator can name
- * and describe (e.g. a headshot standing in for a narrator), not a
- * functioning audio clip — the same behaviour, an honest reason.
- *
- * The operator is told this in components/ugc-reference-picker.tsx, beside
- * the category selector, and that note is load-bearing rather than polite:
- * without it the word "Voice" on a save control is a promise nothing keeps.
- * This comment used to cite "ugc-column.tsx's InfoHint" as where the telling
- * happened. There is no such hint — that file has never contained the word
- * audio — so for as long as this said so, the justification was resting on a
- * control nobody had built.
+ * The upload saves the media and leaves description null. An editor can add
+ * text or explicitly ask Gemini to describe the saved element later.
  */
-/**
- * Describes a just-uploaded reference, or gives up quietly.
- *
- * The same call the "Generate AI description" button made, moved to where the
- * upload happens — because the button is gone. An operator no longer chooses
- * to describe; every saved reference is described, since a tag with no
- * description substitutes to nothing and steers no render.
- *
- * RETURNS null RATHER THAN THROWING. This runs inside a save that has already
- * put bytes in storage, and the description is the one part of an element that
- * can be redone later at any time from the card. Losing the upload because
- * Claude was over its cap or having a bad minute would be trading the
- * expensive, irreplaceable half for the cheap, repeatable one.
- */
-async function describeOnSave(
-  image: File,
-  category: ElementCategory,
-  name: string,
-  /**
-   * null when the upload came from the Elements Library. The run is then
-   * attributed by `runs.user_id` instead (0085), which every per-user spend
-   * read resolves as coalesce(runs.user_id, projects.user_id) — so a describe
-   * paid for from /elements counts against the same weekly allowance one paid
-   * for from the picker does. Without that column this call would be a real
-   * charge invisible to the caps.
-   */
-  projectId: string | null,
-  userId: string,
-  profile: Parameters<typeof assertWithinSpendCaps>[1],
-): Promise<string | null> {
-  // THE CAP, BEFORE THE SPEND — the same sequence describeUploadedReference
-  // follows. Over cap is a reason not to describe, never a reason to refuse
-  // the upload.
-  const compilerModel = getCompilerModel(CLAUDE_SONNET_5.id);
-  const costUsd = describeReferenceCostUsd(compilerModel);
-  if (await assertWithinSpendCaps(userId, profile, costUsd)) return null;
-
-  try {
-    const described = await describeReferenceImage({
-      imageBase64: Buffer.from(await image.arrayBuffer()).toString("base64"),
-      mediaType: image.type,
-      name,
-      category,
-    });
-    await recordRun({
-      projectId,
-      userId,
-      vendor: CLAUDE_VENDOR,
-      model: CLAUDE_SONNET_5.id,
-      costUsd,
-    });
-    return described.description;
-  } catch (err) {
-    await recordRun({
-      projectId,
-      userId,
-      vendor: CLAUDE_VENDOR,
-      model: CLAUDE_SONNET_5.id,
-      // Null, not zero: a failed call may still have been billed, and zero
-      // would assert it was not.
-      costUsd: null,
-      error: err instanceof Error ? err.message : "describe failed",
-    });
-    return null;
-  }
-}
-
-/**
- * Audio's sibling to describeOnSave above. Same discipline end to end — cap
- * checked before the spend, recordRun on every call that could have cost
- * money, a failed or over-cap describe saves the element with description
- * null rather than losing the upload — but a different vendor: kie's Gemini
- * pass (lib/kie-audio-describe.ts's describeReferenceAudio), which LISTENS
- * to the clip, not Claude looking at a picture. See registerElement's own
- * comment above the call site for why an audio upload went undescribed
- * until now and why that no longer holds.
- *
- * THE ESTIMATE IS KIE'S, NOT THE COMPILER'S. describeReferenceCostUsd prices
- * a Claude compile; kie's own measured receipt for one clip is roughly 100x
- * cheaper (AUDIO_DESCRIBE_ESTIMATE_USD's own comment has the math), and
- * checking the cap against the wrong vendor's number would either block an
- * upload that costs almost nothing or, the other direction, let a genuinely
- * expensive call through uncapped. actions/ugc.ts's redescribeElement draws
- * the identical line for the same reason.
- *
- * ONE RETRY, AND ONLY FOR A FAILURE THAT LEARNED NOTHING ABOUT THE CLIP. An
- * operator who uploads a voice clip and walks away — the whole premise of
- * moving describe to upload — will never see a transient network blip or a
- * kie 5xx and press Describe again themselves, so this function makes the one
- * retry a person would have. AudioDescribeUnusableError is excluded on
- * purpose: that is not a failure to reach kie, it is kie's own verdict,
- * reached AND BILLED, that the clip itself is unusable (silence, music with
- * no speech, buried in noise). A second call would not ask a different
- * question — it would pay a second time to hear the same answer.
- *
- * `attempted` tells registerElement whether a description was tried and came
- * back nothing (worth telling the operator about right away) versus never
- * tried at all because the cap refused it (the same "saved, undescribed,
- * Describe still works" state an element has always been able to land in,
- * and not news).
- */
-async function describeAudioOnSave(
-  audio: File,
-  category: ElementCategory,
-  name: string,
-  projectId: string | null,
-  userId: string,
-  profile: Parameters<typeof assertWithinSpendCaps>[1],
-): Promise<{ description: string | null; attempted: boolean }> {
-  if (await assertWithinSpendCaps(userId, profile, AUDIO_DESCRIBE_ESTIMATE_USD)) {
-    return { description: null, attempted: false };
-  }
-
-  const audioBase64 = Buffer.from(await audio.arrayBuffer()).toString("base64");
-  const mediaType = audio.type;
-
-  // ONE ROW PER CALL THAT COULD HAVE SPENT MONEY, never folded together —
-  // two attempts that each reached kie are two charges (or two possible
-  // charges), and a ledger that only remembers the last one understates
-  // what this upload actually cost.
-  async function recordAttempt(costUsd: number | null, error?: string): Promise<void> {
-    await recordRun({
-      projectId,
-      userId,
-      vendor: "kie",
-      model: AUDIO_DESCRIBE_MODEL,
-      costUsd,
-      error,
-    });
-  }
-
-  async function attempt(): Promise<{ description: string } | { failed: true; err: unknown }> {
-    try {
-      const described = await describeReferenceAudio({ audioBase64, mediaType, name, category });
-      // The REAL metered credits_consumed kie returned, never the estimate
-      // the cap was checked against — mirrors describeReferenceAudio's own
-      // contract (see its DescribeReferenceAudioResult.costUsd comment).
-      await recordAttempt(described.costUsd);
-      return { description: described.description };
-    } catch (err) {
-      // Null is the honest "billed an unknown amount" for almost every
-      // failure here. AudioDescribeUnusableError is the one exception: kie
-      // listened to the clip, reported what that cost in the same response,
-      // and only then said the clip was no good — recording null there would
-      // throw away a real receipt. Same rule redescribeElement's catch
-      // follows for this identical error.
-      await recordAttempt(
-        err instanceof AudioDescribeUnusableError ? err.costUsd : null,
-        err instanceof Error ? err.message : "describe failed",
-      );
-      return { failed: true, err };
-    }
-  }
-
-  const first = await attempt();
-  if ("description" in first) return { description: first.description, attempted: true };
-  if (first.err instanceof AudioDescribeUnusableError)
-    return { description: null, attempted: true };
-
-  // TRANSIENT ONLY REACHES HERE — a network error, a non-2xx, a body that
-  // would not parse. Exactly one more try, not a loop: a second failure is
-  // treated the same as any other failed describe, not escalated further.
-  const second = await attempt();
-  if ("description" in second) return { description: second.description, attempted: true };
-  return { description: null, attempted: true };
-}
-
-/**
- * Video's sibling to describeAudioOnSave just above — same discipline,
- * same shape, copied on purpose rather than generalised into one function
- * with a vendor parameter: the two callers each pass a different describer
- * (lib/kie-video-describe.ts's describeReferenceVideo instead of
- * describeReferenceAudio) and a different error class to exclude from the
- * retry, and a shared function threading both through generics would cost
- * more to read than the duplication does.
- *
- * THE ESTIMATE, THE CAP, AND WHY BOTH ARE SAFE HERE. Same reasoning as
- * describeAudioOnSave's own comment: VIDEO_DESCRIBE_ESTIMATE_USD is kie's
- * own measured receipt (its comment has the math — roughly $0.0002), not a
- * guess, and checking the cap against it rather than against
- * describeReferenceCostUsd (a Claude compile price) is what keeps a
- * genuinely cheap call from being blocked by a cap sized for a different
- * vendor's number.
- *
- * WHY THIS CAN NOW EXIST WHEN IT COULDN'T BEFORE. registerElement's own
- * comment above the kind === "video" branch has the full story — kie's
- * Gemini pass was verified against real video/mp4 clips on 2026-09-09 and
- * turned out to accept them exactly the way it accepts audio. What this
- * function additionally has to respect, that describeAudioOnSave does not,
- * is the invention band lib/kie-video-describe.ts's header documents: kie
- * can return a fully-formed, confidently wrong description at HTTP 200 for
- * a clip its media part silently dropped. describeReferenceVideo carries
- * both guards against that (a size check before the call, a
- * promptTokenCount check after) and this function does nothing to weaken
- * either — it only has to treat VideoDescribeUnusableError, the guards'
- * shared failure mode, the same way describeAudioOnSave treats
- * AudioDescribeUnusableError below.
- *
- * ONE RETRY, and the SAME exclusion describeAudioOnSave makes, for the
- * same reason: VideoDescribeUnusableError is not a failure to reach kie, it
- * is kie's own verdict — reached, and (when the size guard didn't fire
- * first) billed — that the clip could not be read. A retry would not ask a
- * different question, it would pay a second time to hear the same answer.
- * A too-large clip never reaches kie at all (costUsd null, nothing spent),
- * so excluding it from the retry costs nothing extra either.
- *
- * `attempted` carries the same meaning it does for audio: false means the
- * cap refused the call before anything was spent (the ordinary, unremarkable
- * "saved undescribed" state an element could already land in); true with a
- * null description means a call was made and lost, which is the one case
- * `videoNeedsDescription` below tells the operator about at save time.
- */
-async function describeVideoOnSave(
-  video: File,
-  category: ElementCategory,
-  name: string,
-  projectId: string | null,
-  userId: string,
-  profile: Parameters<typeof assertWithinSpendCaps>[1],
-): Promise<{ description: string | null; attempted: boolean }> {
-  if (await assertWithinSpendCaps(userId, profile, VIDEO_DESCRIBE_ESTIMATE_USD)) {
-    return { description: null, attempted: false };
-  }
-
-  const videoBase64 = Buffer.from(await video.arrayBuffer()).toString("base64");
-  const mediaType = video.type;
-
-  // ONE ROW PER CALL THAT COULD HAVE SPENT MONEY — same ledger discipline
-  // describeAudioOnSave's identical helper explains: two attempts that each
-  // reached kie are two charges (or two possible charges), and folding them
-  // into one recorded row would understate what this upload actually cost.
-  async function recordAttempt(costUsd: number | null, error?: string): Promise<void> {
-    await recordRun({
-      projectId,
-      userId,
-      vendor: "kie",
-      model: VIDEO_DESCRIBE_MODEL,
-      costUsd,
-      error,
-    });
-  }
-
-  async function attempt(): Promise<{ description: string } | { failed: true; err: unknown }> {
-    try {
-      const described = await describeReferenceVideo({ videoBase64, mediaType, name, category });
-      // The REAL metered credits_consumed kie returned, never the estimate
-      // the cap was checked against — mirrors describeReferenceVideo's own
-      // DescribeReferenceVideoResult.costUsd contract.
-      await recordAttempt(described.costUsd);
-      return { description: described.description };
-    } catch (err) {
-      // Null is the honest "billed an unknown amount" for almost every
-      // failure here. VideoDescribeUnusableError is the one exception: it
-      // carries its own costUsd — null when the size guard rejected the
-      // clip before any network call, the real credits_consumed when kie
-      // read the clip and only then said it was unusable — and recording
-      // null there instead would throw away a real receipt on the branch
-      // where one exists.
-      await recordAttempt(
-        err instanceof VideoDescribeUnusableError ? err.costUsd : null,
-        err instanceof Error ? err.message : "describe failed",
-      );
-      return { failed: true, err };
-    }
-  }
-
-  const first = await attempt();
-  if ("description" in first) return { description: first.description, attempted: true };
-  if (first.err instanceof VideoDescribeUnusableError)
-    return { description: null, attempted: true };
-
-  // TRANSIENT ONLY REACHES HERE — a network error, a non-2xx, a body that
-  // would not parse. Exactly one more try, not a loop: a second failure is
-  // treated the same as any other failed describe, not escalated further.
-  const second = await attempt();
-  if ("description" in second) return { description: second.description, attempted: true };
-  return { description: null, attempted: true };
-}
-
 /** The library path, revalidated by every write here regardless of caller. */
 const ELEMENTS_PATH = "/elements";
 
@@ -480,8 +158,8 @@ function revalidateElementSurfaces(projectId: string | null): void {
   if (projectId) revalidatePath(`/ugc/${projectId}`);
 }
 
-export async function registerElement(formData: FormData): Promise<ActionResult | ActionNotice> {
-  const { project, user, profile } = await resolveElementScope(formData);
+export async function registerElement(formData: FormData): Promise<ActionResult> {
+  const { project, user } = await resolveElementScope(formData);
   const destination = formData.get("destination") ?? "shared";
   if (destination !== "shared" && destination !== "mine")
     return { error: "Choose Shared or Mine." };
@@ -490,7 +168,6 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
 
   const name = String(formData.get("name") ?? "").trim();
   const categoryRaw = String(formData.get("category") ?? "");
-  const givenDescription = String(formData.get("description") ?? "").trim() || null;
 
   const image = formData.get("image");
   if (!(image instanceof File) || image.size === 0) {
@@ -499,9 +176,7 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
 
   // A REFERENCE IS NOW ONE OF THREE THINGS, and which one decides nearly
   // everything that follows: the accept/reject guard, the category default,
-  // which describer (if any) runs, the size ceiling and its error copy, the
-  // assets.kind value, the auto-name prefix, and the failure/success notice
-  // returned at the bottom. This used to be a boolean (`isAudio`) — sound
+  // size ceiling and its error copy, and assets.kind. This used to be a boolean (`isAudio`) — sound
   // reasoning while there were only two kinds to tell apart, since a boolean
   // has an honest "no" for exactly one alternative. Video
   // (0093_video_reference_elements.sql) is a THIRD alternative, and a
@@ -571,112 +246,7 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
 
   const resolvedName = name;
 
-  // THE DESCRIPTION IS THE POINT OF THE ELEMENT, so it is generated here
-  // rather than left for the operator to remember: a tag whose description is
-  // null substitutes to nothing and steers no render (see actions/ugc.ts's
-  // resolveElementTags). Only when none was typed.
-  //
-  // A FAILED DESCRIBE MUST NOT LOSE THE UPLOAD. It is one Claude call on a
-  // capped budget, and it can fail for reasons that have nothing to do with
-  // the picture — over cap, vendor down, a bad response. The element is saved
-  // either way with description null, and the card offers "Describe" to try
-  // again, which is exactly the state an element saved before this change was
-  // already in.
-  // AUDIO USED TO SKIP THIS ENTIRELY, on reasoning that held for a while and
-  // no longer does. The trap this comment used to warn about was real:
-  // describeOnSave hands its bytes to Claude as an IMAGE, and an MP3 sent
-  // that way comes back either a vendor error or, worse, a confident
-  // paragraph about a picture that does not exist. THAT HALF IS STILL TRUE —
-  // an mp3 must never reach describeReferenceImage, audio or not, and
-  // describeAudioOnSave (defined just above describeOnSave's own comment)
-  // is a separate function for exactly that reason, not a branch inside it.
-  //
-  // What changed is the other half. "A voice reference does not need prose
-  // anyway" stopped being true the moment worker/internal/loop/dispatch.go's
-  // bindUITags shipped: it DELETES an audio tag outright rather than
-  // degrading it to a bare name the way an image tag degrades, so an
-  // @voice1 with no description leaves a hole in the prompt — "Dialogue
-  // audio sourced entirely from ." The description is not decoration for an
-  // audio element, it is the ONLY thing that fills that hole, which is what
-  // lib/kie-audio-describe.ts's describeReferenceAudio (kie's Gemini pass,
-  // listening rather than looking) now exists to write.
-  // AUDIO DESCRIBE FAILED is tracked separately from a plain null description
-  // — an operator who typed nothing ever, or landed over cap, is not news;
-  // one who just watched an upload try and fail is, and the return value
-  // below is how that reaches the picker without another database column.
-  //
-  // VIDEO NOW GETS A REAL DESCRIBE CALL TOO — this paragraph used to say
-  // the opposite, and explained why: no vendor here could read a video. That
-  // stopped being true on 2026-09-09, when kie's live Gemini API was probed
-  // directly with real video/mp4 clips and turned out to accept them the
-  // exact same way it accepts audio — same endpoint, same model, same key
-  // (lib/kie-video-describe.ts's header carries the receipts). The Anthropic
-  // SDK vendored here (lib/claude.ts) still has no video content block, so
-  // describeReferenceImage still cannot be handed a video's bytes — that
-  // half never changed and describeVideoOnSave, video's own sibling to
-  // describeAudioOnSave defined just above it, is a separate function for
-  // exactly that reason, same as audio's.
-  //
-  // THE CATCH THAT SIZED MAX_REFERENCE_VIDEO_BYTES. Above ~18.75MB raw, kie
-  // stops reading the clip and silently answers from the instruction text
-  // alone — a confident, entirely invented description, still HTTP 200,
-  // still billed. lib/kie-video-describe.ts's describeReferenceVideo carries
-  // its own two guards against that (a size check before the call, a
-  // usageMetadata.promptTokenCount check after), but this function never
-  // gets to see either one fire on a file too big to have been uploaded in
-  // the first place: lib/file-type.ts's MAX_REFERENCE_VIDEO_BYTES was
-  // lowered from 25MB to 15MB in the same change specifically so that every
-  // video an operator CAN upload here sits inside the band the describer can
-  // trust. The two constants are meant to move together — see
-  // MAX_REFERENCE_VIDEO_BYTES's own comment.
-  //
-  // A DESCRIBE THAT FAILS STILL MUST NOT LOSE THE UPLOAD, same rule the
-  // paragraph above states for audio and image — over cap, vendor down, a
-  // bad response, or VideoDescribeUnusableError (kie's own verdict that the
-  // clip could not be read, reached and possibly billed rather than a
-  // failure to reach kie at all) all leave the element saved with
-  // description null rather than losing the file. See `videoNeedsDescription`
-  // below for how the operator hears about the one case worth telling them
-  // about — a describe that was actually tried and lost — versus the
-  // ordinary "saved undescribed, over cap" state that was never news for
-  // audio either.
-  let audioDescribeFailed = false;
-  let videoNeedsDescription = false;
-  let description: string | null;
-  if (givenDescription) {
-    description = givenDescription;
-  } else if (kind === "audio") {
-    const described = await describeAudioOnSave(
-      image,
-      category,
-      resolvedName,
-      project?.id ?? null,
-      user.id,
-      profile,
-    );
-    description = described.description;
-    audioDescribeFailed = described.attempted && described.description === null;
-  } else if (kind === "video") {
-    const described = await describeVideoOnSave(
-      image,
-      category,
-      resolvedName,
-      project?.id ?? null,
-      user.id,
-      profile,
-    );
-    description = described.description;
-    videoNeedsDescription = described.attempted && described.description === null;
-  } else {
-    description = await describeOnSave(
-      image,
-      category,
-      resolvedName,
-      project?.id ?? null,
-      user.id,
-      profile,
-    );
-  }
+  const description = null;
 
   // ref_frame, the same AssetKind /ugc's own generateClip uses for an
   // operator's upload — this IS a conditioning frame, just one saved under
@@ -834,45 +404,13 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
 
   revalidateElementSurfaces(project?.id ?? null);
 
-  // THE UPLOAD SUCCEEDED — this is an ActionNotice, never an error. The
-  // element exists, is usable by name, and Describe still works from its
-  // card; what would be dishonest is staying silent about the one thing that
-  // did not happen, on a feature built specifically because operators do not
-  // go looking for a Describe button on their own.
-  if (audioDescribeFailed) {
-    return {
-      notice: `@${resolvedName} saved, but its voice could not be described — press Describe on its card to try again.`,
-    };
-  }
-  // SAME SHAPE AS audioDescribeFailed ABOVE, now for the same reason too —
-  // videoNeedsDescription is only true when describeVideoOnSave actually
-  // tried and lost (attempted && description === null), never for the
-  // ordinary over-cap "saved undescribed" state, which was never news for
-  // audio either and isn't for video now.
-  //
-  // This sentence said "write its description from the card" until the retry
-  // it was hedging about actually landed: redescribeElement (actions/ugc.ts)
-  // now routes a 'video_ref' asset to describeReferenceVideo exactly as it
-  // routes audio, in the same commit. The two halves were written by
-  // different hands and the copy was the half that went stale — which is the
-  // worse direction for it to go, because an operator who is told to write a
-  // description by hand does not go looking for the button that would have
-  // done it, and never finds out the product can.
-  if (videoNeedsDescription) {
-    return {
-      notice: `@${resolvedName} saved, but its video could not be described — press Describe on its card to try again.`,
-    };
-  }
   return undefined;
 }
 
 /**
  * Corrects a saved reference: its name, its category, its description.
  *
- * THIS IS WHERE ALL THREE UPLOAD DEFAULTS GET UNDONE. registerElement no
- * longer asks for any of them — it writes newN, "character", and whatever
- * Claude saw — so without this the operator would have no way to reach any of
- * it, and @new7 would be a name they had to type into prompts for good.
+ * This is where the optional description is written after upload.
  *
  * A RENAME REWRITES THE PROMPTS THAT USED THE OLD NAME, and that is the whole
  * reason this action is more than an UPDATE. Substitution is by name at render

@@ -61,10 +61,8 @@
 // as TEXT inside candidates[0].content.parts[0].text, so it has to be
 // JSON.parse'd and validated here rather than read as a nested object.
 //
-// UNLIKE describeReferenceImage (lib/claude.ts), which hands Claude a URL
-// and lets Claude fetch it, this endpoint was only ever verified with
-// inlineData bytes, so this module downloads the clip itself before calling
-// out — same reasoning as the audio module, one medium later.
+// This endpoint was verified with inlineData bytes, so this module downloads
+// the clip itself before calling out, as the image and audio describers do.
 
 import { z } from "zod";
 import { describeRoleLine } from "./describe-role-line";
@@ -197,13 +195,12 @@ export interface DescribeReferenceVideoArgs {
    * Signed URL to the stored mp4, for a clip already in storage — the
    * redescribe path, mirroring DescribeReferenceAudioArgs.videoUrl's sibling
    * field. This module downloads the bytes itself rather than handing kie
-   * the URL — see file header, "UNLIKE describeReferenceImage."
+   * the URL, as the image describer does.
    */
   videoUrl?: string;
   /**
-   * The clip itself, base64-encoded, for a file that has NOT been uploaded
-   * yet — the describe-on-save path, while the bytes are still an in-memory
-   * File, before uploadFile ever runs. Ignored when videoUrl is set.
+   * Inline clip bytes, when the caller already has them. Ignored when
+   * videoUrl is set.
    */
   videoBase64?: string;
   /** Required with videoBase64: the clip's own content type, e.g. "video/mp4". */
@@ -217,7 +214,7 @@ export interface DescribeReferenceVideoArgs {
    * DescribeReferenceAudioArgs.category's identical warning:
    * describeRoleLine interpolates it into `instruction`, and `instruction`
    * is parts[0].text in the POST below. The word travels to kie inside a
-   * request body on every video upload.
+   * request body on every video description request.
    */
   category?: string | null;
 }
@@ -303,9 +300,8 @@ async function downloadVideoAsBase64(
  * DescribeReferenceVideoArgs are optional so either call site compiles.
  *
  * The videoBase64 branch DECODES the string once to get rawBytes — the
- * caller already holds the encoded string, not the original File, by the
- * time this runs (describe-on-save calls this while uploadFile has not
- * run yet, so there is no File.size sitting nearby to read instead). A
+ * caller holds the encoded string, not the original File, so there is no
+ * File.size sitting nearby to read instead. A
  * clip small enough to pass the size guard is small enough that decoding it
  * once, here, costs nothing next to the 11-23s network round trip the
  * caller is about to make.
