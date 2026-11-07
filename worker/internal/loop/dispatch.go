@@ -425,13 +425,25 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		// failing. The claim's own cap makes this rare (see
 		// store.ClaimQueuedScenes); still never kie.
 		if errors.Is(err, byteplus.ErrAtCapacity) {
+			// Bounded: the claim's cap should keep this from firing at all, so a
+			// scene that keeps landing here means the in-flight count looks
+			// permanently full (stuck rows, a miscount). Requeuing it forever
+			// would hide that behind a silent 30s loop; failing it says so.
+			n := deps.CapacityRequeues.note(scene.ID)
+			if n > maxCapacityRequeues {
+				failScene(ctx, deps, logger, scene, fmt.Errorf(
+					"submit render: BytePlus stayed at capacity through %d tries in a row, so its in-flight count may be stuck: %w",
+					maxCapacityRequeues, err))
+				return
+			}
 			recCtx, cancel := recoveryCtx(ctx)
 			defer cancel()
 			if rerr := deps.Store.ReleaseUnsubmittedClaim(recCtx, scene.ID); rerr != nil {
 				failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w (and could not return it to the queue: %v)", err, rerr))
 				return
 			}
-			logger.Info("dispatch: BytePlus at capacity, scene returned to the queue", slog.String("error", err.Error()))
+			logger.Warn("dispatch: BytePlus at capacity past the claim's cap, scene returned to the queue",
+				slog.String("error", err.Error()), slog.Int("requeues", n), slog.Int("max_requeues", maxCapacityRequeues))
 			return
 		}
 		// web/lib/spend.ts's pre-flight balance check (part 1b) is a
@@ -464,6 +476,7 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	// the accumulated backoff, so a process that has been up for months does
 	// not meet its next brief outage with an hour-long pause.
 	deps.Balance.Clear()
+	deps.CapacityRequeues.forget(scene.ID)
 
 	// costAttr, not a bare Float64: when costKnown is false the estimate is
 	// still 0, and printing `estimated_cost_usd: 0` says a render that is
@@ -1020,6 +1033,7 @@ func referencePrompt(scene store.Scene, refs []store.SceneReference, withSpeech 
 // are still recorded even though cost is nil: knowing *what* was attempted
 // is worth keeping alongside *what it cost*, and costs nothing to add.
 func failScene(ctx context.Context, deps Deps, logger *slog.Logger, scene store.Scene, cause error) {
+	deps.CapacityRequeues.forget(scene.ID)
 	logger.Error("dispatch: submission failed", slog.String("error", cause.Error()))
 
 	settings, settingsErr := kie.ParseRenderSettings(scene.RenderSettings)

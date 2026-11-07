@@ -78,6 +78,10 @@ type Deps struct {
 	// failed. 0 = no separate cap: no key, BYTEPLUS_ROUTE=0, or development.
 	BytePlusClaimCap int
 
+	// CapacityRequeues bounds how often one scene may be returned to the
+	// queue for byteplus.ErrAtCapacity. Optional: nil never fails a scene.
+	CapacityRequeues *CapacityRequeues
+
 	// Kie submits/polls renders through the configured video vendor router.
 	// The field keeps its name for existing loop callers; cmd/worker/main.go
 	// wraps kie with BytePlus routing when configured. Always non-nil in a

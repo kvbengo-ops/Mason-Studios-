@@ -251,6 +251,13 @@ func (s *Store) NotifyWeeklyCreditRenewal(ctx context.Context) error {
 // dispatch
 // ---------------------------------------------------------------------------
 
+// sceneClaimLockKey is ClaimQueuedScenes' advisory lock, in the two-int4 key
+// form: (sceneClaimLockKey, 0|1 for dev). A plain constant, not a hash —
+// hashtext is internal and not promised stable across Postgres versions —
+// and a different key space from the one-bigint hashtext(...) locks the
+// migrations take, so the two can never collide.
+const sceneClaimLockKey = 0x5343_4c4d // "SCLM"
+
 // ClaimQueuedScenes atomically claims queued scenes up to the free slots
 // left under ceiling — the global render limit, config.RenderConcurrency —
 // round-robin across users (see docs/architecture.md § "Dispatch — the
@@ -424,9 +431,12 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
 	// worker's dispatch until that session was killed. Keyed on dev, like
 	// every claim filter, so production and development never wait on each
 	// other.
+	devKey := 0
+	if s.dev {
+		devKey = 1
+	}
 	if _, err := tx.Exec(ctx,
-		`SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('scene-claim:' || $1::boolean::text))`,
-		s.dev); err != nil {
+		`SELECT pg_catalog.pg_advisory_xact_lock($1::int, $2::int)`, sceneClaimLockKey, devKey); err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: lock: %w", err)
 	}
 

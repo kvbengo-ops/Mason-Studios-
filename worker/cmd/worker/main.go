@@ -147,7 +147,8 @@ func run() error {
 		// One gate for the process, shared by every dispatch tick — `deps`
 		// is captured by value in the loop closures below, so this has to be
 		// a pointer or each tick would get a fresh, always-open copy.
-		Balance: &loop.BalanceGate{},
+		Balance:          &loop.BalanceGate{},
+		CapacityRequeues: &loop.CapacityRequeues{},
 	}
 	if !cfg.AssembleEnabled {
 		logger.Info("ASSEMBLE_ENABLED is off: delivering raw clips, not an assembled final video")

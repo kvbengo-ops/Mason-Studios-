@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -223,19 +224,41 @@ WHERE id = ANY($2)`, kie.BytePlusSeedance25ID, ids); err != nil {
 	}
 	limit := inflight(ctx, t, s) + 2
 
-	waiting := func() int {
-		var n int
-		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM pg_locks WHERE NOT granted`).Scan(&n); err != nil {
-			t.Fatalf("read pg_locks: %v", err)
+	// Each worker gets its own pool under its own application_name, so the
+	// waits below are this test's backends and nobody else's: a global
+	// pg_locks count on a shared database lets another session's waiter
+	// release the test before its workers are in position.
+	worker := func(name string) (*Store, string) {
+		app := "claimrace-" + name + "-" + s0[:8]
+		sep := "?"
+		if strings.Contains(dsn, "?") {
+			sep = "&"
 		}
-		return n
+		w, err := New(ctx, dsn+sep+"application_name="+app, false)
+		if err != nil {
+			t.Fatalf("New %s: %v", name, err)
+		}
+		t.Cleanup(w.Close)
+		return w, app
 	}
-	waitFor := func(want int, what string) {
+	workerA, appA := worker("a")
+	workerB, appB := worker("b")
+
+	waitFor := func(app, what string) {
 		t.Helper()
 		deadline := time.Now().Add(10 * time.Second)
-		for waiting() < want {
+		for {
+			var n int
+			if err := s.pool.QueryRow(ctx, `
+SELECT count(*) FROM pg_stat_activity
+WHERE application_name = $1 AND wait_event_type = 'Lock'`, app).Scan(&n); err != nil {
+				t.Fatalf("read pg_stat_activity: %v", err)
+			}
+			if n > 0 {
+				return
+			}
 			if time.Now().After(deadline) {
-				t.Fatalf("timed out waiting for %s (%d lock waiters, want %d)", what, waiting(), want)
+				t.Fatalf("timed out waiting for %s", what)
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
@@ -257,19 +280,19 @@ WHERE id = ANY($2)`, kie.BytePlusSeedance25ID, ids); err != nil {
 		scenes []Scene
 		err    error
 	}
-	claim := func(out chan<- result) {
-		sc, err := s.ClaimQueuedScenes(ctx, 1000, limit)
+	claim := func(w *Store, out chan<- result) {
+		sc, err := w.ClaimQueuedScenes(ctx, 1000, limit)
 		out <- result{sc, err}
 	}
 	aDone, bDone := make(chan result, 1), make(chan result, 1)
 
-	go claim(aDone)
-	waitFor(1, "worker A to stall on s1")
+	go claim(workerA, aDone)
+	waitFor(appA, "worker A to stall on s1")
 	if _, err := s.pool.Exec(ctx, `UPDATE scenes SET status = 'queued' WHERE id = $1`, s0); err != nil {
 		t.Fatalf("re-queue s0: %v", err)
 	}
-	go claim(bDone)
-	waitFor(2, "worker B to block")
+	go claim(workerB, bDone)
+	waitFor(appB, "worker B to block")
 	if err := hold.Rollback(ctx); err != nil {
 		t.Fatalf("release s1: %v", err)
 	}
