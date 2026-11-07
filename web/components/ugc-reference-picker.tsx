@@ -71,6 +71,7 @@ import { checkElementUploadName } from "@/actions/check-element-upload-name";
 import { deleteElement, registerElement, updateElement } from "@/actions/elements";
 import { stageFiles } from "@/lib/stage-files";
 import { redescribeElement } from "@/actions/ugc";
+import { elementDescribeEstimateUsd, uploadDescribeEstimateUsd } from "@/lib/element-describe-cost";
 import { Spinner } from "@/components/spinner";
 import { useUploadProgress, useUploadProgressSetter } from "@/components/upload-progress-store";
 import {
@@ -833,6 +834,11 @@ export function UgcReferencePicker({
         toast.error(nameError);
         return;
       }
+      if (
+        !window.confirm(
+          `Upload and describe @${name}? Estimated description cost: $${uploadDescribeEstimateUsd(f).toFixed(4)}. Voice and video retries may cost more.`,
+        )
+      ) return;
       fd.set("name", name);
       await attachVideoDuration(fd, f);
       await stageFiles(fd);
@@ -987,8 +993,20 @@ export function UgcReferencePicker({
    * the operator pressed a button and should see the answer without waiting
    * for a round trip through the page.
    */
-  async function redescribe(elementId: string): Promise<void> {
+  async function redescribe(element: ElementTag): Promise<void> {
     if (redescribing) return;
+    const kind =
+      element.assetKind === "audio"
+        ? "audio"
+        : element.assetKind === "video_ref"
+          ? "video"
+          : "image";
+    if (
+      !window.confirm(
+        `Describe @${element.name}? Estimated cost: $${elementDescribeEstimateUsd(kind).toFixed(4)}.`,
+      )
+    ) return;
+    const elementId = element.id;
     setRedescribing(elementId);
     setRedescribeError(null);
     try {
@@ -1300,6 +1318,12 @@ export function UgcReferencePicker({
     const file = attachIndex === -1 ? null : (files[attachIndex] ?? null);
     const previewUrl = attachIndex === -1 ? null : (pendingPreviewUrls[attachIndex] ?? null);
     if (files.length === 0) return undefined;
+    const estimate = files.reduce((total, item) => total + uploadDescribeEstimateUsd(item), 0);
+    if (
+      !window.confirm(
+        `Upload and describe ${files.length} reference${files.length === 1 ? "" : "s"}? Estimated description cost: $${estimate.toFixed(4)}. Voice and video retries may cost more.`,
+      )
+    ) return undefined;
 
     isSavingRef.current = true;
     setUploadProgress({ done: 0, total: files.length });
@@ -2647,7 +2671,7 @@ export function UgcReferencePicker({
                                   : undefined,
                               )}
                               disabled={redescribing !== null || savingEdit}
-                              onClick={() => void redescribe(selectedElement.id)}
+                              onClick={() => void redescribe(selectedElement)}
                             >
                               {redescribing === selectedElement.id ? (
                                 <Spinner className="size-3" />

@@ -482,6 +482,10 @@ function revalidateElementSurfaces(projectId: string | null): void {
 
 export async function registerElement(formData: FormData): Promise<ActionResult | ActionNotice> {
   const { project, user, profile } = await resolveElementScope(formData);
+  const destination = formData.get("destination") ?? "shared";
+  if (destination !== "shared" && destination !== "mine")
+    return { error: "Choose Shared or Mine." };
+  const shared = destination === "shared";
   await resolveStagedUploads(formData, user.id);
 
   const name = String(formData.get("name") ?? "").trim();
@@ -540,7 +544,7 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
   }
 
   const admin = createAdminClient();
-  const nameError = await elementUploadNameError(admin, user.id, name);
+  const nameError = await elementUploadNameError(admin, user.id, name, shared);
   if (nameError) return { error: nameError };
 
   // RESOLVED AFTER THE FILE, because it depends on it. An audio upload is a
@@ -816,6 +820,7 @@ export async function registerElement(formData: FormData): Promise<ActionResult 
     description,
     category,
     asset_id: asset.id,
+    is_shared: shared,
   });
 
   if (elementError) {

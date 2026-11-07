@@ -78,7 +78,7 @@ const CREDIT_USD = 0.005;
  * MAX_REFERENCE_AUDIO_SECONDS, lib/file-type.ts) actually costs rather than
  * assume every clip prices like the one sample.
  */
-export const AUDIO_DESCRIBE_ESTIMATE_USD = 0.001;
+export { AUDIO_DESCRIBE_ESTIMATE_USD } from "./element-describe-cost";
 
 /**
  * The clip was reached, listened to and BILLED, and is still not usable.

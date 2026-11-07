@@ -70,6 +70,7 @@ vi.mock("@/actions/ugc", () => ({
 }));
 
 import { registerElement, updateElement } from "@/actions/elements";
+import { redescribeElement } from "@/actions/ugc";
 import { UgcReferencePicker, type PickedReference } from "./ugc-reference-picker";
 
 const ELEMENTS: readonly ElementTag[] = [
@@ -96,6 +97,7 @@ let revokeObjectURL: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   let n = 0;
+  vi.spyOn(window, "confirm").mockReturnValue(true);
   createObjectURL = vi.fn(() => `blob:fake/${++n}`);
   revokeObjectURL = vi.fn();
   // jsdom implements neither, so they are installed rather than spied on.
@@ -385,6 +387,7 @@ describe("UgcReferencePicker's two ways in stay distinct", () => {
 
     await waitFor(() => expect(registerElement).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(onPick).toHaveBeenCalledTimes(1));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("$0.0150"));
 
     const picked = onPick.mock.calls[0]?.[0] as PickedReference;
     if (picked.kind !== "upload") throw new Error("expected an upload");
@@ -883,12 +886,23 @@ describe("UgcReferencePicker's detail panel", () => {
     await openDetail(user);
 
     await user.click(screen.getByRole("button", { name: /describe again/i }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("$0.0150"));
 
     await waitFor(() =>
       expect((screen.getByLabelText(/^description$/i) as HTMLTextAreaElement).value).toBe(
         "a woman in a red coat, mid-stride",
       ),
     );
+  });
+
+  it("does not describe when the cost prompt is declined", async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    const user = userEvent.setup();
+    renderPicker();
+    await openDetail(user);
+
+    await user.click(screen.getByRole("button", { name: /describe again/i }));
+    expect(redescribeElement).not.toHaveBeenCalled();
   });
 
   it("saves on its own a moment after typing stops", async () => {

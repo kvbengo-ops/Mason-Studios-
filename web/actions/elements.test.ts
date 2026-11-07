@@ -590,6 +590,7 @@ describe("registerElement — the happy path", () => {
       description: "the usual talent",
       category: "character",
       asset_id: "asset-1",
+      is_shared: true,
     });
     expect(revalidatePath).toHaveBeenCalledWith("/ugc/project-1");
   });
@@ -997,6 +998,29 @@ describe("the project-less (Elements Library) branch", () => {
     expect(assetRow).toMatchObject({ project_id: null, user_id: USER.id });
     // The element itself is unchanged in shape — it was always user-owned.
     expect(elementRow).toMatchObject({ user_id: USER.id });
+  });
+
+  it("saves a Mine upload as private", async () => {
+    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "users/user-1/ref_frame/x.jpg" });
+    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
+    const elementBuilder = fakeBuilder({ data: null, error: null });
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn((table: string) => (table === "assets" ? assetBuilder : elementBuilder)),
+    } as never);
+
+    const formData = libraryFormData();
+    formData.set("destination", "mine");
+    expect(await registerElement(formData)).toBeUndefined();
+    expect(elementBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: USER.id, is_shared: false }),
+    );
+  });
+
+  it("refuses an unknown destination before uploading", async () => {
+    const formData = libraryFormData();
+    formData.set("destination", "elsewhere");
+    expect(await registerElement(formData)).toEqual({ error: "Choose Shared or Mine." });
+    expect(uploadFile).not.toHaveBeenCalled();
   });
 
   it("still refuses another account's element with no projectId to hide behind", async () => {
