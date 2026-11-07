@@ -70,6 +70,7 @@ vi.mock("@/actions/ugc", () => ({
 }));
 
 import { registerElement, updateElement } from "@/actions/elements";
+import { redescribeElement } from "@/actions/ugc";
 import { UgcReferencePicker, type PickedReference } from "./ugc-reference-picker";
 
 const ELEMENTS: readonly ElementTag[] = [
