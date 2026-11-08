@@ -296,6 +296,7 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const projectIds = projects.map((p) => p.id);
+  const videoModels = [...new Set(KIE_MODELS.map((m) => m.kieModelName))];
   const withSound = isAudioEnabled();
 
   const [{ data: sceneRows, error: scenesError }, { data: runRows, error: runsError }] =
@@ -310,9 +311,9 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
         .limit(RECENT_SCENES),
       supabase
         .from("runs")
-        .select("id, scene_id, model, cost_usd, error, created_at")
+        .select("id, scene_id, model, prompt, cost_usd, error, created_at")
         .in("project_id", projectIds)
-        .not("scene_id", "is", null)
+        .in("model", videoModels)
         .order("created_at", { ascending: false })
         .limit(RECENT_RUNS),
     ]);
@@ -341,7 +342,7 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
       createdAt: run.created_at,
       status: run.error ? "failed" : latest && scene?.status === "rendering" ? "rendering" : "done",
       modelLabel: KIE_MODELS.find((m) => m.kieModelName === run.model)?.label ?? run.model,
-      prompt: scene?.video_prompt ?? "",
+      prompt: run.prompt ?? scene?.video_prompt ?? "",
       costUsd: run.cost_usd,
       reason: run.error,
       returnedUsd:

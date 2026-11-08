@@ -295,15 +295,27 @@ describe("admin-creations loaders", () => {
             project_id: "proj-a",
             scene_id: "scene-a-done",
             model: "kling-3.0/video",
+            prompt: null,
             cost_usd: 0.5,
             error: null,
             created_at: "2026-10-30T10:01:00Z",
+          },
+          {
+            id: "vrun-a-deleted-failed",
+            project_id: "proj-a",
+            scene_id: null,
+            model: "bytedance/seedance-2-5",
+            prompt: "Removed failed scene prompt",
+            cost_usd: null,
+            error: "kie task failed",
+            created_at: "2026-10-30T10:00:30Z",
           },
           {
             id: "vrun-b",
             project_id: "proj-b",
             scene_id: "scene-b-done",
             model: "bytedance/seedance-2-fast",
+            prompt: null,
             cost_usd: 0.56,
             error: null,
             created_at: "2026-10-30T11:01:00Z",
@@ -320,10 +332,19 @@ describe("admin-creations loaders", () => {
     expect(clips[0]?.costUsd).toBe(0.5);
     expect(clips[0]?.url).toBe("https://signed.example/projects/proj-a/clip-1.mp4");
 
-    expect(runs).toHaveLength(2);
+    expect(runs).toHaveLength(3);
     expect(runs[0]?.id).toBe("scene-scene-a-queued");
     expect(runs[0]?.modelLabel).toBe("Kling 3.0");
     expect(runs[1]?.id).toBe("vrun-a");
+    expect(runs[1]?.prompt).toBe("Creator unboxing");
+    expect(runs[2]).toMatchObject({
+      id: "vrun-a-deleted-failed",
+      status: "failed",
+      modelLabel: "Seedance 2.5",
+      prompt: "Removed failed scene prompt",
+      costUsd: null,
+      reason: "kie task failed",
+    });
   });
 
   it("loadEditorVideos includes scripted-pipeline projects and clips that only hang off assets.scene_id", async () => {

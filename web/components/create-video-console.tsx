@@ -115,18 +115,21 @@ export async function CreateVideoConsole({
   const sceneById = new Map(scenes.map((s) => [s.id, s]));
   const sceneIds = scenes.map((s) => s.id);
 
+  const videoModels = [...new Set(KIE_MODELS.map((m) => m.kieModelName))];
   // One row per attempt (runs), for the Runs pill. Readable through
-  // runs_select's project-owner branch.
+  // runs_select's project-owner branch. Filtered by video model rather than
+  // scene_id IS NOT NULL so a run still shows here after its scene is deleted
+  // (0054_runs_survive_scene_delete.sql sets runs.scene_id to NULL).
   const { data: runRows } =
     projects.length > 0
       ? await supabase
           .from("runs")
-          .select("id, scene_id, model, cost_usd, error, created_at")
+          .select("id, scene_id, model, prompt, cost_usd, error, created_at")
           .in(
             "project_id",
             projects.map((p) => p.id),
           )
-          .not("scene_id", "is", null)
+          .in("model", videoModels)
           .order("created_at", { ascending: false })
           .limit(RECENT_RUNS)
       : { data: [] };
@@ -144,7 +147,7 @@ export async function CreateVideoConsole({
       // yet — that one is listed from the scene below, not as this run.
       status: run.error ? "failed" : latest && scene?.status === "rendering" ? "rendering" : "done",
       modelLabel: KIE_MODELS.find((m) => m.kieModelName === run.model)?.label ?? run.model,
-      prompt: scene?.video_prompt ?? "",
+      prompt: run.prompt ?? scene?.video_prompt ?? "",
       costUsd: run.cost_usd,
       reason: run.error,
       // A failure kie did not bill holds nothing (worker's kie.FailedRunCost):

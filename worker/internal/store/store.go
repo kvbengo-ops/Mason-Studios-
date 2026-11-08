@@ -603,8 +603,8 @@ RETURNING id`,
 	}
 
 	_, err = tx.Exec(ctx, `
-INSERT INTO runs (project_id, scene_id, kie_task_id, vendor, model, cost_usd, latency_ms, inference_ms, error)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+INSERT INTO runs (project_id, scene_id, kie_task_id, vendor, model, cost_usd, latency_ms, inference_ms, error, prompt)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, (SELECT video_prompt FROM scenes WHERE id = $2))`,
 		run.ProjectID, run.SceneID, run.KieTaskID, run.Vendor, run.Model, run.CostUSD, run.LatencyMS, run.InferenceMS, run.Error,
 	)
 	if err != nil {
@@ -697,8 +697,8 @@ func (s *Store) MarkFailed(ctx context.Context, sceneID string, run Run) error {
 	}
 
 	_, err = tx.Exec(ctx, `
-INSERT INTO runs (project_id, scene_id, kie_task_id, vendor, model, cost_usd, latency_ms, inference_ms, error)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+INSERT INTO runs (project_id, scene_id, kie_task_id, vendor, model, cost_usd, latency_ms, inference_ms, error, prompt)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, (SELECT video_prompt FROM scenes WHERE id = $2))`,
 		run.ProjectID, run.SceneID, run.KieTaskID, run.Vendor, run.Model, run.CostUSD, run.LatencyMS, run.InferenceMS, run.Error,
 	)
 	if err != nil {

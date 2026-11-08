@@ -2587,10 +2587,24 @@ export async function deleteClipScene(formData: FormData): Promise<ActionResult>
   }
 
   const admin = createAdminClient();
+  // Preserve the prompt on the scene's runs before ON DELETE SET NULL clears
+  // runs.scene_id, so the attempt stays readable in Runs even after the scene
+  // (and its Bin entry) is gone.
+  if (scene.video_prompt) {
+    const { error: promptError } = await admin
+      .from("runs")
+      .update({ prompt: scene.video_prompt })
+      .eq("scene_id", scene.id)
+      .is("prompt", null);
+    if (promptError) {
+      console.error(`deleteClipScene: prompt not recorded for scene ${scene.id}`, promptError);
+    }
+  }
   const { error } = await admin.from("scenes").delete().eq("id", scene.id);
   if (error) throw new Error(`Failed to delete the clip: ${error.message}`);
 
   revalidatePath(`/ugc/${scene.project_id}`);
+  revalidatePath("/create");
   revalidatePath("/bin");
   return undefined;
 }
