@@ -74,6 +74,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -788,18 +789,35 @@ export function ElementsLibrary({
               </li>
             );
           })}
+          {loading
+            ? Array.from({ length: 4 }, (_, index) => (
+                <li
+                  key={`loading-${index}`}
+                  aria-hidden="true"
+                  className="flex min-w-0 flex-col rounded-xl border bg-card shadow-sm"
+                >
+                  <Skeleton className="aspect-[4/3] w-full rounded-t-xl" />
+                  <div className="flex flex-col gap-3 p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-5 w-14 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-5/6" />
+                  </div>
+                </li>
+              ))
+            : null}
         </ul>
       )}
 
       {loading ? (
-        <div
-          className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
-          role="status"
-        >
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+        <span role="status" className="sr-only">
           Loading references…
-        </div>
+        </span>
       ) : null}
+
       {loadError ? (
         <div className="flex flex-col items-center gap-2 py-3" role="alert">
           <p className="text-sm text-destructive">{loadError}</p>
