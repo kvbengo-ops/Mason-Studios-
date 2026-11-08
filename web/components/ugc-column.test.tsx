@@ -203,6 +203,32 @@ describe("UgcColumn names the spend before the press", () => {
   });
 });
 
+describe("Create video prompt draft persistence", () => {
+  it("restores the prompt after the composer unmounts and mounts again", async () => {
+    const createProps = {
+      projectId: "",
+      options: OPTIONS,
+      selectedScene: null,
+      budget: BUDGET,
+      vendor: "kie" as const,
+      audioEnabled: false,
+      elements: [],
+      ensureProject: async () => ({ projectId: "personal-project" }),
+      layout: "bar" as const,
+    };
+    const { unmount } = render(<UgcColumn {...createProps} />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "A product reveal" } });
+
+    expect(window.localStorage.getItem("ugc:draft:create")).toBe("A product reveal");
+    unmount();
+
+    render(<UgcColumn {...createProps} />);
+    await waitFor(() =>
+      expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe("A product reveal"),
+    );
+  });
+});
+
 describe("UgcColumn's prompt field follows the selected scene", () => {
   it("loads the selected scene's prompt", () => {
     renderColumn({ id: "scene-1", idx: 1, prompt: "a cat knocks a glass over" });

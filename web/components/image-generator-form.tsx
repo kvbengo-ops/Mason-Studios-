@@ -302,6 +302,20 @@ export function ImageGeneratorForm({
     }
   }, [restored, DRAFT_KEY, prompt, modelId, aspectRatio, imageCount]);
 
+  function updatePromptDraft(nextPrompt: string): void {
+    setPrompt(nextPrompt);
+    if (!restored) return;
+    // Write on input too, so immediate navigation cannot beat the save effect.
+    try {
+      window.localStorage.setItem(
+        DRAFT_KEY,
+        serializeImageDraft({ prompt: nextPrompt, modelId, aspectRatio, imageCount }),
+      );
+    } catch {
+      // The form still works when browser storage is blocked.
+    }
+  }
+
   /**
    * Appends the picked reference as an @tag.
    *
@@ -544,7 +558,7 @@ export function ImageGeneratorForm({
                     id="image-generator-prompt"
                     name="prompt"
                     value={prompt}
-                    onChange={setPrompt}
+                    onChange={updatePromptDraft}
                     elements={elements}
                     placeholder="Describe the scene you imagine — subject, setting, light. Type @ for a saved reference."
                     // Height and colour only — NOT padding or font metrics. Those are

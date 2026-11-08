@@ -565,6 +565,17 @@ export function UgcColumn({
   const isNewScene = selectedScene === null || selectedScene === undefined;
   const draftKey = `ugc:draft:${ensureProject ? "create" : projectId}`;
   const [draftLoaded, setDraftLoaded] = useState(false);
+  function updatePromptDraft(nextPrompt: string): void {
+    setPrompt(nextPrompt);
+    if (!draftLoaded || !isNewScene) return;
+    // Write on input too, so immediate navigation cannot beat the save effect.
+    try {
+      window.localStorage.setItem(draftKey, nextPrompt);
+    } catch {
+      // The form still works when browser storage is blocked.
+    }
+  }
+
   /* eslint-disable react-hooks/set-state-in-effect -- restore after mount, see above */
   useEffect(() => {
     try {
@@ -1526,7 +1537,7 @@ export function UgcColumn({
                 boxClassName={bar ? "pr-32" : undefined}
                 name="prompt"
                 value={prompt}
-                onChange={setPrompt}
+                onChange={updatePromptDraft}
                 // The scene the history belongs to. "new" rather than
                 // undefined for the unsaved one, so switching from a saved
                 // scene back to the draft still clears — undefined would read

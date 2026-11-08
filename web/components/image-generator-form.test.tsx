@@ -59,6 +59,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("Image Generator prompt draft persistence", () => {
+  it("restores the prompt after the form unmounts and mounts again", async () => {
+    const props = {
+      action: vi.fn(),
+      models: [model],
+      disabledReason: null,
+      projectId: null,
+      elements: [],
+    };
+    const { unmount } = render(<ImageGeneratorForm {...props} />);
+    fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "A portrait at dawn" } });
+
+    const stored = JSON.parse(window.localStorage.getItem("image-generator:draft:personal")!);
+    expect(stored.prompt).toBe("A portrait at dawn");
+    unmount();
+
+    render(<ImageGeneratorForm {...props} />);
+    await waitFor(() =>
+      expect((screen.getByLabelText("Prompt") as HTMLTextAreaElement).value).toBe(
+        "A portrait at dawn",
+      ),
+    );
+  });
+});
+
 describe("Image Generator background completion", () => {
   it("does not submit or reserve a request key when confirmation is cancelled", () => {
     const action = vi.fn();
