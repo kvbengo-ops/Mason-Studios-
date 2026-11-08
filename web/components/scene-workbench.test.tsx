@@ -53,6 +53,13 @@ function createMockScene(overrides?: Partial<SceneRow>): SceneRow {
   return {
     id: "scene-1",
     project_id: "project-1",
+    // 0127 — API-token columns; irrelevant to the workbench.
+    api_token_id: null,
+    estimated_cost_usd: null,
+    idempotency_hash: null,
+    idempotency_key: null,
+    prepare_started_at: null,
+    prepare_token: null,
     idx: 0,
     status: "frame_ready",
     script_line: "Test script line",

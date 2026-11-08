@@ -36,7 +36,7 @@ import {
   mergeRenderSettings,
   type RenderSettings,
 } from "@/lib/models";
-import { assertWithinSpendCaps } from "@/lib/spend";
+import { assertWithinSpendCaps, type queueScenesIfWithinCaps } from "@/lib/spend";
 import {
   assertAllFramed,
   assertSettingsAllowedForDurations,
@@ -344,16 +344,43 @@ export async function enqueueRender(projectId: string): Promise<ActionResult> {
     );
   }
 
-  const { error: sceneError } = await admin
-    .from("scenes")
-    .update({ status: "queued", dev: isDev() })
-    .in(
-      "id",
-      pending.map((scene) => scene.id),
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    const perSceneEstimatesUsd = pricedPending.map(
+      (scene) =>
+        estimateCost(
+          toBrief([scene]),
+          audioEnabled,
+          mergeRenderSettings(project.render_settings, scene.render_settings_override),
+        ).totalUsd,
     );
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId: project.id,
+      userId: user.id,
+      profile,
+      sceneIds: pending.map((scene) => scene.id),
+      estimatesUsd: perSceneEstimatesUsd,
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error: sceneError } = await admin
+      .from("scenes")
+      .update({ status: "queued", dev: isDev() })
+      .in(
+        "id",
+        pending.map((scene) => scene.id),
+      );
 
-  if (sceneError) {
-    throw new Error(`Failed to enqueue scenes for project ${projectId}: ${sceneError.message}`);
+    if (sceneError) {
+      throw new Error(`Failed to enqueue scenes for project ${projectId}: ${sceneError.message}`);
+    }
   }
 
   // Mostly a cache write, same as the two below and compile.ts's —
@@ -566,13 +593,32 @@ export async function enqueueScene(sceneId: string): Promise<ActionResult> {
 
   await openSceneVersion(admin, scene, settings);
 
-  const { error: sceneError } = await admin
-    .from("scenes")
-    .update({ status: "queued", dev: isDev() })
-    .eq("id", scene.id);
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId: project.id,
+      userId: user.id,
+      profile,
+      sceneIds: [scene.id],
+      estimatesUsd: [estimate.totalUsd],
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error: sceneError } = await admin
+      .from("scenes")
+      .update({ status: "queued", dev: isDev() })
+      .eq("id", scene.id);
 
-  if (sceneError) {
-    throw new Error(`Failed to enqueue scene ${scene.id}: ${sceneError.message}`);
+    if (sceneError) {
+      throw new Error(`Failed to enqueue scene ${scene.id}: ${sceneError.message}`);
+    }
   }
 
   const { error: projectError } = await admin
@@ -642,13 +688,34 @@ export async function enqueueTestScene(projectId: string): Promise<ActionResult>
 
   await openSceneVersion(admin, scene, settings);
 
-  const { error: sceneError } = await admin
-    .from("scenes")
-    .update({ status: "queued", dev: isDev() })
-    .eq("id", scene.id);
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId,
+      userId: user.id,
+      profile,
+      sceneIds: [scene.id],
+      estimatesUsd: [estimate.totalUsd],
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error: sceneError } = await admin
+      .from("scenes")
+      .update({ status: "queued", dev: isDev() })
+      .eq("id", scene.id);
 
-  if (sceneError) {
-    throw new Error(`Failed to enqueue test scene for project ${projectId}: ${sceneError.message}`);
+    if (sceneError) {
+      throw new Error(
+        `Failed to enqueue test scene for project ${projectId}: ${sceneError.message}`,
+      );
+    }
   }
 
   const { error: projectError } = await admin
@@ -893,27 +960,55 @@ export async function retryScene(
     await openSceneVersion(admin, scene, settings);
   }
 
-  const { error } = await admin
-    .from("scenes")
-    .update({
-      status: "queued",
-      dev: isDev(),
-      kie_task_id: null,
-      submitted_at: null,
-      // Written in the SAME statement that re-queues the scene, not a
-      // separate one before it: the worker's claim query is what reads this
-      // (ClaimQueuedScenes merges it in SQL), and it only looks at scenes
-      // that are already 'queued'. Splitting the two writes would open a
-      // window where the scene is claimable at the OLD model. Only written
-      // when an override was actually requested — a plain retry must leave
-      // the column exactly as it found it (0045: sticky, nothing clears it
-      // implicitly, including a retry that says nothing about the model).
-      ...(override ? { render_settings_override: override } : {}),
-    })
-    .eq("id", sceneId);
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    if (override) {
+      const { error: overrideErr } = await admin
+        .from("scenes")
+        .update({ render_settings_override: override })
+        .eq("id", sceneId);
+      if (overrideErr) {
+        throw new Error(`Failed to retry scene ${sceneId}: ${overrideErr.message}`);
+      }
+    }
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId: project.id,
+      userId: user.id,
+      profile,
+      sceneIds: [sceneId],
+      estimatesUsd: [estimatedUsd],
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error } = await admin
+      .from("scenes")
+      .update({
+        status: "queued",
+        dev: isDev(),
+        kie_task_id: null,
+        submitted_at: null,
+        // Written in the SAME statement that re-queues the scene, not a
+        // separate one before it: the worker's claim query is what reads this
+        // (ClaimQueuedScenes merges it in SQL), and it only looks at scenes
+        // that are already 'queued'. Splitting the two writes would open a
+        // window where the scene is claimable at the OLD model. Only written
+        // when an override was actually requested — a plain retry must leave
+        // the column exactly as it found it (0045: sticky, nothing clears it
+        // implicitly, including a retry that says nothing about the model).
+        ...(override ? { render_settings_override: override } : {}),
+      })
+      .eq("id", sceneId);
 
-  if (error) {
-    throw new Error(`Failed to retry scene ${sceneId}: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to retry scene ${sceneId}: ${error.message}`);
+    }
   }
 
   // See this function's doc comment for why this also clears a stale
@@ -1015,25 +1110,64 @@ export async function retryAllFailed(projectId: string, modelId?: string): Promi
   // No final-asset cleanup here either — see "THE FINAL CUT IS NOT DELETED
   // ANY MORE" above.
 
-  const { error } = await admin
-    .from("scenes")
-    .update({
-      status: "queued",
-      dev: isDev(),
-      kie_task_id: null,
-      submitted_at: null,
-      // Same statement as the re-queue, same reason as retryScene's: the
-      // worker claims on status='queued' and reads this column in that same
-      // claim, so the override must land no later than the status does. The
-      // filter below is unchanged (`status = 'failed'`), so this writes the
-      // override onto exactly the scenes being re-queued and nothing else.
-      ...(override ? { render_settings_override: override } : {}),
-    })
-    .eq("project_id", projectId)
-    .eq("status", "failed");
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    if (override) {
+      const { error: overrideErr } = await admin
+        .from("scenes")
+        .update({ render_settings_override: override })
+        .eq("project_id", projectId)
+        .eq("status", "failed");
+      if (overrideErr) {
+        throw new Error(
+          `Failed to retry failed scenes for project ${projectId}: ${overrideErr.message}`,
+        );
+      }
+    }
+    const perSceneEstimatesUsd = pricedFailed.map(
+      (scene) =>
+        estimateCost(
+          toBrief([scene]),
+          isAudioEnabled(),
+          mergeRenderSettings(project.render_settings, override ?? scene.render_settings_override),
+        ).totalUsd,
+    );
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId,
+      userId: user.id,
+      profile,
+      sceneIds: failed.map((scene) => scene.id),
+      estimatesUsd: perSceneEstimatesUsd,
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error } = await admin
+      .from("scenes")
+      .update({
+        status: "queued",
+        dev: isDev(),
+        kie_task_id: null,
+        submitted_at: null,
+        // Same statement as the re-queue, same reason as retryScene's: the
+        // worker claims on status='queued' and reads this column in that same
+        // claim, so the override must land no later than the status does. The
+        // filter below is unchanged (`status = 'failed'`), so this writes the
+        // override onto exactly the scenes being re-queued and nothing else.
+        ...(override ? { render_settings_override: override } : {}),
+      })
+      .eq("project_id", projectId)
+      .eq("status", "failed");
 
-  if (error) {
-    throw new Error(`Failed to retry failed scenes for project ${projectId}: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to retry failed scenes for project ${projectId}: ${error.message}`);
+    }
   }
 
   // See retryScene's doc comment for why this also clears a stale 'delivered'.
@@ -1150,13 +1284,32 @@ export async function rerenderScene(
     await openSceneVersion(admin, scene, settings);
   }
 
-  const { error: sceneError } = await admin
-    .from("scenes")
-    .update({ status: "queued", dev: isDev(), kie_task_id: null, submitted_at: null })
-    .eq("id", sceneId);
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId: project.id,
+      userId: user.id,
+      profile,
+      sceneIds: [sceneId],
+      estimatesUsd: [estimatedUsd],
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error: sceneError } = await admin
+      .from("scenes")
+      .update({ status: "queued", dev: isDev(), kie_task_id: null, submitted_at: null })
+      .eq("id", sceneId);
 
-  if (sceneError) {
-    throw new Error(`Failed to re-render scene ${sceneId}: ${sceneError.message}`);
+    if (sceneError) {
+      throw new Error(`Failed to re-render scene ${sceneId}: ${sceneError.message}`);
+    }
   }
 
   const { error: projectError } = await admin

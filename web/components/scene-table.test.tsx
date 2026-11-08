@@ -71,6 +71,13 @@ afterEach(() => {
 function scene(overrides: Partial<SceneRow> = {}): SceneRow {
   return {
     active_version_id: null,
+    // 0127 — API-token columns; irrelevant to SceneTable.
+    api_token_id: null,
+    estimated_cost_usd: null,
+    idempotency_hash: null,
+    idempotency_key: null,
+    prepare_started_at: null,
+    prepare_token: null,
     created_at: new Date().toISOString(),
     // 0063_scenes_dev_flag.sql — irrelevant to SceneTable, which never reads
     // it; false (production) is the ordinary case for a fixture.

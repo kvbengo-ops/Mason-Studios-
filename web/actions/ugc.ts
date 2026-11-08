@@ -72,7 +72,7 @@ import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { MAX_REFERENCES } from "@/lib/ugc-references";
 import { supportsPromptOnlyVideo } from "@/lib/prompt-only-video";
 import { getModel, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
-import { assertWithinSpendCaps } from "@/lib/spend";
+import { assertWithinSpendCaps, type queueScenesIfWithinCaps } from "@/lib/spend";
 import { recordRun } from "@/lib/runs";
 import {
   assertAllFramed,
@@ -1075,6 +1075,14 @@ async function attachSceneReferences(args: {
    * two rows, both kind='image', regardless of what its prompt names.
    */
   klingEndElementId?: string | null;
+  /**
+   * Optional explicit reference tag ordering (used by `/api/v1/generate` when
+   * `image_refs`/`video_refs`/`audio_refs` arrays are provided). When supplied,
+   * ordinals are assigned in this exact array order rather than scanning
+   * `tagsInOrder(prompt)`, so `@Image 2` mentioned before `@Image 1` or an
+   * unmentioned array entry still binds to its array ordinal.
+   */
+  explicitOrderedTags?: readonly string[];
 }): Promise<void> {
   const {
     admin,
@@ -1086,6 +1094,7 @@ async function attachSceneReferences(args: {
     primaryKind,
     primaryElementId,
     klingEndElementId,
+    explicitOrderedTags,
   } = args;
 
   const rows: Array<{
@@ -1200,8 +1209,15 @@ async function attachSceneReferences(args: {
     // case this version does not backfill the freed slot from later in the
     // prompt. Backfilling would mean re-introducing the sequential retry
     // that concurrency was the point of removing.
+    const orderedTagNames =
+      explicitOrderedTags !== undefined
+        ? explicitOrderedTags.map((t) => t.toLowerCase())
+        : tagsInOrder(prompt);
+    const seenEligible = new Set<string>();
     const pureEligible: { name: string; element: ElementRow }[] = [];
-    for (const name of tagsInOrder(prompt)) {
+    for (const name of orderedTagNames) {
+      if (!name || seenEligible.has(name)) continue;
+      seenEligible.add(name);
       if (pureEligible.length >= MAX_REFERENCES - 1) break;
       const element = byName.get(name);
       if (!element || !element.asset_id) continue;
@@ -2121,12 +2137,31 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // already cleared.
   await openSceneVersion(admin, scene, settings);
 
-  const { error: queueError } = await admin
-    .from("scenes")
-    .update({ status: "queued", dev: isDev() })
-    .eq("id", scene.id);
+  if (
+    typeof (admin as { rpc?: unknown }).rpc === "function" &&
+    typeof (assertWithinSpendCaps as { queueScenes?: unknown }).queueScenes === "function"
+  ) {
+    const queueResult = await (
+      assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+        queueScenes: typeof queueScenesIfWithinCaps;
+      }
+    ).queueScenes({
+      admin,
+      projectId: project.id,
+      userId: user.id,
+      profile,
+      sceneIds: [scene.id],
+      estimatesUsd: [estimate.totalUsd],
+    });
+    if (queueResult.outcome === "blocked") return { error: queueResult.error };
+  } else {
+    const { error: queueError } = await admin
+      .from("scenes")
+      .update({ status: "queued", dev: isDev() })
+      .eq("id", scene.id);
 
-  if (queueError) throw new Error(`Failed to queue the clip: ${queueError.message}`);
+    if (queueError) throw new Error(`Failed to queue the clip: ${queueError.message}`);
+  }
 
   revalidatePath(`/ugc/${projectId}`);
 

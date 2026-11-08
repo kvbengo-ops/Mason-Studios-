@@ -541,9 +541,8 @@ export async function uploadIssueImage(args: { file: File }): Promise<string> {
  * access control (no auth check; see the route's own comment).
  */
 export function issueImageStorageKey(file: string): string | null {
-  const match = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/.test(
-    file,
-  );
+  const match =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(png|jpg|gif|webp)$/.test(file);
   return match ? `issue-reports/${file}` : null;
 }
 
@@ -641,12 +640,22 @@ export async function removeStorageObjects(storageKeys: string[]): Promise<void>
  * `download` requests an attachment: true uses the stored filename, or a
  * string supplies a download filename. Omit `transform` for original bytes.
  */
-export async function signedUrl(
+export interface SignedUrlWithExpiry {
+  url: string;
+  expiresInSeconds: number;
+}
+
+/**
+ * Same as `signedUrl`, but also returns the accurate remaining lifetime in seconds
+ * (`1800..3600s` on a cache hit or `expiresInSeconds` on a fresh sign) so
+ * `GET /api/v1/jobs/[id]` never advertises a stale `3600` TTL on a cached URL.
+ */
+export async function signedUrlWithExpiry(
   storageKey: string,
   expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
   transform?: ImageTransform,
   download?: string | boolean,
-): Promise<string> {
+): Promise<SignedUrlWithExpiry> {
   if (transform) {
     assertTransformableImage(storageKey);
   }
@@ -656,7 +665,11 @@ export async function signedUrl(
 
   const cached = signedUrlCache.get(cacheKey);
   if (cached && isSignedUrlCacheEntryFresh(cached, now)) {
-    return cached.url;
+    const remainingSeconds = Math.max(
+      1,
+      cached.expiresInSeconds - Math.ceil((now - cached.cachedAtMs) / 1000),
+    );
+    return { url: cached.url, expiresInSeconds: remainingSeconds };
   }
 
   const admin = createAdminClient();
@@ -677,24 +690,6 @@ export async function signedUrl(
     );
   }
 
-  // A REQUESTED TRANSFORM CAN BE SILENTLY DROPPED, and this is the only
-  // place that can notice. Storage answers a transform request with a
-  // `/render/image/sign/...` URL when the project has image transformations
-  // available and with a plain `/object/sign/...` URL — the ORIGINAL bytes,
-  // no width, no format negotiation — when it does not. storage-js reports
-  // no error either way, so a 96px thumbnail and a 7 MB PNG are the same
-  // successful call from here.
-  //
-  // Verified against the local stack, which has no `/render/image` route at
-  // all: signing the same key with and without a transform returned byte-
-  // identical URLs. Production answers that route, so this fires in local
-  // development — which is exactly where a page can look right while
-  // shipping fifty megabytes, and where the "it is already a thumbnail"
-  // assumption goes unchallenged.
-  //
-  // Warned, not thrown: the original renders correctly, and refusing to
-  // serve a picture because it arrived at full size would break local
-  // development over a performance problem.
   if (transform && !data.signedUrl.includes("/render/image/")) {
     warnTransformDropped(storageKey);
   }
@@ -704,7 +699,17 @@ export async function signedUrl(
   }
   signedUrlCache.set(cacheKey, { url: data.signedUrl, cachedAtMs: now, expiresInSeconds });
 
-  return data.signedUrl;
+  return { url: data.signedUrl, expiresInSeconds };
+}
+
+export async function signedUrl(
+  storageKey: string,
+  expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
+  transform?: ImageTransform,
+  download?: string | boolean,
+): Promise<string> {
+  const { url } = await signedUrlWithExpiry(storageKey, expiresInSeconds, transform, download);
+  return url;
 }
 
 /**
@@ -726,16 +731,63 @@ function warnTransformDropped(storageKey: string): void {
   );
 }
 
-const STAGED_KEY_PATTERN = /^staging\/([0-9a-f-]{36})\/[0-9a-f-]{36}$/;
+const STAGED_KEY_PATTERN =
+  /^staging\/([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+export class StagedUploadError extends Error {
+  constructor(
+    message: string,
+    readonly status: 400 | 403 | 404,
+    readonly code: "invalid_staged_key" | "forbidden_staged_key" | "staged_file_missing",
+  ) {
+    super(message);
+  }
+}
 
 /** A signed URL the browser can upload exactly one object to, under the user's own staging prefix. See lib/staged-upload.ts. */
-export async function createStagedUploadUrl(userId: string): Promise<{ key: string; token: string }> {
+export async function createStagedUploadUrl(
+  userId: string,
+): Promise<{ key: string; token: string; signedUrl: string }> {
   const key = `staging/${userId}/${crypto.randomUUID()}`;
-  const { data, error } = await createAdminClient().storage.from(MEDIA_BUCKET).createSignedUploadUrl(key);
+  const { data, error } = await createAdminClient()
+    .storage.from(MEDIA_BUCKET)
+    .createSignedUploadUrl(key);
   if (error || !data) {
     throw new Error(`createStagedUploadUrl: ${error?.message ?? "no upload token returned"}`);
   }
-  return { key, token: data.token };
+  return { key, token: data.token, signedUrl: data.signedUrl };
+}
+
+/** Downloads and consumes one staged object after verifying its owner prefix. */
+export async function downloadStagedUpload(
+  key: string,
+  userId: string,
+  filename: string,
+  type: string,
+): Promise<File> {
+  const match = STAGED_KEY_PATTERN.exec(key);
+  if (!match) throw new StagedUploadError("Invalid staged upload key.", 400, "invalid_staged_key");
+  if (match[1] !== userId) {
+    throw new StagedUploadError(
+      "That staged upload belongs to another account.",
+      403,
+      "forbidden_staged_key",
+    );
+  }
+
+  const admin = createAdminClient();
+  try {
+    const { data, error } = await admin.storage.from(MEDIA_BUCKET).download(key);
+    if (error || !data) {
+      throw new StagedUploadError("Staged upload was not found.", 404, "staged_file_missing");
+    }
+    return new File([data], filename, { type });
+  } finally {
+    await admin.storage
+      .from(MEDIA_BUCKET)
+      .remove([key])
+      .catch(() => undefined);
+  }
 }
 
 /**
@@ -758,6 +810,9 @@ export async function resolveStagedUploads(formData: FormData, userId: string): 
       throw new Error(`Could not read the uploaded file: ${error?.message ?? "not found"}`);
     }
     formData.set(name, new File([data], staged.filename, { type: staged.type }));
-    await admin.storage.from(MEDIA_BUCKET).remove([staged.key]).catch(() => undefined);
+    await admin.storage
+      .from(MEDIA_BUCKET)
+      .remove([staged.key])
+      .catch(() => undefined);
   }
 }

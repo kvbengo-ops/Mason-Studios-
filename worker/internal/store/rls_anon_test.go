@@ -49,6 +49,7 @@ func TestRLSAnonHasNoTablePrivileges(t *testing.T) {
 	tables := []string{
 		"allowance_grants",
 		"allowance_requests",
+		"api_tokens",
 		"assets",
 		"characters",
 		"chat_conversations",

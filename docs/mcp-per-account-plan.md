@@ -1,6 +1,6 @@
 # Per-account MCP server — plan
 
-2026-10-27 · status: proposal, nothing built
+2026-10-27 · status: superseded by [`docs/personal-api-token-plan.md`](personal-api-token-plan.md) and tracked in [`/TASK.md`](../TASK.md) (REST `/api/v1/*` + personal API tokens; Ced builds his own script/MCP client).
 
 Each account connects its own MCP client (Claude, etc.) to the app with a personal
 token, and can create and queue `/ugc` clips through it. Everything it does runs

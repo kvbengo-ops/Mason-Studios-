@@ -84,6 +84,7 @@ import {
 import type { ActionResult } from "@/lib/action-result";
 import type { ElementCategory } from "@/types/db";
 import { elementUploadNameError } from "@/lib/element-upload-name";
+import { parseMp4DurationSeconds } from "@/lib/mp4-duration";
 import { promptMentionsTag, renameTagInPrompt } from "@/lib/rename-tag";
 
 // Mirrors 0073's CHECK. A category the database refuses is a 500 the operator
@@ -268,31 +269,12 @@ export async function registerElement(formData: FormData): Promise<ActionResult>
   const assetKind =
     kind === "audio" ? "audio" : kind === "video" ? "video_ref" : ("ref_frame" as const);
 
-  // WHAT THE PRICING FORMULA NEEDS AND NOBODY WAS SENDING. kie bills a
-  // render carrying a video reference at Price x (Input + Output), not
-  // Price x Output alone (lib/kie/rates.ts's VIDEO_INPUT_PRICING), and
-  // "Input" is THIS FILE's own duration — a number this action never asked
-  // for until now. Read off the form rather than probed here: this action
-  // has no ffprobe or equivalent, and downloading the file back out of
-  // `image` to decode it server-side would cost a second read of bytes
-  // already in hand for nothing an operator's own browser can't already
-  // tell us — components/ugc-reference-picker.tsx's videoDurationSeconds
-  // (the video twin of audioDurationSeconds, added alongside this) decodes
-  // the file with a <video> element before it ever leaves the browser and
-  // sends the result as this field.
-  //
-  // A CLIENT-SUPPLIED NUMBER IS NOT A RECEIPT, and that gap is left open
-  // rather than papered over: nothing stops a forged small value from
-  // reaching here, which would under-quote exactly the render this task
-  // exists to protect. Closing that for real needs a server-side probe this
-  // action does not have. What is NOT open is the failure-shut direction —
-  // a missing, non-numeric or non-positive value becomes null, never 0 or a
-  // guess, and lib/estimate.ts's estimateCost reads a null assets.duration_s
-  // as license to over-quote the scene without limit rather than under-price
-  // it.
-  const durationSRaw = Number(formData.get("durationS"));
+  // Only a duration parsed from the MP4 bytes is trusted for pricing.
   const measuredVideoDurationS =
-    Number.isFinite(durationSRaw) && durationSRaw > 0 ? durationSRaw : null;
+    kind === "video" ? parseMp4DurationSeconds(new Uint8Array(await image.arrayBuffer())) : null;
+  if (kind === "video" && measuredVideoDurationS === null) {
+    return { error: "That MP4 has no supported movie duration." };
+  }
   // WHERE THE BYTES GO follows the same owner split as the guard above:
   // `projects/<id>/...` when the picker supplied a project, `users/<id>/...`
   // when the Elements Library did (0085 added the second shape). The element

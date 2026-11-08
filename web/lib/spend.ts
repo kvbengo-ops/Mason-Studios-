@@ -86,7 +86,8 @@ import { guardResult, type ActionResult } from "@/lib/action-result";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
 import { estimateCost } from "@/lib/estimate";
 import { isAudioEnabled, mergeRenderSettings } from "@/lib/models";
-import type { ProfileRole } from "@/types/db";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, ProfileRole } from "@/types/db";
 
 /**
  * Parses a *_CAP_USD env var into a non-negative dollar ceiling, or throws.
@@ -513,6 +514,22 @@ export function assertHourlyCapNotExceeded(
   }
 }
 
+export function assertTokenMonthlyCapNotExceeded(
+  monthlySpentUsd: number,
+  estimatedUsd: number,
+  capUsd: number,
+): void {
+  const projectedUsd = monthlySpentUsd + estimatedUsd;
+  if (projectedUsd > capUsd) {
+    throw new Error(
+      `This render would bring this API token's spend this month to $${projectedUsd.toFixed(2)}, over ` +
+        `its $${capUsd.toFixed(2)} monthly cap ($${monthlySpentUsd.toFixed(2)} already used this month, ` +
+        `this render is estimated at $${estimatedUsd.toFixed(2)}). Raise or clear the token's monthly cap ` +
+        "in API Tokens settings. Refusing to enqueue.",
+    );
+  }
+}
+
 /**
  * Refuses when kie.ai's real dollar balance (lib/kie-balance.ts) cannot
  * cover `estimatedUsd`. This is the fourth spend-cap check — global/weekly/
@@ -626,6 +643,15 @@ export function startOfManilaWeekIso(now: Date = new Date()): string {
   const daysSinceMonday = (weekday + 6) % 7;
   const monday = new Date(Date.UTC(year, month, day) - daysSinceMonday * DAY_MS);
   return manilaMidnightUtcIso(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate());
+}
+
+/**
+ * Start of the current Manila calendar month (1st of month 00:00 Manila), as a
+ * UTC ISO timestamp. Used by per-token monthly cap enforcement.
+ */
+export function startOfManilaMonthIso(now: Date = new Date()): string {
+  const { year, month } = manilaDateParts(now);
+  return manilaMidnightUtcIso(year, month, 1);
 }
 
 export function startOfRollingHourIso(now: Date = new Date()): string {
@@ -922,8 +948,7 @@ export async function getGlobalSpend(
   now: Date = new Date(),
 ): Promise<number> {
   const admin = createAdminClient();
-  const start =
-    settings.period === "weekly" ? startOfManilaWeekIso(now) : startOfManilaDayIso(now);
+  const start = settings.period === "weekly" ? startOfManilaWeekIso(now) : startOfManilaDayIso(now);
   return getSpendTotalUsd(admin, start, now.toISOString());
 }
 
@@ -954,6 +979,8 @@ export interface InFlightSpend {
   globalUsd: number;
   /** Per owning account, for weekly, hourly, and daily caps. */
   byUserUsd: Map<string, number>;
+  /** Per API token, for monthly token caps. */
+  byTokenUsd: Map<string, number>;
 }
 
 /**
@@ -995,6 +1022,7 @@ export async function getInFlightSpend(): Promise<InFlightSpend> {
   const admin = createAdminClient();
   const audioEnabled = isAudioEnabled();
   const byUserUsd = new Map<string, number>();
+  const byTokenUsd = new Map<string, number>();
   let globalUsd = 0;
 
   const PAGE = 1000;
@@ -1002,7 +1030,7 @@ export async function getInFlightSpend(): Promise<InFlightSpend> {
     const { data, error } = await admin
       .from("scenes")
       .select(
-        "duration_s, is_talking_head, render_settings_override, projects!inner(user_id, render_settings)",
+        "duration_s, is_talking_head, render_settings_override, api_token_id, estimated_cost_usd, projects!inner(user_id, render_settings), scene_references(kind, assets(duration_s))",
       )
       .in("status", [...IN_FLIGHT_STATUSES])
       // Only this MODE's own rows. Without it, a developer's mocked test
@@ -1045,26 +1073,31 @@ export async function getInFlightSpend(): Promise<InFlightSpend> {
       } | null;
       if (!project) continue;
 
+      const refsRaw = (
+        row as unknown as {
+          scene_references?:
+            | {
+                kind: string;
+                assets: { duration_s: number | null } | { duration_s: number | null }[] | null;
+              }[]
+            | null;
+        }
+      ).scene_references;
+      const videoReferenceDurationsS = Array.isArray(refsRaw)
+        ? refsRaw
+            .filter((r) => r.kind === "video")
+            .map((r) => {
+              const asset = Array.isArray(r.assets) ? r.assets[0] : r.assets;
+              return asset?.duration_s ?? null;
+            })
+        : undefined;
+
       // The scene's own override wins over the project's blob (0045): a
       // scene an earlier retry pinned to another model renders — and bills
       // — on that model, so pricing it at the project's would misstate
       // exactly the scenes that already cost the most.
-      // RAW project settings, not parseRenderSettings(...) first — see
-      // mergeRenderSettings' own doc comment: it merges raw and parses
-      // ONCE, and that order is load-bearing. Parsing the project side
-      // first resolves its resolution/fps against the PROJECT's model
-      // before the override can redirect them, so a project holding a
-      // value illegal for its own model (say LTX at 480p) has it replaced
-      // by LTX's default and then carried onto the overridden model,
-      // instead of the override's model accepting the original. On
-      // Seedance Mini that is 720p where 480p was meant — $0.1547/s
-      // against $0.0721/s, more than double, on the figure a spend cap is
-      // enforced against.
       const settings = mergeRenderSettings(project.render_settings, row.render_settings_override);
-      // character/script_line/video_prompt are unread by estimateCost — it
-      // prices duration and the talking-head route only — so the empty
-      // strings are the shape it asks for, not missing data.
-      const sceneUsd = estimateCost(
+      const computedUsd = estimateCost(
         {
           character: "",
           scenes: [
@@ -1073,6 +1106,9 @@ export async function getInFlightSpend(): Promise<InFlightSpend> {
               video_prompt: "",
               is_talking_head: row.is_talking_head,
               duration_s: row.duration_s,
+              ...(videoReferenceDurationsS && videoReferenceDurationsS.length > 0
+                ? { videoReferenceDurationsS }
+                : {}),
             },
           ],
         },
@@ -1080,13 +1116,23 @@ export async function getInFlightSpend(): Promise<InFlightSpend> {
         settings,
       ).totalUsd;
 
+      const recordedEst = (row as { estimated_cost_usd?: number | null }).estimated_cost_usd;
+      const sceneUsd =
+        typeof recordedEst === "number" && Number.isFinite(recordedEst) && recordedEst > 0
+          ? Math.max(recordedEst, computedUsd)
+          : computedUsd;
+
       globalUsd += sceneUsd;
       byUserUsd.set(project.user_id, (byUserUsd.get(project.user_id) ?? 0) + sceneUsd);
+      const tokenId = (row as { api_token_id?: string | null }).api_token_id;
+      if (tokenId) {
+        byTokenUsd.set(tokenId, (byTokenUsd.get(tokenId) ?? 0) + sceneUsd);
+      }
     }
     if (rows.length < PAGE) break;
   }
 
-  return { globalUsd, byUserUsd };
+  return { globalUsd, byUserUsd, byTokenUsd };
 }
 
 /**
@@ -1114,7 +1160,7 @@ export async function getInFlightSpendSafe(): Promise<InFlightSpend> {
     return await getInFlightSpend();
   } catch (error) {
     console.error("getInFlightSpendSafe: in-flight spend unavailable, holds not counted", error);
-    return { globalUsd: 0, byUserUsd: new Map() };
+    return { globalUsd: 0, byUserUsd: new Map(), byTokenUsd: new Map() };
   }
 }
 
@@ -1475,8 +1521,7 @@ export async function getAccountBudgetSnapshot(
     ? globalSpend.settings.capUsd - globalSpend.spentUsd - inFlight.globalUsd
     : Number.POSITIVE_INFINITY;
   const hourlyCapUsd = profile.hourly_cap_override_usd ?? null;
-  const hourlyRemainingUsd =
-    hourlyCapUsd === null ? null : hourlyCapUsd - hourlySpentUsd - heldUsd;
+  const hourlyRemainingUsd = hourlyCapUsd === null ? null : hourlyCapUsd - hourlySpentUsd - heldUsd;
   const remaining = {
     globalRemainingUsd,
     weeklyRemainingUsd,
@@ -1546,46 +1591,37 @@ export async function getAccountBudgetSnapshot(
  * instance of that window — see each call site's own comment for why that
  * is being stated plainly rather than silently widened.
  */
+export async function getTokenMonthlySpend(
+  tokenId: string,
+  now: Date = new Date(),
+): Promise<number> {
+  const admin = createAdminClient();
+  const monthStart = startOfManilaMonthIso(now);
+  const { data, error } = await admin
+    .from("runs")
+    .select("cost_usd")
+    .eq("api_token_id", tokenId)
+    .not("cost_usd", "is", null)
+    .gte("created_at", monthStart)
+    .lt("created_at", now.toISOString());
+
+  if (error) {
+    throw new Error(`Failed to read token monthly spend for ${tokenId}: ${error.message}`);
+  }
+  return (data ?? []).reduce((sum, r) => sum + (r.cost_usd ?? 0), 0);
+}
+
 export async function assertWithinSpendCaps(
   userId: string,
   profile: AccountCapProfile,
   estimatedUsd: number,
+  options?: {
+    apiTokenId?: string | null;
+    tokenMonthlyCapUsd?: number | null;
+  },
 ): Promise<ActionResult> {
-  // Read-failure handling lives in getKieAccountBalanceUsd itself (return
-  // null, log, never throw) — see its doc comment. null here means "skip
-  // this check," not "there is money": the spend checks below still run
-  // regardless, and the worker's own insufficient-balance handling is the
-  // real backstop.
-  //
-  // Skipped entirely in development. This check asks "does kie have the
-  // money", and a MODE=development scene is written dev=true — claimed
-  // only by a MODE=development worker (see lib/mode.ts), which never calls
-  // a vendor at all — so a real, empty balance would block a render that
-  // was never going to cost anything, which is exactly what it did on a
-  // local machine with a drained vendor account back when this read the
-  // WORKER's own mock-video env var (never set on this process, so it
-  // silently no-op'd) instead of asking this process's own mode. The three
-  // spend caps below still run: they bound what this app allows, mocked or
-  // not, and they are what a test of the cap behaviour should be
-  // exercising.
   const mockedRender = isDev();
 
-  // AN UNPRICEABLE ESTIMATE IS NOT A FUNDING PROBLEM, and saying it is was a
-  // lie about money.
-  //
-  // priceForSecond returns +Infinity for a model/resolution nobody has
-  // priced — deliberately, so an unpriced pair refuses loudly instead of
-  // quoting a guess. But Infinity then flows into the balance gate below,
-  // where `balanceUsd < estimatedUsd` is true against ANY balance, and the
-  // operator was told "the kie.ai account needs additional funding" while the
-  // account held $89. They cannot act on that, and an admin sent to fund the
-  // account would find nothing wrong with it.
-  //
-  // Caught here rather than in assertKieBalanceCoversEstimate because it is
-  // not that function's question: it compares two dollar amounts, and by the
-  // time it is called one of them must be a real one. This is also why the
-  // check sits ahead of every cap — the same Infinity would otherwise breach
-  // whichever cap ran first and blame that instead.
   if (!Number.isFinite(estimatedUsd)) {
     return {
       error:
@@ -1606,10 +1642,6 @@ export async function assertWithinSpendCaps(
     }
   }
 
-  // Renders already committed but not yet in `runs` — see getInFlightSpend
-  // for why every check below would otherwise be blind to them for the
-  // whole length of a render, and getInFlightSpendSafe for why a failed
-  // read degrades instead of refusing.
   const inFlight = await getInFlightSpendSafe();
   const inFlightForUserUsd = inFlight.byUserUsd.get(userId) ?? 0;
 
@@ -1628,10 +1660,6 @@ export async function assertWithinSpendCaps(
 
   const caps = resolveAccountCaps(profile);
 
-  // getEffectiveWeeklyCapUsd, not caps.weeklyCapUsd directly — folds this
-  // account's active allowance_grants (0032_allowance_requests.sql) into the
-  // weekly ceiling. See that function's doc comment: a grant raises this
-  // check's cap only, never the daily one three lines below.
   const [spentThisWeekUsd, effectiveWeeklyCapUsd] = await Promise.all([
     getWeeklySpend(userId),
     getEffectiveWeeklyCapUsd(userId, profile),
@@ -1645,15 +1673,26 @@ export async function assertWithinSpendCaps(
   );
   if (weeklyCapResult) return weeklyCapResult;
 
+  if (options?.apiTokenId && options.tokenMonthlyCapUsd != null) {
+    const tokenId = options.apiTokenId;
+    const tokenCapUsd = options.tokenMonthlyCapUsd;
+    const spentTokenMonthUsd = await getTokenMonthlySpend(tokenId);
+    const inFlightForTokenUsd = inFlight.byTokenUsd.get(tokenId) ?? 0;
+    const tokenCapResult = guardResult(() =>
+      assertTokenMonthlyCapNotExceeded(
+        spentTokenMonthUsd + inFlightForTokenUsd,
+        estimatedUsd,
+        tokenCapUsd,
+      ),
+    );
+    if (tokenCapResult) return tokenCapResult;
+  }
+
   const hourlyCapUsd = profile.hourly_cap_override_usd ?? null;
   if (hourlyCapUsd !== null) {
     const hourlySpentUsd = await getHourlySpend(userId);
     const hourlyCapResult = guardResult(() =>
-      assertHourlyCapNotExceeded(
-        hourlySpentUsd + inFlightForUserUsd,
-        estimatedUsd,
-        hourlyCapUsd,
-      ),
+      assertHourlyCapNotExceeded(hourlySpentUsd + inFlightForUserUsd, estimatedUsd, hourlyCapUsd),
     );
     if (hourlyCapResult) return hourlyCapResult;
   }
@@ -1666,6 +1705,170 @@ export async function assertWithinSpendCaps(
   const spentTodayUsd = (await getDailySpend(userId)) + inFlightForUserUsd;
   return guardResult(() => assertCapNotExceeded(spentTodayUsd, estimatedUsd, caps.dailyCapUsd));
 }
+
+export type QueueScenesOutcome =
+  | { outcome: "queued" }
+  | { outcome: "fenced" }
+  | {
+      outcome: "blocked";
+      blockedBy:
+        "unpriceable" | "kie_balance" | "global" | "weekly" | "token_monthly" | "hourly" | "daily";
+      error: string;
+      code: "spend_cap_exceeded";
+    };
+
+/**
+ * Single-transaction spend-cap check and scene status='queued' transition.
+ *
+ * Acquires `pg_advisory_xact_lock(hashtext('spend-cap:global'))` followed by
+ * `pg_advisory_xact_lock(hashtext('spend-cap:owner:' || userId))` inside
+ * `public.queue_scenes_if_within_caps` (`0127_api_tokens.sql`), re-computes
+ * settled + in-flight spend across global, weekly, token monthly, hourly, and
+ * daily ceilings, and transitions the target scenes to `status = 'queued'`
+ * in the same PostgreSQL transaction.
+ */
+export async function queueScenesIfWithinCaps(params: {
+  admin?: SupabaseClient<Database>;
+  projectId: string;
+  userId: string;
+  profile: AccountCapProfile;
+  sceneIds: string[];
+  estimatesUsd: number[];
+  override?: unknown;
+  apiTokenId?: string | null;
+  prepareToken?: string | null;
+  now?: Date;
+}): Promise<QueueScenesOutcome> {
+  const { projectId, userId, profile, sceneIds, estimatesUsd } = params;
+  if (sceneIds.length === 0 || sceneIds.length !== estimatesUsd.length) {
+    throw new Error(
+      "queueScenesIfWithinCaps requires non-empty matching sceneIds and estimatesUsd",
+    );
+  }
+
+  for (const est of estimatesUsd) {
+    if (!Number.isFinite(est) || est <= 0) {
+      return {
+        outcome: "blocked",
+        blockedBy: "unpriceable",
+        code: "spend_cap_exceeded",
+        error:
+          "This clip cannot be priced, so it was not queued — nobody has been billed for this " +
+          "model at this resolution yet, and rendering it would spend an unknown amount. This is " +
+          "a configuration gap, not a problem with your account or the balance. Pick another " +
+          "model, or ask an admin to price this one.",
+      };
+    }
+  }
+
+  const totalEstimateUsd = estimatesUsd.reduce((sum, v) => sum + v, 0);
+
+  if (!isDev() && totalEstimateUsd > 0) {
+    const balanceUsd = await getKieAccountBalanceUsd();
+    if (balanceUsd !== null) {
+      const balanceResult = guardResult(() =>
+        assertKieBalanceCoversEstimate(balanceUsd, totalEstimateUsd),
+      );
+      if (balanceResult) {
+        return {
+          outcome: "blocked",
+          blockedBy: "kie_balance",
+          code: "spend_cap_exceeded",
+          error: balanceResult.error,
+        };
+      }
+    }
+  }
+
+  const admin = params.admin ?? createAdminClient();
+  const now = params.now ?? new Date();
+  const caps = resolveAccountCaps(profile);
+  const [effectiveWeeklyCapUsd, dailyCapEnabled, globalSpendCap] = await Promise.all([
+    getEffectiveWeeklyCapUsd(userId, profile),
+    getUserDailyCapEnabled(),
+    getGlobalSpendCapSettings(),
+  ]);
+
+  const { data, error } = await admin.rpc("queue_scenes_if_within_caps", {
+    p_project_id: projectId,
+    p_scene_ids: sceneIds,
+    p_expected_user_id: userId,
+    p_scene_estimates_usd: estimatesUsd,
+    p_dev: isDev(),
+    p_override: params.override ?? null,
+    p_day_start_ts: startOfManilaDayIso(now),
+    p_week_start_ts: startOfManilaWeekIso(now),
+    p_month_start_ts: startOfManilaMonthIso(now),
+    // Rolling hour: the SQL reads NULL as now - 1 hour. PostgREST still needs the key.
+    p_hour_start_ts: null,
+    p_now_ts: now.toISOString(),
+    p_global_cap_usd: globalSpendCap.capUsd,
+    p_global_cap_enabled: globalSpendCap.enabled,
+    p_global_cap_period: globalSpendCap.period,
+    p_weekly_cap_usd: effectiveWeeklyCapUsd,
+    p_daily_cap_usd: caps.dailyCapUsd,
+    p_daily_cap_enabled: dailyCapEnabled,
+    p_hourly_cap_usd: profile.hourly_cap_override_usd ?? null,
+    p_api_token_id: params.apiTokenId ?? null,
+    p_prepare_token: params.prepareToken ?? null,
+  });
+
+  if (error) {
+    throw new Error(`Failed to queue scenes within spend caps: ${error.message}`);
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    throw new Error("queue_scenes_if_within_caps returned no row");
+  }
+
+  if (row.outcome === "queued") {
+    return { outcome: "queued" };
+  }
+  if (row.outcome === "fenced") {
+    return { outcome: "fenced" };
+  }
+
+  const spentUsd = Number(row.spent_usd ?? 0);
+  const capUsd = Number(row.cap_usd ?? 0);
+  const blockedBy = row.blocked_by ?? "weekly";
+
+  let message = "Spend cap exceeded. Refusing to enqueue.";
+  if (blockedBy === "global") {
+    message =
+      guardResult(() =>
+        assertGlobalCapNotExceeded(spentUsd, totalEstimateUsd, capUsd, globalSpendCap.period),
+      )?.error ?? message;
+  } else if (blockedBy === "weekly") {
+    message =
+      guardResult(() => assertWeeklyCapNotExceeded(spentUsd, totalEstimateUsd, capUsd))?.error ??
+      message;
+  } else if (blockedBy === "token_monthly") {
+    message =
+      guardResult(() => assertTokenMonthlyCapNotExceeded(spentUsd, totalEstimateUsd, capUsd))
+        ?.error ?? message;
+  } else if (blockedBy === "hourly") {
+    message =
+      guardResult(() => assertHourlyCapNotExceeded(spentUsd, totalEstimateUsd, capUsd))?.error ??
+      message;
+  } else if (blockedBy === "daily") {
+    message =
+      guardResult(() => assertCapNotExceeded(spentUsd, totalEstimateUsd, capUsd))?.error ?? message;
+  }
+
+  return {
+    outcome: "blocked",
+    blockedBy,
+    code: "spend_cap_exceeded",
+    error: message,
+  };
+}
+
+(
+  assertWithinSpendCaps as typeof assertWithinSpendCaps & {
+    queueScenes?: typeof queueScenesIfWithinCaps;
+  }
+).queueScenes = queueScenesIfWithinCaps;
 
 // ---------------------------------------------------------------------------
 // The Image Generator's ceilings (0083_image_generator.sql).
@@ -1727,7 +1930,7 @@ export async function resolveImageAttemptCeilings(
   profile: AccountCapProfile,
   now: Date = new Date(),
 ): Promise<ImageAttemptCeilings> {
-  let inFlight: InFlightSpend = { globalUsd: 0, byUserUsd: new Map() };
+  let inFlight: InFlightSpend = { globalUsd: 0, byUserUsd: new Map(), byTokenUsd: new Map() };
   try {
     inFlight = await getInFlightSpend();
   } catch (error) {

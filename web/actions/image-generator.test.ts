@@ -1,4 +1,4 @@
-// resolvePromptReferences (actions/image-generator.ts): the regression test
+// resolvePromptReferences (lib/image-generation.ts): the regression test
 // for the cross-feature leak this /ugc voice-description change would
 // otherwise open.
 //
@@ -14,7 +14,7 @@
 // silently makes no sense.
 
 import { describe, expect, it, vi } from "vitest";
-import { resolvePromptReferences } from "./image-generator";
+import { resolvePromptReferences } from "@/lib/image-generation";
 
 // signedUrl is the only other thing this function touches outside the fake
 // admin client — mocked rather than exercising the real Supabase signing
