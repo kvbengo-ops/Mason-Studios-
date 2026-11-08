@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SidebarShell } from "./sidebar-shell";
-import { EXPECTED_DB_VERSION } from "@/lib/version";
 
 vi.mock("@/actions/auth", () => ({
   signOut: vi.fn(async () => undefined),
@@ -42,8 +41,6 @@ describe("SidebarShell", () => {
         showAllowanceLink={true}
         decidableRequestCount={null}
         defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion={EXPECTED_DB_VERSION}
       />,
     );
 
@@ -75,8 +72,6 @@ describe("SidebarShell", () => {
         showAllowanceLink={true}
         decidableRequestCount={null}
         defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion={EXPECTED_DB_VERSION}
       />,
     );
 
@@ -124,8 +119,6 @@ describe("SidebarShell", () => {
         showAllowanceLink={false}
         decidableRequestCount={null}
         defaultCollapsed={true}
-        buildSha="10ba25c"
-        dbVersion={EXPECTED_DB_VERSION}
       />,
     );
 
@@ -133,87 +126,6 @@ describe("SidebarShell", () => {
     expect(within(projectsLink).getByText("Studio").className).toContain("md:hidden");
     expect(screen.queryByRole("button", { name: /collapse sidebar/i })).toBeNull();
     expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeTruthy();
-  });
-});
-
-describe("SidebarShell build/db version footer", () => {
-  it("renders the matching version in the normal muted style, and copies the full string on click", async () => {
-    const user = userEvent.setup();
-    // jsdom has no Clipboard API implementation of its own, and
-    // `navigator.clipboard` is a getter-only accessor — Object.assign can't
-    // touch it, so it has to be replaced via defineProperty instead.
-    const writeText = vi.fn(async () => undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-
-    render(
-      <SidebarShell
-        showAdminLinks={false}
-        showAllowanceLink={false}
-        decidableRequestCount={null}
-        defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion={EXPECTED_DB_VERSION}
-      />,
-    );
-
-    const line = screen.getByRole("button", { name: `10ba25c · db ${EXPECTED_DB_VERSION}` });
-    expect(line.className).not.toContain("text-warning");
-
-    await user.click(line);
-    expect(writeText).toHaveBeenCalledWith(`10ba25c · db ${EXPECTED_DB_VERSION}`);
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
-  });
-
-  it("renders a mismatched db version as a warning", () => {
-    render(
-      <SidebarShell
-        showAdminLinks={false}
-        showAllowanceLink={false}
-        decidableRequestCount={null}
-        defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion="0001"
-      />,
-    );
-
-    const line = screen.getByRole("button", { name: "10ba25c · db 0001" });
-    expect(line.className).toContain("text-warning");
-  });
-
-  it("renders db ? in the normal (non-warning) style when the read failed or the migration hasn't landed", () => {
-    render(
-      <SidebarShell
-        showAdminLinks={false}
-        showAllowanceLink={false}
-        decidableRequestCount={null}
-        defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion={null}
-      />,
-    );
-
-    const line = screen.getByRole("button", { name: "10ba25c · db ?" });
-    expect(line.className).not.toContain("text-warning");
-  });
-
-  it("renders nothing when collapsed", () => {
-    render(
-      <SidebarShell
-        showAdminLinks={false}
-        showAllowanceLink={false}
-        decidableRequestCount={null}
-        defaultCollapsed={true}
-        buildSha="10ba25c"
-        dbVersion={EXPECTED_DB_VERSION}
-      />,
-    );
-
-    expect(
-      screen.queryByRole("button", { name: `10ba25c · db ${EXPECTED_DB_VERSION}` }),
-    ).toBeNull();
   });
 });
 
@@ -229,8 +141,6 @@ describe("SidebarShell — the strip steps aside inside a project", () => {
         showAllowanceLink={false}
         decidableRequestCount={null}
         defaultCollapsed={false}
-        buildSha="10ba25c"
-        dbVersion="0057"
       />,
     );
     return container.querySelector("aside")?.className ?? "";
@@ -269,8 +179,6 @@ describe("SidebarShell allowance badge", () => {
         showAllowanceLink={true}
         decidableRequestCount={count}
         defaultCollapsed={false}
-        buildSha="abc1234"
-        dbVersion="0074"
       />,
     );
   }

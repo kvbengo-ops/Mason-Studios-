@@ -14,7 +14,6 @@ import { NavLinks } from "@/components/nav-links";
 import { MaisonLogo, MaisonWordmark } from "@/components/maison-logo";
 import { ThemePicker } from "@/components/theme-picker";
 import { ReportIssueDialog } from "@/components/report-issue-dialog";
-import { EXPECTED_DB_VERSION } from "@/lib/version";
 import { cn } from "@/lib/utils";
 
 const COOKIE_NAME = "sidebar-collapsed";
@@ -22,77 +21,11 @@ const COOKIE_NAME = "sidebar-collapsed";
 // should hold across sessions, not just the current tab.
 const COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365;
 
-// How long the "Copied" feedback stays up after a click — long enough to
-// register, short enough that it's plainly tied to the click that caused it.
-const COPY_FEEDBACK_MS = 1500;
-
-/**
- * Diagnostic footer line: `<sha> · db <version>`. Exists so a code-ahead-of-
- * migration deploy is visible at a glance instead of silent — see
- * app/(app)/layout.tsx (where both values are read, each with its own
- * fail-soft fallback) and lib/version.ts (BUILD_SHA / EXPECTED_DB_VERSION).
- * Deliberately quiet: muted text, no icon, no border of its own — this is
- * something to notice while debugging, not something to navigate.
- */
-function BuildVersionLine({
-  buildSha,
-  dbVersion,
-}: {
-  buildSha: string;
-  /** null means the RPC read failed or the migration isn't applied yet —
-   * see app/(app)/layout.tsx's fail-soft wrapper. Rendered as "db ?", not
-   * a warning: that's the expected state before the migration lands. */
-  dbVersion: string | null;
-}): JSX.Element {
-  const [copied, setCopied] = useState(false);
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return (): void => {
-      if (copyTimer.current) clearTimeout(copyTimer.current);
-    };
-  }, []);
-
-  const label = `${buildSha} · db ${dbVersion ?? "?"}`;
-  // Only an actual mismatch is a warning — a null dbVersion (RPC not there
-  // yet, or a transient read failure) is the ordinary pre-migration state,
-  // not evidence the DB is behind.
-  const isStale = dbVersion !== null && dbVersion !== EXPECTED_DB_VERSION;
-
-  async function handleCopy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(label);
-    } catch (error) {
-      console.error("Failed to copy build/db version to clipboard", error);
-      return;
-    }
-    if (copyTimer.current) clearTimeout(copyTimer.current);
-    setCopied(true);
-    copyTimer.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      title={isStale ? `DB is behind — expected ${EXPECTED_DB_VERSION}` : undefined}
-      className={cn(
-        "w-full truncate rounded px-1 text-left text-[11px] outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-        isStale ? "font-medium text-warning" : "text-muted-foreground",
-      )}
-    >
-      {copied ? "Copied" : label}
-    </button>
-  );
-}
-
 export function SidebarShell({
   showAdminLinks,
   showAllowanceLink,
   decidableRequestCount,
   defaultCollapsed,
-  buildSha,
-  dbVersion,
 }: {
   showAdminLinks: boolean;
   showAllowanceLink: boolean;
@@ -103,11 +36,6 @@ export function SidebarShell({
    * choice — no expand-then-snap-collapsed flash while this component
    * hydrates. */
   defaultCollapsed: boolean;
-  /** lib/version.ts's BUILD_SHA, already truncated to 7 chars. */
-  buildSha: string;
-  /** applied_schema_version() via app/(app)/layout.tsx's fail-soft wrapper —
-   * null on any read failure, not just "not migrated yet". */
-  dbVersion: string | null;
 }): JSX.Element {
   const pathname = usePathname();
 
@@ -264,10 +192,9 @@ export function SidebarShell({
       <div className="border-t border-sidebar-border pt-2">
         {/* Same footer, right next to the account control — a display
             preference, not an account setting, so it doesn't belong inside
-            AccountMenu's dropdown. Unlike BuildVersionLine below, this stays
-            visible collapsed: ThemePicker already follows the collapse rule
-            itself (icon-only, label md:hidden), matching the collapse
-            button up in the header rather than disappearing outright. */}
+            AccountMenu's dropdown. This stays visible collapsed: ThemePicker
+            follows the collapse rule itself (icon-only, label md:hidden),
+            matching the collapse button up in the header. */}
         {/* REACHABLE FROM EVERY PAGE, which is the only placement that
             works: a problem is noticed wherever it happens, and a report
             button that lives on one screen is a report button people
@@ -283,10 +210,6 @@ export function SidebarShell({
             two icons reads as a toolbar, which is a different promise. */}
         <ThemePicker collapsed={collapsed} />
         <ReportIssueDialog collapsed={collapsed} />
-        {/* md:hidden when collapsed, same rule as every other footer label
-            here — at md:w-16 there's no room for it, and it's diagnostic,
-            not something worth keeping around at icon-only width. */}
-        {!collapsed ? <BuildVersionLine buildSha={buildSha} dbVersion={dbVersion} /> : null}
       </div>
     </aside>
   );

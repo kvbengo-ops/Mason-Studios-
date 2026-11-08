@@ -6,8 +6,6 @@ import { TopBar } from "@/components/top-bar";
 import { getSidebarBudget, getDecidableRequestCount } from "@/lib/sidebar-budget";
 import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
 import { RenderTimer } from "@/lib/perf-log";
-import { readAppliedSchemaVersion } from "@/lib/db-version";
-import { BUILD_SHA } from "@/lib/version";
 import { getRecentNotifications, getUnreadNotificationCount } from "@/lib/notifications";
 import { HostedDbWarning } from "@/components/hosted-db-warning";
 import { UploadProgressProvider } from "@/components/upload-progress-store";
@@ -77,7 +75,6 @@ export default async function AppLayout({
     unreadNotificationCount,
     recentNotifications,
     avatarUrl,
-    dbVersion,
     sidebarCollapsedCookie,
   ] = await Promise.all([
     timer.step("budget", getSidebarBudget(user.id, profile)),
@@ -113,12 +110,6 @@ export default async function AppLayout({
         }
       })(),
     ),
-    // Same fail-soft shape as the avatar read above — see
-    // lib/db-version.ts's own header for the full contract (a missing
-    // function, a network hiccup, or an RLS/auth surprise must degrade to
-    // `null` and let the sidebar footer render `db ?`, never take the shell
-    // down).
-    timer.step("db_version", readAppliedSchemaVersion()),
     // Read, not written, here — SidebarShell (a Client Component) is the
     // one that writes this cookie on toggle, via document.cookie, since
     // it's a pure display preference with no server-side consequence worth
@@ -183,8 +174,6 @@ export default async function AppLayout({
           showAllowanceLink={isApprover(profile)}
           decidableRequestCount={decidableRequestCount}
           defaultCollapsed={sidebarCollapsed}
-          buildSha={BUILD_SHA}
-          dbVersion={dbVersion}
         />
 
         <div className="relative flex min-w-0 flex-1 flex-col md:h-svh">
