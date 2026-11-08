@@ -386,13 +386,12 @@ function firstLine(text: string | null | undefined): string {
 
 export interface AccountsRunLogRow {
   id: string;
+  userId: string | null;
   model: string;
   /** runs.vendor as a person reads it: "kie", "BytePlus". */
   provider: string;
   costUsd: number | null;
   error: string | null;
-  createdAt: string;
-  projectTitle: string | null;
   thumbnail: BinCardThumbnail;
 }
 
@@ -430,7 +429,7 @@ export function sceneTimeKey(sceneId: string, createdAt: string): string {
  * One page of every run in the same `windowDays` window as the overview — the
  * log that used to live on /spend behind its own date picker. `projects` is
  * embedded off runs.project_id (not through scenes) so a scene-less run still
- * names its project. Each row carries its provider and a preview of what it
+ * resolves its owner. Each row carries its provider and a preview of what it
  * made; a preview that cannot be found or signed is a placeholder, never an
  * error, because the run log matters more than its pictures.
  */
@@ -445,7 +444,7 @@ export async function loadAccountsRunLog(
   const { data, error, count } = await supabase
     .from("runs")
     .select(
-      "id, model, vendor, cost_usd, error, created_at, scene_id, asset_id, projects ( title )",
+      "id, model, vendor, cost_usd, error, created_at, scene_id, asset_id, user_id, projects ( user_id )",
       { count: "exact" },
     )
     .gte("created_at", windowStart.toISOString())
@@ -462,7 +461,8 @@ export async function loadAccountsRunLog(
     created_at: string;
     scene_id: string | null;
     asset_id: string | null;
-    projects: { title: string } | null;
+    user_id: string | null;
+    projects: { user_id: string } | null;
   }[];
 
   const assetIds = [...new Set(rows.flatMap((run) => (run.asset_id ? [run.asset_id] : [])))];
@@ -518,12 +518,11 @@ export async function loadAccountsRunLog(
   return {
     rows: rows.map((run, i) => ({
       id: run.id,
+      userId: run.user_id ?? run.projects?.user_id ?? null,
       model: run.model,
       provider: providerLabel(run.vendor),
       costUsd: run.cost_usd,
       error: run.error,
-      createdAt: run.created_at,
-      projectTitle: run.projects?.title ?? null,
       thumbnail: thumbnails[i]!,
     })),
     total: count ?? 0,

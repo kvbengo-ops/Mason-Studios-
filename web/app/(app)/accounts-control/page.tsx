@@ -619,6 +619,7 @@ export default async function AccountsControlPage({
       : null,
   ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
+  const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
   const selectedAccount =
     overview.accounts.find((account) => account.id === requestedUserId) ??
     overview.accounts[0] ??
@@ -1281,15 +1282,15 @@ export default async function AccountsControlPage({
           ) : (
             <div className="flex flex-col gap-5">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Every recorded attempt across the team, including failures. Costs are in USD.
+                Every recorded attempt across the team, including failures. Costs are in USD. CSV
+                preview links expire after one hour.
               </p>
               <div className="overflow-hidden rounded-xl border border-border">
                 <Table className="min-w-[840px]">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Preview</TableHead>
-                      <TableHead className="whitespace-nowrap">Date</TableHead>
-                      <TableHead>Project</TableHead>
+                      <TableHead>User email</TableHead>
                       <TableHead>Provider</TableHead>
                       <TableHead className="whitespace-nowrap">Model</TableHead>
                       <TableHead numeric>Cost</TableHead>
@@ -1308,11 +1309,8 @@ export default async function AccountsControlPage({
                             />
                           </div>
                         </TableCell>
-                        <TableCell className="whitespace-nowrap py-4 text-xs text-muted-foreground">
-                          {dateTimeFormatter.format(new Date(run.createdAt))}
-                        </TableCell>
-                        <TableCell className="min-w-36 py-4 font-medium">
-                          {run.projectTitle ?? "—"}
+                        <TableCell className="min-w-36 break-words py-4 font-medium">
+                          {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
                         </TableCell>
                         <TableCell className="whitespace-nowrap py-4 text-xs">
                           {run.provider}
