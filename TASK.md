@@ -205,12 +205,23 @@
 
 ---
 
+### T9 — Hosted MCP connector (`/api/mcp`)
+- **Status:** `[~]` Implemented 2026-11-09 on `feat/hosted-mcp`; free paths verified against a local web server on prod data; needs CI + deploy + a claude.ai connector test
+- **Files:** `web/app/api/mcp/route.ts`, `web/app/api/mcp/route.test.ts`, `web/lib/supabase/middleware.ts` (`/api/mcp` public, like `/api/v1`)
+- **Shape:** Streamable HTTP, stateless JSON (no SSE, no session id; `GET` → 405). A thin adapter: every tool calls the matching `/api/v1` route handler in-process with the caller's token, so auth, scopes, rate limits, validation, idempotency and spend caps are the API's own.
+- **Auth:** `?token=ms_live_…` on the connector URL (owner's choice, 2026-11-09) or `Authorization: Bearer`. Risk: the URL is the credential and may appear in access logs; revoke the token to cut it off. OAuth is the upgrade path.
+- **Tools (6):** `list_elements`, `quote_clip`, `generate_clip`, `get_job`, `generate_image`, `get_image`. No upload tool (a hosted fetch-a-URL tool is an SSRF surface; chat attachments never reach a connector) — upload in the web app.
+- **Verified locally:** no token → 401; `initialize` (2025-06-18) → 200; `notifications/initialized` → 202; `tools/list` → 6; `list_elements` and `get_job` (serum clip, done, $0.80) through the adapter; `GET` → 405.
+- **Use:** claude.ai / Desktop / mobile → Settings → Connectors → Add custom connector → `https://app.vbgstudio.site/api/mcp?token=ms_live_…`
+
+---
+
 ### Next steps
 1. **Revoke the token pasted into the 2026-11-09 session** and mint a new one for the MCP wrapper.
-2. Branch, commit, push; read CI and fix what it finds. Any further SQL fix is a **new** migration (`0127`/`0128` are in prod).
-3. Merge, then deploy `ugc-web` manually (`autoDeploy: false`); `/api/health` should read `aligned` at `0128`. The worker needs no deploy.
-4. Paid smoke tests: one image via `/api/v1/images`, one clip proving the `/create` wall fix, one Element upload.
-5. Optional: hosted `/api/mcp` for the Claude web app; comment-only `0129` restoring `reserve_image_attempt`'s notes.
+2. ~~Branch, commit, push; read CI and fix what it finds.~~ Done — PR #15 green and merged; prod `/api/health` `aligned` at `0128`. Any further SQL fix is a **new** migration.
+3. ~~Merge, then deploy `ugc-web`.~~ Done.
+4. Paid smoke tests: ~~one image via `/api/v1/images`~~, ~~one clip proving the `/create` wall fix~~ (both done), one Element upload (pending).
+5. T9: CI, deploy, then add the connector in claude.ai and run one prompt end to end. Optional: comment-only `0129` restoring `reserve_image_attempt`'s notes.
 
 ---
 
