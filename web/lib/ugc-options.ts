@@ -54,7 +54,7 @@ export function ugcOptions(withSound: boolean): UgcOption[] {
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;
     return {
       modelId: offer.model.id,
-      label: offer.model.label,
+      label: offer.model.id === "seedance-2.5" ? `${offer.model.label} · Kie` : offer.model.label,
       resolution: offer.resolution,
       durationsS: offer.model.durationsS,
       creditsPerSecond: rate.creditsPerSecond,

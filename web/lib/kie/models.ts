@@ -149,7 +149,7 @@ export const GEMINI_OMNI_VIDEO: KieModel = {
 export const SEEDANCE_2_5: KieModel = {
   id: "seedance-2.5",
   kieModelName: "bytedance/seedance-2-5",
-  label: "Seedance 2.5 · Kie",
+  label: "Seedance 2.5",
   resolutions: ["480p", "720p", "1080p"],
   // 480P, not 720P. The old table had no 480P entry at all, so every render
   // went out at 2.25x the cheapest available rate — and this is the tier the
