@@ -2,28 +2,30 @@ import { describe, expect, it } from "vitest";
 import { buildAccountsRunsCsv } from "./accounts-runs-csv";
 
 describe("buildAccountsRunsCsv", () => {
-  it("exports account, provider, USD, Kie credits, and video duration safely", () => {
+  it("matches the All Runs columns and escapes spreadsheet data", () => {
     expect(
       buildAccountsRunsCsv([
         {
-          username: "=alice",
-          model: "seedance-2.5",
+          preview: "https://example.com/preview.jpg",
+          userEmail: "=alice@example.com",
           provider: "kie",
+          model: "seedance-2.5",
           costUsd: 0.56,
-          durationS: 4,
+          details: "failed, then retried",
         },
         {
-          username: "bob",
-          model: "seedance-2.5",
+          preview: null,
+          userEmail: "bob@example.com",
           provider: "BytePlus",
+          model: "seedance-2.5",
           costUsd: 0.12,
-          durationS: null,
+          details: null,
         },
       ]),
     ).toBe(
-      "username,model,provider,cost_usd,kie_credits,duration_s\r\n" +
-        "'=alice,seedance-2.5,kie,0.56,112,4\r\n" +
-        "bob,seedance-2.5,BytePlus,0.12,,\r\n",
+      "preview,user_email,provider,model,cost_usd,details\r\n" +
+        "https://example.com/preview.jpg,'=alice@example.com,kie,seedance-2.5,0.56,\"failed, then retried\"\r\n" +
+        ",bob@example.com,BytePlus,seedance-2.5,0.12,\r\n",
     );
   });
 });

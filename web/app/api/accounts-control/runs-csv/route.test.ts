@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET } from "./route";
 import { AuthorizationError, requireAdmin } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
+import { signedUrl } from "@/lib/storage";
+import type * as StorageModule from "@/lib/storage";
 
 vi.mock("@/actions/guard", () => ({
   requireAdmin: vi.fn(),
@@ -10,6 +12,10 @@ vi.mock("@/actions/guard", () => ({
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
+}));
+vi.mock("@/lib/storage", async (importOriginal) => ({
+  ...(await importOriginal<typeof StorageModule>()),
+  signedUrl: vi.fn(async () => "https://signed.example/preview.jpg"),
 }));
 
 const mockedRequireAdmin = vi.mocked(requireAdmin);
@@ -61,7 +67,7 @@ describe("GET /api/accounts-control/runs-csv", () => {
         }
         return {
           select: () => ({
-            in: async () => ({ data: [{ id: "u1", username: "alice" }], error: null }),
+            in: async () => ({ data: [{ id: "u1", email: "alice@example.com" }], error: null }),
           }),
         };
       },
@@ -72,7 +78,68 @@ describe("GET /api/accounts-control/runs-csv", () => {
     const csv = await response.text();
     expect(response.status).toBe(200);
     expect(runPageRequests).toBe(2);
-    expect(csv.match(/alice,bytedance\/seedance-2-5,kie,0\.56,112,4/g)).toHaveLength(1001);
+    expect(csv.startsWith("preview,user_email,provider,model,cost_usd,details\r\n")).toBe(
+      true,
+    );
+    expect(csv.match(/,alice@example\.com,kie,bytedance\/seedance-2-5,0\.56,/g)).toHaveLength(
+      1001,
+    );
     expect(response.headers.get("Content-Disposition")).toContain("all-runs.csv");
+  });
+
+  it("exports a signed preview link and the run's error", async () => {
+    mockedRequireAdmin.mockResolvedValue({ user: {} as never, profile: {} as never });
+    mockedCreateClient.mockResolvedValue({
+      from(table: string) {
+        if (table === "runs") {
+          return {
+            select: () => ({
+              order: () => ({
+                order: () => ({
+                  range: async () => ({
+                    data: [
+                      {
+                        asset_id: "asset-1",
+                        scene_id: null,
+                        created_at: "2026-11-08T00:00:00Z",
+                        error: "Failed render",
+                        model: "image-model",
+                        vendor: "kie",
+                        cost_usd: 0.02,
+                        user_id: "u1",
+                        projects: null,
+                      },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === "profiles") {
+          return {
+            select: () => ({
+              in: async () => ({ data: [{ id: "u1", email: "alice@example.com" }], error: null }),
+            }),
+          };
+        }
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [{ id: "asset-1", storage_key: "users/u1/image.png" }],
+              error: null,
+            }),
+          }),
+        };
+      },
+    } as unknown as Awaited<ReturnType<typeof createClient>>);
+
+    const response = await GET(makeRequest());
+    expect(response.status).toBe(200);
+    expect(signedUrl).toHaveBeenCalledWith("users/u1/image.png");
+    expect(await response.text()).toContain(
+      "https://signed.example/preview.jpg,alice@example.com,kie,image-model,0.02,Failed render",
+    );
   });
 });
