@@ -40,6 +40,7 @@ import type { UgcOption } from "@/components/ugc-column";
 // offerable() still prices and validates the rest, so old scenes stay readable.
 // kling-4.0-reference is Kling 4.0's References mode, not a separate model.
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
+  "seedance-2.5",
   "seedance-2.5-byteplus",
   "kling-4.0",
   "kling-4.0-reference",

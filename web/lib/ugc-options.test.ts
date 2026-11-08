@@ -16,6 +16,9 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
+      "seedance-2.5/480p",
+      "seedance-2.5/720p",
+      "seedance-2.5/1080p",
       "seedance-2.5-byteplus/480p",
       "seedance-2.5-byteplus/720p",
       "seedance-2.5-byteplus/1080p",
@@ -39,6 +42,7 @@ describe("ugcOptions(true) — the sound picker", () => {
     );
     const bySecond = Object.fromEntries(firsts.map((o) => [o.modelId, o.videoCreditsPerSecond]));
     expect(bySecond).toEqual({
+      "seedance-2.5": 17,
       "seedance-2.5-byteplus": 12.2976,
       "kling-4.0": null,
       "kling-4.0-reference": null,
@@ -48,12 +52,16 @@ describe("ugcOptions(true) — the sound picker", () => {
   });
 
   it("never shows a hidden model, even one offerable() still prices", () => {
-    for (const id of ["seedance-2.5", "seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
+    for (const id of ["seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
       expect(
         options.some((o) => o.modelId === id),
         id,
       ).toBe(false);
     }
+  });
+
+  it("labels the restored option as Kie", () => {
+    expect(options[0]?.label).toBe("Seedance 2.5 · Kie");
   });
 
   it("never offers Hailuo — it has no sound rate at all", () => {
@@ -98,6 +106,9 @@ describe("ugcOptions(false) — the silent picker", () => {
 
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
+      "seedance-2.5/480p/28",
+      "seedance-2.5/720p/63",
+      "seedance-2.5/1080p/158",
       "seedance-2.5-byteplus/480p/20.56005",
       "seedance-2.5-byteplus/720p/46.224",
       "seedance-2.5-byteplus/1080p/113.724",
