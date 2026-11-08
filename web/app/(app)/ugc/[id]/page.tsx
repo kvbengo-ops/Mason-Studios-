@@ -12,11 +12,15 @@
 // disagree. `?v=` is which attempt is being LOOKED at, which is a different
 // fact from which one is current: only Make current writes that.
 
-import type { JSX } from "react";
+import { Suspense, type JSX } from "react";
 import Link from "next/link";
 import { ArrowLeftIcon, DownloadIcon } from "lucide-react";
 import { requireProjectReadable } from "@/actions/guard";
-import { CreateModeSwitch } from "@/components/create-mode-switch";
+import {
+  CreateModeContent,
+  CreateModeSkeleton,
+  CreateModeSwitch,
+} from "@/components/create-mode-switch";
 import { ImageGeneratorConsole } from "@/components/image-generator-console";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
 import type { RenderBudgetFigures } from "@/lib/render-budget";
@@ -153,7 +157,11 @@ export default async function UgcPage({
             videoHref={videoHref}
           />
         </header>
-        <ImageGeneratorConsole />
+        <CreateModeContent video={false} projectVideo>
+          <Suspense fallback={<CreateModeSkeleton video={false} />}>
+            <ImageGeneratorConsole />
+          </Suspense>
+        </CreateModeContent>
       </div>
     );
   }
@@ -894,56 +902,57 @@ export default async function UgcPage({
         />
       </div>
 
-      {/* Scenes | result | versions: the result takes the middle and the
-          full height, which it needs for a 9:16 clip. */}
-      {/* Down to the bottom of the screen, under the floating bar: -mt-48 on
-          the dock below lets it overlap this row, and every scroller in the
-          row (scenes, versions) plus the result gets pb-48 so its last item
-          can scroll clear of the bar. */}
-      <div className="flex min-h-[26rem] flex-col gap-4 xl:h-[calc(100svh-8.5rem)] xl:flex-row xl:items-stretch xl:[&_.overflow-y-auto]:pb-48">
-        <UgcSceneStrip
-          vertical
-          projectId={project.id}
-          scenes={stripScenes}
-          selectedSceneId={selected?.id ?? null}
-          selectedVersionId={selectedVersionId}
-          readOnly={!isOwner}
-        />
-        {/* A FIXED height, not a minimum: the rail beside it scrolls, and if
+      <CreateModeContent video projectVideo>
+        {/* Scenes | result | versions: the result takes the middle and the
+            full height, which it needs for a 9:16 clip. */}
+        {/* Down to the bottom of the screen, under the floating bar: -mt-48 on
+            the dock below lets it overlap this row, and every scroller in the
+            row (scenes, versions) plus the result gets pb-48 so its last item
+            can scroll clear of the bar. */}
+        <div className="flex min-h-[26rem] flex-col gap-4 xl:h-[calc(100svh-8.5rem)] xl:flex-row xl:items-stretch xl:[&_.overflow-y-auto]:pb-48">
+          <UgcSceneStrip
+            vertical
+            projectId={project.id}
+            scenes={stripScenes}
+            selectedSceneId={selected?.id ?? null}
+            selectedVersionId={selectedVersionId}
+            readOnly={!isOwner}
+          />
+          {/* A FIXED height, not a minimum: the rail beside it scrolls, and if
             either grew with its content the two would disagree and the canvas
             would jump every time a scene with more versions was selected. */}
-        {/* Dashed ONLY while there is nothing to show.
+          {/* Dashed ONLY while there is nothing to show.
             A dashed border reads as "empty, put something here" — which is
             right for the waiting state and wrong for the finished clip, and
             this panel used it for both. The most important thing on the screen
             was framed like a drop zone. */}
-        <div
-          className={`flex min-h-0 flex-1 flex-col rounded-lg border ${
-            shownVersion?.downloadUrl ? "bg-card" : "border-dashed"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2 rounded-t-[7px] border-b bg-muted/60 px-3 py-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
-              {shownVersion
-                ? `Result — scene ${selected?.idx}` +
-                  (selected && versions.length > 1 ? ` · v${shownVersion.n}` : "")
-                : "Result — the clip lands here"}
-            </p>
-            {selected && isOwner ? (
-              // Another take, not a replacement: refills the bar below.
-              <IterateButton
-                detail={{
-                  prompt: shownVersion?.videoPrompt ?? selected.prompt,
-                  referenceTags: selected.referenceTags,
-                  modelId: selectedModelId,
-                  resolution: selectedSettings?.resolution ?? null,
-                  durationS: shownVersion?.durationS ?? selected.durationS,
-                }}
-              />
-            ) : null}
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 xl:pb-48">
-            {/* THE SHOWN VERSION DECIDES, not the scene's status.
+          <div
+            className={`flex min-h-0 flex-1 flex-col rounded-lg border ${
+              shownVersion?.downloadUrl ? "bg-card" : "border-dashed"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 rounded-t-[7px] border-b bg-muted/60 px-3 py-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                {shownVersion
+                  ? `Result — scene ${selected?.idx}` +
+                    (selected && versions.length > 1 ? ` · v${shownVersion.n}` : "")
+                  : "Result — the clip lands here"}
+              </p>
+              {selected && isOwner ? (
+                // Another take, not a replacement: refills the bar below.
+                <IterateButton
+                  detail={{
+                    prompt: shownVersion?.videoPrompt ?? selected.prompt,
+                    referenceTags: selected.referenceTags,
+                    modelId: selectedModelId,
+                    resolution: selectedSettings?.resolution ?? null,
+                    durationS: shownVersion?.durationS ?? selected.durationS,
+                  }}
+                />
+              ) : null}
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 xl:pb-48">
+              {/* THE SHOWN VERSION DECIDES, not the scene's status.
                 These were the other way round, so while v2 was in flight the
                 panel showed a spinner for every version — including v1, which
                 had a finished clip sitting right there in the rail. Pressing
@@ -952,8 +961,8 @@ export default async function UgcPage({
                 rendered ten minutes ago. A version that HAS a clip can always
                 be played; the spinner belongs only to the version that is
                 actually waiting on the worker. */}
-            {panel.kind === "working" ? (
-              /* A spinner, centred, for as long as the worker has it.
+              {panel.kind === "working" ? (
+                /* A spinner, centred, for as long as the worker has it.
                  The canvas said "Attach an image, write a prompt, and press
                  Generate" while a render was in flight — instructions for a
                  thing the operator had already done, on the screen they were
@@ -963,85 +972,87 @@ export default async function UgcPage({
 
                  A spinner rather than dots or a swapped label, per the rule
                  this project already follows for in-flight controls. */
-              <div className="flex flex-1 flex-col items-center justify-center gap-3">
-                <Spinner className="size-8 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  {panel.queued
-                    ? "Queued — waiting for a worker to pick this up."
-                    : "Rendering. This takes a minute or two."}
-                </p>
-              </div>
-            ) : panel.kind === "clip" && shownVersion?.downloadUrl ? (
-              <>
-                {/* The clip at full height, and its own poster blurred behind it
-                    so a 9:16 take in a wide panel has no dead bars beside it. */}
-                <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-black">
-                  {shownVersion.posterUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- signed URL
-                    <img
-                      src={shownVersion.posterUrl}
-                      alt=""
-                      aria-hidden="true"
-                      className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
-                    />
-                  ) : null}
-                  <video
-                    controls
-                    preload="metadata"
-                    poster={shownVersion.posterUrl ?? undefined}
-                    className="relative h-full max-h-full w-auto max-w-full"
-                    src={shownVersion.downloadUrl}
-                  >
-                    Your browser does not support inline video playback.
-                  </video>
-                  {/* asAttachment, because `download` alone is ignored on a
-                    cross-origin href and every signed URL here is one. */}
-                  <a
-                    href={asAttachment(shownVersion.downloadUrl, shownVersion.filename)}
-                    download={shownVersion.filename ?? undefined}
-                    className="absolute right-3 top-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-background/80 px-3 text-sm font-medium text-foreground backdrop-blur transition-colors hover:bg-background"
-                  >
-                    <DownloadIcon aria-hidden="true" className="size-3.5" />
-                    Download
-                  </a>
+                <div className="flex flex-1 flex-col items-center justify-center gap-3">
+                  <Spinner className="size-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    {panel.queued
+                      ? "Queued — waiting for a worker to pick this up."
+                      : "Rendering. This takes a minute or two."}
+                  </p>
                 </div>
-                {/* Watching an older take while a new one renders is the whole
+              ) : panel.kind === "clip" && shownVersion?.downloadUrl ? (
+                <>
+                  {/* The clip at full height, and its own poster blurred behind it
+                    so a 9:16 take in a wide panel has no dead bars beside it. */}
+                  <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-md bg-black">
+                    {shownVersion.posterUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- signed URL
+                      <img
+                        src={shownVersion.posterUrl}
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 h-full w-full scale-110 object-cover opacity-40 blur-2xl"
+                      />
+                    ) : null}
+                    <video
+                      controls
+                      preload="metadata"
+                      poster={shownVersion.posterUrl ?? undefined}
+                      className="relative h-full max-h-full w-auto max-w-full"
+                      src={shownVersion.downloadUrl}
+                    >
+                      Your browser does not support inline video playback.
+                    </video>
+                    {/* asAttachment, because `download` alone is ignored on a
+                    cross-origin href and every signed URL here is one. */}
+                    <a
+                      href={asAttachment(shownVersion.downloadUrl, shownVersion.filename)}
+                      download={shownVersion.filename ?? undefined}
+                      className="absolute right-3 top-3 inline-flex h-8 items-center gap-1.5 rounded-lg bg-background/80 px-3 text-sm font-medium text-foreground backdrop-blur transition-colors hover:bg-background"
+                    >
+                      <DownloadIcon aria-hidden="true" className="size-3.5" />
+                      Download
+                    </a>
+                  </div>
+                  {/* Watching an older take while a new one renders is the whole
                     reason the branch above yields — but the render must not go
                     silent for it. The poll refreshes every 10s, so this clears
                     itself. */}
-                {panel.kind === "clip" && panel.renderInFlight ? (
-                  <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                    <Spinner className="size-3" />
-                    {panel.queued ? "A newer attempt is queued." : "A newer attempt is rendering."}
+                  {panel.kind === "clip" && panel.renderInFlight ? (
+                    <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Spinner className="size-3" />
+                      {panel.queued
+                        ? "A newer attempt is queued."
+                        : "A newer attempt is rendering."}
+                    </p>
+                  ) : null}
+                </>
+              ) : shownVersion && selectedError ? (
+                // A failed render has already been billed, so "it failed" on its
+                // own leaves the operator with one move to make next.
+                // classifyRenderError's `retryable` is the part worth reading
+                // before spending: it separates "the vendor was briefly down"
+                // from "this will not work as written".
+                //
+                // The message is scoped to the SCENE, not to this version:
+                // latestErrorsByScene keeps the newest error per scene_id, so
+                // with several failed attempts this is the most recent one. Said
+                // in the copy rather than implied, because attributing v3's
+                // failure to v1 would be its own small lie.
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                  <p className="text-sm font-medium text-destructive">
+                    This attempt produced no clip.
                   </p>
-                ) : null}
-              </>
-            ) : shownVersion && selectedError ? (
-              // A failed render has already been billed, so "it failed" on its
-              // own leaves the operator with one move to make next.
-              // classifyRenderError's `retryable` is the part worth reading
-              // before spending: it separates "the vendor was briefly down"
-              // from "this will not work as written".
-              //
-              // The message is scoped to the SCENE, not to this version:
-              // latestErrorsByScene keeps the newest error per scene_id, so
-              // with several failed attempts this is the most recent one. Said
-              // in the copy rather than implied, because attributing v3's
-              // failure to v1 would be its own small lie.
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-                <p className="text-sm font-medium text-destructive">
-                  This attempt produced no clip.
-                </p>
-                {/* The classifier's own message, and nothing paraphrasing it.
+                  {/* The classifier's own message, and nothing paraphrasing it.
                     A second line reading "Worth another try — this looks like
                     a passing failure" sat under one that already said
                     "Retrying may work", and the same duplication existed on
                     the other branch: every message classifyRenderError
                     produces already carries its own retry advice. Two
                     sentences saying one thing read as two findings. */}
-                <p className="max-w-sm text-sm text-foreground">{selectedError.message}</p>
+                  <p className="max-w-sm text-sm text-foreground">{selectedError.message}</p>
 
-                {/* NO "TRY AGAIN" HERE ANY MORE. It used to be its own
+                  {/* NO "TRY AGAIN" HERE ANY MORE. It used to be its own
                     confirm dialog, wired to retryClip -> retryScene, which
                     re-ran the scene's SAVED settings — the prompt, the
                     frames, the model as they stood the moment the render was
@@ -1056,63 +1067,64 @@ export default async function UgcPage({
                     for a done one — it always re-prices and re-submits
                     whatever is on screen at the moment of the press. This is
                     just a pointer to it, not a second control. */}
-                <p className="text-xs text-muted-foreground">
-                  Press Iterate to try it again from this prompt.
-                </p>
+                  <p className="text-xs text-muted-foreground">
+                    Press Iterate to try it again from this prompt.
+                  </p>
 
-                <p className="text-[11px] text-muted-foreground">
-                  Most recent failure on this scene.
+                  <p className="text-[11px] text-muted-foreground">
+                    Most recent failure on this scene.
+                  </p>
+                </div>
+              ) : (
+                // Centred like the spinner beside it. Pinned to the top-left of
+                // a box this tall, one short sentence read as leftover text
+                // rather than as the state of the panel.
+                <p className="flex flex-1 items-center justify-center text-center text-sm text-muted-foreground">
+                  {shownVersion
+                    ? "This attempt produced no clip."
+                    : "Write a prompt in the bar below and press Generate."}
                 </p>
-              </div>
-            ) : (
-              // Centred like the spinner beside it. Pinned to the top-left of
-              // a box this tall, one short sentence read as leftover text
-              // rather than as the state of the panel.
-              <p className="flex flex-1 items-center justify-center text-center text-sm text-muted-foreground">
-                {shownVersion
-                  ? "This attempt produced no clip."
-                  : "Write a prompt in the bar below and press Generate."}
-              </p>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <UgcDeletedScenes scenes={deletedScenes} readOnly={!isOwner} />
+        <UgcDeletedScenes scenes={deletedScenes} readOnly={!isOwner} />
 
-      {/* THE PROMPT BAR, along the bottom like /create's. It used to be the
+        {/* THE PROMPT BAR, along the bottom like /create's. It used to be the
           left column of the row above; the result and version rail get that
           width back, and the composer reads the same on both screens. */}
-      {/* Sticky, like the image console's dock: <main> scrolls, the bar
+        {/* Sticky, like the image console's dock: <main> scrolls, the bar
           floats over the bottom with a fade so the content reads under it. */}
-      <div className="pointer-events-none sticky bottom-0 z-30 -mx-6 mt-auto bg-gradient-to-t xl:-mt-48 from-background via-background/90 to-transparent px-6 pb-4 pt-8 has-[[data-moved=true]]:bg-none">
-        <div className="mx-auto w-full max-w-5xl">
-          <ResizablePromptBar storageKey="video" defaultPx={80}>
-            <UgcColumn
-              layout="bar"
-              projectId={project.id}
-              options={options}
-              budget={budget}
-              readOnly={!isOwner}
-              // kie is the only vendor now — resolveVendor (lib/vendor-routing.ts)
-              // was decommissioned along with fal.
-              vendor="kie"
-              // Same flag `options` above was already built from (`withSound`) —
-              // read once and passed down rather than re-imported into a client
-              // component, and reused rather than re-derived so the picker and
-              // the prompt preview cannot answer "will this clip have audio"
-              // differently.
-              audioEnabled={withSound}
-              // ALWAYS A NEW SCENE. The bar used to follow the selected scene and
-              // turn Generate into Regenerate (a new VERSION of it); takes
-              // replaced versions, so Generate makes another clip and Iterate
-              // (in the result header) is what refills the bar from one.
-              selectedScene={null}
-              elements={elements}
-            />
-          </ResizablePromptBar>
+        <div className="pointer-events-none sticky bottom-0 z-30 -mx-6 mt-auto bg-gradient-to-t xl:-mt-48 from-background via-background/90 to-transparent px-6 pb-4 pt-8 has-[[data-moved=true]]:bg-none">
+          <div className="mx-auto w-full max-w-5xl">
+            <ResizablePromptBar storageKey="video" defaultPx={80}>
+              <UgcColumn
+                layout="bar"
+                projectId={project.id}
+                options={options}
+                budget={budget}
+                readOnly={!isOwner}
+                // kie is the only vendor now — resolveVendor (lib/vendor-routing.ts)
+                // was decommissioned along with fal.
+                vendor="kie"
+                // Same flag `options` above was already built from (`withSound`) —
+                // read once and passed down rather than re-imported into a client
+                // component, and reused rather than re-derived so the picker and
+                // the prompt preview cannot answer "will this clip have audio"
+                // differently.
+                audioEnabled={withSound}
+                // ALWAYS A NEW SCENE. The bar used to follow the selected scene and
+                // turn Generate into Regenerate (a new VERSION of it); takes
+                // replaced versions, so Generate makes another clip and Iterate
+                // (in the result header) is what refills the bar from one.
+                selectedScene={null}
+                elements={elements}
+              />
+            </ResizablePromptBar>
+          </div>
         </div>
-      </div>
+      </CreateModeContent>
     </div>
   );
 }

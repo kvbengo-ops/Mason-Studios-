@@ -1,9 +1,19 @@
-import type { JSX } from "react";
+import { Suspense, type JSX } from "react";
 import { requireUser } from "@/actions/guard";
-import { CreateModeSwitch } from "@/components/create-mode-switch";
+import {
+  CreateModeContent,
+  CreateModeSkeleton,
+  CreateModeSwitch,
+} from "@/components/create-mode-switch";
 import { CreateVideoConsole } from "@/components/create-video-console";
 import { ImageGeneratorConsole } from "@/components/image-generator-console";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
+
+async function CreateVideoTab({ scene }: { scene?: string }): Promise<JSX.Element> {
+  const { user, profile } = await requireUser();
+  const snapshot = await getAccountBudgetSnapshot(user.id, profile);
+  return <CreateVideoConsole snapshot={snapshot} initialSceneId={scene} />;
+}
 
 // ONE PLACE TO MAKE THINGS. The Image tab is the personal image generator,
 // unchanged; the Video tab is the /ugc prompt bar, starting a new clip
@@ -17,8 +27,7 @@ export default async function CreatePage({
 }): Promise<JSX.Element> {
   const { tab, scene } = await searchParams;
   const video = tab === "video";
-  const { user, profile } = await requireUser();
-  const snapshot = await getAccountBudgetSnapshot(user.id, profile);
+  await requireUser();
 
   return (
     <div data-create-page className="flex min-h-full w-full flex-col px-4 md:px-6">
@@ -39,11 +48,11 @@ export default async function CreatePage({
       </div>
       <div id="create-runs-control" className="fixed right-6 top-20 z-20" />
 
-      {video ? (
-        <CreateVideoConsole snapshot={snapshot} initialSceneId={scene} />
-      ) : (
-        <ImageGeneratorConsole />
-      )}
+      <CreateModeContent video={video}>
+        <Suspense key={video ? "video" : "image"} fallback={<CreateModeSkeleton video={video} />}>
+          {video ? <CreateVideoTab scene={scene} /> : <ImageGeneratorConsole />}
+        </Suspense>
+      </CreateModeContent>
     </div>
   );
 }
