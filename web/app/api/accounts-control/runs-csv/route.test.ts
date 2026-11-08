@@ -3,6 +3,7 @@ import { GET } from "./route";
 import { AuthorizationError, requireAdmin } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl } from "@/lib/storage";
+import type * as StorageModule from "@/lib/storage";
 
 vi.mock("@/actions/guard", () => ({
   requireAdmin: vi.fn(),
@@ -13,7 +14,7 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(),
 }));
 vi.mock("@/lib/storage", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/storage")>()),
+  ...(await importOriginal<typeof StorageModule>()),
   signedUrl: vi.fn(async () => "https://signed.example/preview.jpg"),
 }));
 
@@ -77,7 +78,7 @@ describe("GET /api/accounts-control/runs-csv", () => {
     const csv = await response.text();
     expect(response.status).toBe(200);
     expect(runPageRequests).toBe(2);
-    expect(csv.startsWith("\uFEFFpreview,user_email,provider,model,cost_usd,details\r\n")).toBe(
+    expect(csv.startsWith("preview,user_email,provider,model,cost_usd,details\r\n")).toBe(
       true,
     );
     expect(csv.match(/,alice@example\.com,kie,bytedance\/seedance-2-5,0\.56,/g)).toHaveLength(
