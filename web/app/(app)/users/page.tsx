@@ -42,6 +42,8 @@ import type { AccountCapProfile, AccountCaps } from "@/lib/spend";
 import { getUserActiveGrantsTotals, type ActiveGrantTotals } from "@/lib/db-aggregates";
 import { requiresAccountApproval } from "@/lib/account-approval";
 import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
+import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
+import { ImageLightbox } from "@/components/image-lightbox";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -351,6 +353,7 @@ export default async function UsersPage({
     string,
     { spent_today_usd: number; spent_this_week_usd: number }
   >();
+  const avatarUrlByUserId = new Map<string, string>();
   // Per-user sum + count of unexpired allowance_grants
   // (0033_allowance_requests_rls_fix.sql's user_active_grants_usd_by_user) —
   // "clear usage visibility for each editor" (the proposal's own words,
@@ -388,7 +391,9 @@ export default async function UsersPage({
     const [{ data: overridesData }, { data: windowsData }, activeGrantsTotals] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd")
+        .select(
+          "id, avatar_storage_key, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd",
+        )
         .in("id", userIds),
       supabase
         .from("account_spend_windows")
@@ -404,6 +409,20 @@ export default async function UsersPage({
       }),
     ]);
     for (const row of overridesData ?? []) overrideByUserId.set(row.id, row);
+    const avatarEntries = await Promise.all(
+      (overridesData ?? []).map(async (row) => {
+        if (!row.avatar_storage_key) return null;
+        try {
+          return [row.id, await signedUrl(row.avatar_storage_key, 3600, AVATAR_TRANSFORM)] as const;
+        } catch (error) {
+          console.error(`Failed to sign avatar URL for /users row ${row.id}`, error);
+          return null;
+        }
+      }),
+    );
+    for (const entry of avatarEntries) {
+      if (entry) avatarUrlByUserId.set(entry[0], entry[1]);
+    }
     for (const row of windowsData ?? []) spendWindowByUserId.set(row.user_id, row);
     for (const [userId, totals] of activeGrantsTotals) activeGrantsByUserId.set(userId, totals);
 
@@ -660,7 +679,30 @@ export default async function UsersPage({
 
                   return (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium text-foreground">{user.email}</TableCell>
+                      <TableCell className="font-medium text-foreground">
+                        <div className="flex items-center gap-3">
+                          {avatarUrlByUserId.get(user.id) ? (
+                            <span className="size-9 shrink-0 overflow-hidden rounded-full border bg-muted">
+                              <ImageLightbox
+                                src={avatarUrlByUserId.get(user.id)!}
+                                alt={`${user.username || user.email}'s profile picture`}
+                                className="size-full rounded-full object-cover"
+                                showIcon={false}
+                              />
+                            </span>
+                          ) : (
+                            <span
+                              aria-hidden="true"
+                              className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted text-sm text-muted-foreground"
+                            >
+                              {user.username?.[0]?.toUpperCase() ||
+                                user.email?.[0]?.toUpperCase() ||
+                                "?"}
+                            </span>
+                          )}
+                          <span>{user.email}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{user.username}</TableCell>
                       <TableCell>
                         <RoleBadge role={user.role} />
