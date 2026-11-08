@@ -53,8 +53,8 @@ describe("POST /api/mcp", () => {
       }),
     );
     expect((await init.json()).result.protocolVersion).toBe("2025-06-18");
-    const authRequest = vi.mocked(requireApiToken).mock.calls[0][0];
-    expect(authRequest.headers.get("Authorization")).toBe(`Bearer ${TOKEN}`);
+    const authRequest = vi.mocked(requireApiToken).mock.calls[0]?.[0];
+    expect(authRequest?.headers.get("Authorization")).toBe(`Bearer ${TOKEN}`);
 
     const list = await POST(rpc({ jsonrpc: "2.0", id: 2, method: "tools/list" }));
     const names = (await list.json()).result.tools.map((t: { name: string }) => t.name);
@@ -94,10 +94,10 @@ describe("POST /api/mcp", () => {
         },
       }),
     );
-    const forwarded = vi.mocked(generateClip).mock.calls[0][0];
-    expect(forwarded.headers.get("Authorization")).toBe(`Bearer ${TOKEN}`);
-    expect(forwarded.headers.get("Idempotency-Key")).toBe("k-1");
-    expect(await forwarded.json()).not.toHaveProperty("idempotency_key");
+    const forwarded = vi.mocked(generateClip).mock.calls[0]?.[0];
+    expect(forwarded?.headers.get("Authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(forwarded?.headers.get("Idempotency-Key")).toBe("k-1");
+    expect(await forwarded?.json()).not.toHaveProperty("idempotency_key");
     // tools/call is authorized by the v1 handler it reaches, not twice.
     expect(requireApiToken).not.toHaveBeenCalled();
 
@@ -119,7 +119,7 @@ describe("POST /api/mcp", () => {
         params: { name: "get_job", arguments: { job_id: "x" } },
       }),
     );
-    expect(await vi.mocked(getJob).mock.calls[0][1].params).toEqual({ id: "x" });
+    expect(await vi.mocked(getJob).mock.calls[0]?.[1].params).toEqual({ id: "x" });
     expect((await res.json()).result.isError).toBe(true);
   });
 });
