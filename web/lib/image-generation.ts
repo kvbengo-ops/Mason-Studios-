@@ -1009,12 +1009,16 @@ const runIdSchema = z.string().uuid();
  * no row here ever carries a task id to check.
  */
 export async function reconcileImageAttemptFor(
-  supabase: SupabaseClient<Database>,
+  // A factory, not a client: a malformed id is refused before any client exists
+  // (image-generator-recovery.test.ts pins that order).
+  getClient: () => SupabaseClient<Database> | Promise<SupabaseClient<Database>>,
   userId: string,
   runId: string,
 ): Promise<ImageAttempt> {
   const parsedRunId = runIdSchema.safeParse(runId);
   if (!parsedRunId.success) throw new Error("Invalid image attempt.");
+
+  const supabase = await getClient();
 
   // OWNER-SCOPED READ, through the session client so RLS gates it too. A run id
   // arriving from the browser is exactly the id an attacker would guess.

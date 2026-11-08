@@ -28,7 +28,7 @@ export async function GET(
 
   const admin = createAdminClient();
   try {
-    const attempt = await reconcileImageAttemptFor(admin, auth.userId, id);
+    const attempt = await reconcileImageAttemptFor(() => admin, auth.userId, id);
 
     let output = null;
     if (attempt.image) {

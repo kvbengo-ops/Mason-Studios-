@@ -241,7 +241,8 @@ export async function POST(request: Request): Promise<Response> {
         "id, video_prompt, ref_frame_asset_id, duration_s, render_settings_override, projects(render_settings)",
       )
       .eq("id", sceneIdForAttempt)
-      .single();
+      .eq("project_id", projectId)
+      .maybeSingle();
     if (versionScene) {
       await openSceneVersion(
         admin,

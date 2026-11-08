@@ -18,6 +18,8 @@ vi.mock("@/lib/api-clip", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/spend", () => ({ queueScenesIfWithinCaps: vi.fn() }));
+// Version bookkeeping (best-effort, its own module's tests); asserted as called.
+vi.mock("@/actions/enqueue", () => ({ openSceneVersion: vi.fn() }));
 vi.mock("@/lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof StorageModule>();
   return { ...actual, removeStorageObjects: vi.fn().mockResolvedValue(undefined) };
@@ -33,6 +35,7 @@ import {
   sweepAbandonedApiScenes,
 } from "@/lib/api-generation";
 import { prepareApiClip } from "@/lib/api-clip";
+import { openSceneVersion } from "@/actions/enqueue";
 import { queueScenesIfWithinCaps } from "@/lib/spend";
 import { removeStorageObjects } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -278,6 +281,8 @@ describe("POST /api/v1/generate idempotency", () => {
     ).toHaveLength(2);
     expect(mockedAttach).toHaveBeenCalledTimes(1);
     expect(mockedQueue).toHaveBeenCalledTimes(1);
+    // The /create wall reads takes from scene_versions; one queued render, one version.
+    expect(vi.mocked(openSceneVersion)).toHaveBeenCalledTimes(1);
     expect([firstBody.deduplicated, secondBody.deduplicated].sort()).toEqual([false, true]);
     expect([200, 202]).toContain(first.status);
     expect([200, 202]).toContain(second.status);

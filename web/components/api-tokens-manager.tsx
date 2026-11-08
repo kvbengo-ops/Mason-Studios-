@@ -3,6 +3,7 @@
 import { useEffect, useState, type JSX } from "react";
 import { createApiToken, revokeApiToken, type ApiTokenMetadata } from "@/actions/api-tokens";
 import { Button } from "@/components/ui/button";
+import { PendingButton } from "@/components/pending-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,9 +137,9 @@ export function ApiTokensManager({
             </div>
 
             <div>
-              <Button type="submit" size="sm" disabled={creating}>
-                {creating ? "Creating…" : "Create token"}
-              </Button>
+              <PendingButton type="submit" size="sm" pending={creating}>
+                Create token
+              </PendingButton>
             </div>
           </form>
 
@@ -224,15 +225,15 @@ export function ApiTokensManager({
                       </TableCell>
                       <TableCell className="text-right">
                         {!isRevoked ? (
-                          <Button
+                          <PendingButton
                             type="button"
                             variant="outline"
                             size="sm"
-                            disabled={revokingId === t.id}
+                            pending={revokingId === t.id}
                             onClick={() => handleRevoke(t.id)}
                           >
-                            {revokingId === t.id ? "Revoking…" : "Revoke"}
-                          </Button>
+                            Revoke
+                          </PendingButton>
                         ) : null}
                       </TableCell>
                     </TableRow>

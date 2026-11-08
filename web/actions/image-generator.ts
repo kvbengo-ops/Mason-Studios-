@@ -391,5 +391,5 @@ export async function reconcilePersonalImageAttempt(runId: string): Promise<Imag
   // Not rate-limited: the image panel polls this every 5s per unfinished image,
   // and it is an owner-scoped read that spends nothing.
   const { user } = await requireUser({ rateLimit: false });
-  return reconcileImageAttemptFor(await createClient(), user.id, runId);
+  return reconcileImageAttemptFor(createClient, user.id, runId);
 }

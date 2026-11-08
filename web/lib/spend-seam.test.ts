@@ -97,6 +97,12 @@ const NOT_A_WRITER: Readonly<Record<string, string>> = {
   // So an entry here means a NEW file mentions the write and someone decided
   // it does not really queue a render. That decision should be written down,
   // which is what the string is for.
+  "app/api/v1/generate/route.ts":
+    'The `status: "queued"` here is the JSON response body, not a write. The write ' +
+    "happens inside public.queue_scenes_if_within_caps (0127/0128, via lib/spend.ts's " +
+    "queueScenesIfWithinCaps), which checks kie funds, global, weekly, hourly, daily and " +
+    "the token's monthly cap under the same advisory locks and in the same transaction " +
+    "that sets the status — stricter than assertWithinSpendCaps, which checks then writes.",
 };
 
 describe("every path that queues a render checks the spend cap", () => {

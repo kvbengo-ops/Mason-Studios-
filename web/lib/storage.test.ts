@@ -214,6 +214,7 @@ describe("signedUrl", () => {
   });
 
   it("signedUrlWithExpiry returns 3600 on fresh sign and accurate remaining seconds on cache hit", async () => {
+    vi.useFakeTimers();
     const admin = fakeAdmin();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
