@@ -450,7 +450,9 @@ describe("assertGlobalCapNotExceeded", () => {
   // editor well under their OWN caps must still be told this is a
   // team-wide refusal, not mistake it for their personal limit.
   it("names the failure as the team's, not personal", () => {
-    expect(() => assertGlobalCapNotExceeded(90, 19.2, 100)).toThrow(/team has hit the daily limit/i);
+    expect(() => assertGlobalCapNotExceeded(90, 19.2, 100)).toThrow(
+      /team has hit the daily limit/i,
+    );
   });
 
   it("uses the weekly window and Monday reset when selected", () => {
@@ -879,12 +881,23 @@ async function mockZeroSpend(
     order: vi.fn(() => builder),
     range: vi.fn(() => Promise.resolve({ data: rows, error: null })),
   };
+  const runsBuilder = {
+    select: vi.fn(() => runsBuilder),
+    eq: vi.fn(() => runsBuilder),
+    not: vi.fn(() => runsBuilder),
+    gte: vi.fn(() => runsBuilder),
+    lt: vi.fn(() => Promise.resolve({ data: [], error: null })),
+  };
   vi.mocked(createAdminClient).mockReturnValue({
     rpc: vi.fn(() => Promise.resolve({ data: 0, error: null })),
     // Table-aware: app_settings is a one-row lookup with a different chain
     // (limit/maybeSingle) from the scenes read's select/in/eq/order/range, and
     // a single builder serving both would make one of them silently wrong.
-    from: vi.fn((table: string) => (table === "app_settings" ? settingsBuilder : builder)),
+    from: vi.fn((table: string) => {
+      if (table === "app_settings") return settingsBuilder;
+      if (table === "runs") return runsBuilder;
+      return builder;
+    }),
   } as unknown as SupabaseClient<Database>);
   return builder;
 }
@@ -1516,5 +1529,159 @@ describe("getAccountBudgetSnapshot — breakdown arithmetic matches enforcement"
     expect(snapshot.weeklyUsedUsd).toBe(0);
     expect(snapshot.dailyRemainingUsd).toBe(snapshot.dailyCapUsd - expectedHeldUsd);
     expect(snapshot.weeklyRemainingUsd).toBe(snapshot.weeklyCapUsd - expectedHeldUsd);
+  });
+});
+
+describe("getInFlightSpend, token monthly caps, and queueScenesIfWithinCaps", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+  });
+
+  const editorProfile = {
+    role: "editor" as const,
+    daily_cap_override_usd: 5,
+    weekly_cap_override_usd: 10,
+  };
+
+  it("prices in-flight scenes with video references at the video-input rate and tracks byTokenUsd", async () => {
+    await mockZeroSpend([
+      {
+        duration_s: 5,
+        is_talking_head: false,
+        render_settings_override: null,
+        api_token_id: "tok-1",
+        estimated_cost_usd: null,
+        projects: {
+          user_id: "u1",
+          render_settings: { model: "bytedance/seedance-2-fast", resolution: "480p" },
+        },
+        scene_references: [{ kind: "video", assets: { duration_s: 10 } }],
+      },
+      {
+        duration_s: 5,
+        is_talking_head: false,
+        render_settings_override: null,
+        api_token_id: null,
+        estimated_cost_usd: null,
+        projects: {
+          user_id: "u1",
+          render_settings: { model: "bytedance/seedance-2-fast", resolution: "480p" },
+        },
+        scene_references: [],
+      },
+    ]);
+
+    const { getInFlightSpend } = await import("./spend");
+    const hold = await getInFlightSpend();
+    const tokenHold = hold.byTokenUsd.get("tok-1") ?? 0;
+    const totalUserHold = hold.byUserUsd.get("u1") ?? 0;
+    const nonVideoHold = totalUserHold - tokenHold;
+
+    expect(tokenHold).toBeGreaterThan(nonVideoHold);
+    expect(hold.globalUsd).toBeCloseTo(totalUserHold, 5);
+  });
+
+  it("enforces tokenMonthlyCapUsd across settled and in-flight token spend", async () => {
+    await mockZeroSpend([
+      {
+        duration_s: 5,
+        is_talking_head: false,
+        render_settings_override: null,
+        api_token_id: "tok-1",
+        estimated_cost_usd: 2.5,
+        projects: { user_id: "u1", render_settings: null },
+        scene_references: [],
+      },
+    ]);
+    const { getKieAccountBalanceUsd } = await import("@/lib/kie-balance");
+    vi.mocked(getKieAccountBalanceUsd).mockResolvedValue(100);
+    const { assertWithinSpendCaps } = await import("./spend");
+
+    const blocked = await assertWithinSpendCaps("u1", editorProfile, 1.0, {
+      apiTokenId: "tok-1",
+      tokenMonthlyCapUsd: 3.0,
+    });
+    expect(blocked).toEqual({
+      error: expect.stringMatching(/API token.*monthly cap/i),
+    });
+
+    const allowed = await assertWithinSpendCaps("u1", editorProfile, 1.0, {
+      apiTokenId: "tok-1",
+      tokenMonthlyCapUsd: 5.0,
+    });
+    expect(allowed).toBeUndefined();
+  });
+
+  it("queueScenesIfWithinCaps maps queued, fenced, and blocked RPC outcomes and serializes concurrent submissions", async () => {
+    await mockZeroSpend([]);
+    const { queueScenesIfWithinCaps } = await import("./spend");
+    let inFlightCommitted = 0;
+
+    const fakeAdmin = {
+      rpc: vi.fn(async (fnName: string, args: { p_scene_estimates_usd: number[] }) => {
+        expect(fnName).toBe("queue_scenes_if_within_caps");
+        const est = args.p_scene_estimates_usd.reduce((a, b) => a + b, 0);
+        if (inFlightCommitted + est > 10) {
+          return {
+            data: [
+              {
+                outcome: "blocked",
+                blocked_by: "weekly",
+                spent_usd: inFlightCommitted,
+                cap_usd: 10,
+              },
+            ],
+            error: null,
+          };
+        }
+        inFlightCommitted += est;
+        return {
+          data: [{ outcome: "queued", blocked_by: null, spent_usd: 0, cap_usd: 10 }],
+          error: null,
+        };
+      }),
+    } as unknown as SupabaseClient<Database>;
+
+    const first = await queueScenesIfWithinCaps({
+      admin: fakeAdmin,
+      projectId: "project-1",
+      userId: "u1",
+      profile: editorProfile,
+      sceneIds: ["scene-1"],
+      estimatesUsd: [6],
+    });
+    const second = await queueScenesIfWithinCaps({
+      admin: fakeAdmin,
+      projectId: "project-1",
+      userId: "u1",
+      profile: editorProfile,
+      sceneIds: ["scene-2"],
+      estimatesUsd: [6],
+    });
+
+    expect(first).toEqual({ outcome: "queued" });
+    expect(second.outcome).toBe("blocked");
+    if (second.outcome === "blocked") {
+      expect(second.blockedBy).toBe("weekly");
+      expect(second.error).toMatch(/weekly allowance/i);
+    }
+
+    const fencedAdmin = {
+      rpc: vi.fn(async () => ({
+        data: [{ outcome: "fenced", blocked_by: null, spent_usd: 0, cap_usd: 0 }],
+        error: null,
+      })),
+    } as unknown as SupabaseClient<Database>;
+
+    const fenced = await queueScenesIfWithinCaps({
+      admin: fencedAdmin,
+      projectId: "project-1",
+      userId: "u1",
+      profile: editorProfile,
+      sceneIds: ["scene-3"],
+      estimatesUsd: [1],
+      prepareToken: "stale-token",
+    });
+    expect(fenced).toEqual({ outcome: "fenced" });
   });
 });

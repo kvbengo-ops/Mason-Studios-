@@ -5,6 +5,7 @@ import {
   extFromFilename,
   MEDIA_BUCKET,
   signedUrl,
+  signedUrlWithExpiry,
 } from "./storage";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -210,5 +211,20 @@ describe("signedUrl", () => {
 
     await expect(signedUrl(key, 3600, { quality: 80 })).rejects.toThrow(/not.*image|image.*mp4/i);
     expect(admin.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("signedUrlWithExpiry returns 3600 on fresh sign and accurate remaining seconds on cache hit", async () => {
+    const admin = fakeAdmin();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
+    const first = await signedUrlWithExpiry(key, 3600);
+    expect(first.expiresInSeconds).toBe(3600);
+
+    vi.advanceTimersByTime(1000 * 600); // 10 minutes later
+    const second = await signedUrlWithExpiry(key, 3600);
+    expect(second.url).toBe(first.url);
+    expect(second.expiresInSeconds).toBe(3000);
+    expect(admin.createSignedUrl).toHaveBeenCalledTimes(1);
   });
 });

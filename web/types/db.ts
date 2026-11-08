@@ -312,6 +312,56 @@ export type Database = {
           },
         ];
       };
+      api_tokens: {
+        Row: {
+          created_at: string;
+          expires_at: string | null;
+          id: string;
+          last_used_at: string | null;
+          monthly_cap_usd: number | null;
+          name: string;
+          revoked_at: string | null;
+          scopes: string[];
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          monthly_cap_usd?: number | null;
+          name: string;
+          revoked_at?: string | null;
+          scopes?: string[];
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          last_used_at?: string | null;
+          monthly_cap_usd?: number | null;
+          name?: string;
+          revoked_at?: string | null;
+          scopes?: string[];
+          token_hash?: string;
+          token_prefix?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "api_tokens_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       tasks: {
         Row: {
           id: string;
@@ -1305,6 +1355,10 @@ export type Database = {
       };
       runs: {
         Row: {
+          // Added by 0127_api_tokens.sql. Populated by runs_inherit_scene_api_token
+          // trigger from scenes.api_token_id so token spend attribution survives
+          // even if a scene is later deleted (0054).
+          api_token_id: string | null;
           // Added by 0095_image_attempt_recovery.sql. The image this attempt
           // produced, so a generation the operator navigated away from can be
           // found again and shown. NULL until the attempt succeeds. ON DELETE
@@ -1356,6 +1410,7 @@ export type Database = {
           vendor: string;
         };
         Insert: {
+          api_token_id?: string | null;
           asset_id?: string | null;
           cost_usd?: number | null;
           created_at?: string;
@@ -1374,6 +1429,7 @@ export type Database = {
           vendor: string;
         };
         Update: {
+          api_token_id?: string | null;
           asset_id?: string | null;
           cost_usd?: number | null;
           created_at?: string;
@@ -1392,6 +1448,13 @@ export type Database = {
           vendor?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "runs_api_token_id_fkey";
+            columns: ["api_token_id"];
+            isOneToOne: false;
+            referencedRelation: "api_tokens";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "runs_project_id_fkey";
             columns: ["project_id"];
@@ -1534,6 +1597,7 @@ export type Database = {
           // currently shows and delivers. Null for a scene created before 0058
           // that has never rendered since.
           active_version_id: string | null;
+          api_token_id: string | null;
           created_at: string;
           // Which MODE queued this scene — 0063_scenes_dev_flag.sql. false
           // (the default, and every pre-existing row) for MODE=production,
@@ -1545,10 +1609,15 @@ export type Database = {
           dev: boolean;
           duration_s: number;
           edited_by_human: boolean;
+          estimated_cost_usd: number | null;
+          idempotency_hash: string | null;
+          idempotency_key: string | null;
           kie_task_id: string | null;
           id: string;
           idx: number;
           is_talking_head: boolean;
+          prepare_started_at: string | null;
+          prepare_token: string | null;
           project_id: string;
           ref_frame_asset_id: string | null;
           // PARTIAL per-scene render settings — typically just {"model": ...} — written by a
@@ -1578,14 +1647,20 @@ export type Database = {
         };
         Insert: {
           active_version_id?: string | null;
+          api_token_id?: string | null;
           created_at?: string;
           dev?: boolean;
           duration_s?: number;
           edited_by_human?: boolean;
+          estimated_cost_usd?: number | null;
+          idempotency_hash?: string | null;
+          idempotency_key?: string | null;
           kie_task_id?: string | null;
           id?: string;
           idx: number;
           is_talking_head?: boolean;
+          prepare_started_at?: string | null;
+          prepare_token?: string | null;
           project_id: string;
           ref_frame_asset_id?: string | null;
           // See the Row comment above / 0045_scene_render_settings_override.sql.
@@ -1600,14 +1675,20 @@ export type Database = {
         };
         Update: {
           active_version_id?: string | null;
+          api_token_id?: string | null;
           created_at?: string;
           dev?: boolean;
           duration_s?: number;
           edited_by_human?: boolean;
+          estimated_cost_usd?: number | null;
+          idempotency_hash?: string | null;
+          idempotency_key?: string | null;
           kie_task_id?: string | null;
           id?: string;
           idx?: number;
           is_talking_head?: boolean;
+          prepare_started_at?: string | null;
+          prepare_token?: string | null;
           project_id?: string;
           ref_frame_asset_id?: string | null;
           // See the Row comment above / 0045_scene_render_settings_override.sql.
@@ -1621,6 +1702,13 @@ export type Database = {
           visual_idea?: string | null;
         };
         Relationships: [
+          {
+            foreignKeyName: "scenes_api_token_id_fkey";
+            columns: ["api_token_id"];
+            isOneToOne: false;
+            referencedRelation: "api_tokens";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "scenes_project_id_fkey";
             columns: ["project_id"];
@@ -2369,6 +2457,101 @@ export type Database = {
       element_creators: {
         Args: never;
         Returns: { id: string; display_name: string | null }[];
+      };
+      // 0127_api_tokens.sql — Allocates max(idx)+1 under FOR UPDATE on the
+      // parent project row and inserts a status='frame_ready' scene.
+      insert_frame_ready_scene: {
+        Args: {
+          p_project_id: string;
+          p_expected_user_id: string;
+          p_duration_s: number;
+          p_is_talking_head: boolean;
+          p_video_prompt: string;
+          p_ai_generated_prompt: string | null;
+          p_render_settings_override: unknown;
+          p_dev: boolean;
+          p_api_token_id: string | null;
+          p_idempotency_key: string | null;
+          p_idempotency_hash: string | null;
+          p_prepare_token: string;
+        };
+        Returns: {
+          outcome: "inserted" | "existing";
+          scene_id: string;
+          scene_status: SceneStatus;
+          idempotency_hash: string | null;
+          prepare_token: string | null;
+          prepare_started_at: string | null;
+        }[];
+      };
+      // 0127_api_tokens.sql — Replaces scene_references only when the caller
+      // still holds scenes.prepare_token while status='frame_ready'.
+      attach_scene_references_fenced: {
+        Args: {
+          p_scene_id: string;
+          p_project_id: string;
+          p_prepare_token: string;
+          p_refs: unknown;
+        };
+        Returns: boolean;
+      };
+      // 0127_api_tokens.sql — Exclusive CAS takeover for stale frame_ready
+      // API scenes (>15s old). Rotates prepare_token and refreshes
+      // prepare_started_at in one atomic UPDATE.
+      reclaim_stale_frame_ready_scene: {
+        Args: {
+          p_scene_id: string;
+          p_project_id: string;
+          p_expected_prepare_token: string | null;
+          p_new_prepare_token: string;
+        };
+        Returns: {
+          claimed: boolean;
+          superseded_keys: string[];
+        }[];
+      };
+      delete_abandoned_api_scene: {
+        Args: {
+          p_scene_id: string;
+          p_prepare_token: string;
+        };
+        Returns: {
+          scene_id: string;
+          storage_keys: string[];
+        }[];
+      };
+      // 0127_api_tokens.sql — Checks global, weekly, token monthly, hourly,
+      // and daily spend caps (settled + in-flight) and transitions scenes to
+      // status='queued' inside one transaction under global-then-owner
+      // pg_advisory_xact_lock.
+      queue_scenes_if_within_caps: {
+        Args: {
+          p_project_id: string;
+          p_scene_ids: string[];
+          p_expected_user_id: string;
+          p_scene_estimates_usd: number[];
+          p_dev: boolean;
+          p_override: unknown;
+          p_day_start_ts: string;
+          p_week_start_ts: string;
+          p_month_start_ts: string;
+          p_now_ts: string;
+          p_global_cap_usd: number;
+          p_global_cap_enabled: boolean;
+          p_global_cap_period: "daily" | "weekly";
+          p_weekly_cap_usd: number;
+          p_daily_cap_usd: number | null;
+          p_daily_cap_enabled: boolean;
+          p_hourly_cap_usd: number | null;
+          p_api_token_id: string | null;
+          p_prepare_token: string | null;
+        };
+        Returns: {
+          outcome: "queued" | "fenced" | "blocked";
+          blocked_by: "global" | "weekly" | "token_monthly" | "hourly" | "daily" | null;
+          spent_usd: number | null;
+          cap_usd: number | null;
+        }[];
       };
     };
     Enums: {

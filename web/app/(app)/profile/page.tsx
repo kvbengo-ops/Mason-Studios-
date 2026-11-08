@@ -1,4 +1,5 @@
 import type { JSX } from "react";
+import Link from "next/link";
 import { requireUser } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
@@ -250,6 +251,24 @@ export default async function ProfilePage(): Promise<JSX.Element> {
               </Table>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Personal API Tokens</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 px-6">
+          <p className="text-sm text-muted-foreground">
+            Create and manage personal API tokens for scripts and MCP integrations against{" "}
+            <code>/api/v1/*</code>.
+          </p>
+          <Link
+            href="/settings/api-tokens"
+            className="text-sm font-medium text-foreground underline underline-offset-4"
+          >
+            Manage API tokens &rarr;
+          </Link>
         </CardContent>
       </Card>
 

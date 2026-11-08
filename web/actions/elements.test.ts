@@ -364,14 +364,7 @@ describe("registerElement — the happy path", () => {
     );
   });
 
-  // THE WHOLE POINT OF THIS TASK: what the pricing formula needs actually
-  // reaches the row it prices FROM. components/ugc-reference-picker.tsx's
-  // videoDurationSeconds measures the file in the browser and sends the
-  // result as `durationS` on the same FormData the file itself travels on
-  // (attachVideoDuration, that file's own comment) — this is the server
-  // half, pinning that the field is read, parsed, and written to exactly
-  // the column lib/estimate.ts's estimateCost later reads back out.
-  it("writes the measured durationS to assets.duration_s for a video reference", async () => {
+  it("refuses an MP4 without a parsed duration even when the client supplies one", async () => {
     vi.mocked(requireProject).mockResolvedValue({
       user: USER,
       profile: {} as never,
@@ -396,20 +389,12 @@ describe("registerElement — the happy path", () => {
 
     const result = await registerElement(formData);
 
-    expect(result).toBeUndefined();
-    expect(assetBuilder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "video_ref", duration_s: 12.5 }),
-    );
+    expect(result).toEqual({ error: "That MP4 has no supported movie duration." });
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(assetBuilder.insert).not.toHaveBeenCalled();
   });
 
-  // THE OTHER HALF: a browser that could not decode the file's metadata
-  // sends no durationS field at all (components/ugc-reference-picker.tsx's
-  // videoDurationSeconds returns null in exactly that case, and
-  // attachVideoDuration leaves the form field unset rather than sending a
-  // string spelling out "null"). registerElement must not turn a MISSING
-  // field into 0 — Number(null-ish) is NaN, and NaN fails the
-  // `> 0` guard the same way a genuinely bad value would.
-  it("writes duration_s as null for a video reference the browser could not measure", async () => {
+  it("also refuses an MP4 without a parsed duration when the client omits one", async () => {
     vi.mocked(requireProject).mockResolvedValue({
       user: USER,
       profile: {} as never,
@@ -434,9 +419,53 @@ describe("registerElement — the happy path", () => {
 
     const result = await registerElement(formData);
 
+    expect(result).toEqual({ error: "That MP4 has no supported movie duration." });
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(assetBuilder.insert).not.toHaveBeenCalled();
+  });
+
+  it("overrides a forged client durationS with the server-parsed MP4 mvhd duration", async () => {
+    vi.mocked(requireProject).mockResolvedValue({
+      user: USER,
+      profile: {} as never,
+      project: PROJECT as never,
+      reached: {} as never,
+    });
+    vi.mocked(uploadFile).mockResolvedValue({ storageKey: "projects/project-1/video_ref/x.mp4" });
+
+    const assetBuilder = fakeBuilder({ data: { id: "asset-1" }, error: null });
+    const elementBuilder = fakeBuilder({ data: null, error: null });
+    vi.mocked(createAdminClient).mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "assets") return assetBuilder;
+        if (table === "elements") return elementBuilder;
+        throw new Error(`Unexpected table in test: ${table}`);
+      }),
+    } as never);
+
+    // Build a valid minimal moov -> mvhd v0 box (timescale 1000, duration 9200 -> 10s).
+    const mvhdPayload = new Uint8Array(100);
+    const mvhdView = new DataView(mvhdPayload.buffer);
+    mvhdView.setUint32(12, 1000, false);
+    mvhdView.setUint32(16, 9200, false);
+    const mvhdBox = new Uint8Array(108);
+    new DataView(mvhdBox.buffer).setUint32(0, 108, false);
+    mvhdBox.set([0x6d, 0x76, 0x68, 0x64], 4); // "mvhd"
+    mvhdBox.set(mvhdPayload, 8);
+    const moovBox = new Uint8Array(116);
+    new DataView(moovBox.buffer).setUint32(0, 116, false);
+    moovBox.set([0x6d, 0x6f, 0x6f, 0x76], 4); // "moov"
+    moovBox.set(mvhdBox, 8);
+
+    const formData = okFormData({ name: "unboxing_clip" });
+    formData.set("image", new File([moovBox], "unboxing.mp4", { type: "video/mp4" }));
+    formData.set("durationS", "1"); // forged under-reported client duration
+
+    const result = await registerElement(formData);
+
     expect(result).toBeUndefined();
     expect(assetBuilder.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "video_ref", duration_s: null }),
+      expect.objectContaining({ kind: "video_ref", duration_s: 10 }),
     );
   });
 
