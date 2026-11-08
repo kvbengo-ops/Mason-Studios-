@@ -5,7 +5,7 @@ import { offerable } from "@/lib/kie/offerable";
 import { KIE_MODELS } from "@/lib/kie/models";
 import { quoteClip, type ClipQuote } from "@/lib/kie/cost";
 import { isAudioEnabled, mergeRenderSettings, type RenderSettings } from "@/lib/models";
-import { resolveApiReferences, type ResolveApiReferencesSuccess } from "@/lib/api-references";
+import { resolveApiReferences, type ResolvedApiReferencesSuccess } from "@/lib/api-references";
 import type { Resolution } from "@/lib/kie/rates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
@@ -26,7 +26,7 @@ export type ApiClipPreparation =
   | {
       ok: true;
       input: ApiClipInput;
-      references: ResolveApiReferencesSuccess;
+      references: ResolvedApiReferencesSuccess;
       settings: RenderSettings;
       estimatedCostUsd: number;
       quote: ClipQuote;

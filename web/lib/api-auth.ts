@@ -5,9 +5,12 @@ import { NextResponse } from "next/server";
 import { canUseApp } from "@/lib/account-approval";
 import { retryAfterSeconds, takeActionSlot, takeReadSlot } from "@/lib/action-rate-limit";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { ApiTokenScope, Database } from "@/types/db";
+import type { Database } from "@/types/db";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
+
+/** Mirrors api_tokens.scopes' CHECK in 0127_api_tokens.sql. */
+export type ApiTokenScope = "read" | "upload" | "generate";
 
 export const API_TOKEN_PREFIX = "ms_live_";
 const API_TOKEN_REGEX = /^ms_live_[0-9a-f]{64}$/;

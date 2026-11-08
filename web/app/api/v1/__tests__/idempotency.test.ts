@@ -308,10 +308,11 @@ describe("POST /api/v1/generate idempotency", () => {
         fenced: false,
       });
     mockedQueue.mockImplementation(async ({ prepareToken }) => {
-      if (state.scene?.prepare_token !== prepareToken || state.scene.status !== "frame_ready") {
+      const scene = state.scene;
+      if (!scene || scene.prepare_token !== prepareToken || scene.status !== "frame_ready") {
         return { outcome: "fenced" } as never;
       }
-      state.scene.status = "queued";
+      scene.status = "queued";
       return { outcome: "queued" } as never;
     });
 

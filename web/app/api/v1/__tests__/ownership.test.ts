@@ -40,7 +40,7 @@ const mockedRequireApiToken = vi.mocked(requireApiToken);
 const mockedCreateAdminClient = vi.mocked(createAdminClient);
 
 function fakeFile(data: Uint8Array, name: string, type = "application/octet-stream"): File {
-  return new File([data], name, { type });
+  return new File([Uint8Array.from(data)], name, { type });
 }
 
 function makeUploadAdmin(data: Blob) {

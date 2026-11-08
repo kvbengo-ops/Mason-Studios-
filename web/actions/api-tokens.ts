@@ -5,7 +5,7 @@ import { requireUser } from "@/actions/guard";
 import type { ActionResult } from "@/lib/action-result";
 import { generateApiTokenMaterial } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/server";
-import type { ApiTokenScope } from "@/types/db";
+import type { ApiTokenScope } from "@/lib/api-auth";
 
 const VALID_SCOPES: ReadonlySet<ApiTokenScope> = new Set(["read", "upload", "generate"]);
 
