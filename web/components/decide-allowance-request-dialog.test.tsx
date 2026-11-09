@@ -178,9 +178,10 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
 
   it("shows the requester's full reason in the Approve and Deny dialogs", async () => {
     const user = userEvent.setup();
-    const reason =
-      "Client reshoot for the skincare campaign: 12 extra Seedance clips, line 2
-and a second paragraph.";
+    const reason = [
+      "Client reshoot for the skincare campaign: 12 extra Seedance clips, line 2",
+      "and a second paragraph.",
+    ].join("\n");
     render(
       <DecideAllowanceRequestDialog
         requestId="request-reason"
