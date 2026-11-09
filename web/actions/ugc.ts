@@ -69,7 +69,7 @@ import { KLING_FRAME_EXTS } from "@/lib/elements";
 // scene_references allowlist can't quietly drift apart the way a hand-picked
 // second copy eventually would.
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
-import { MAX_REFERENCES } from "@/lib/ugc-references";
+import { MAX_REFERENCES, maxReferencesFor } from "@/lib/ugc-references";
 import { supportsPromptOnlyVideo } from "@/lib/prompt-only-video";
 import { getModel, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
 import { assertWithinSpendCaps, type queueScenesIfWithinCaps } from "@/lib/spend";
@@ -1489,8 +1489,9 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // that fails both. One cheap read, not worth that risk.
   const referencesBoxSubmitted = formData.get("referencesBox") === "1";
   const boxTags = formData.getAll("referenceTag").map((t) => String(t));
-  if (referencesBoxSubmitted && boxTags.length > MAX_REFERENCES) {
-    return { error: `A scene holds at most ${MAX_REFERENCES} references.` };
+  const maxBoxReferences = maxReferencesFor(String(formData.get("modelId") ?? ""));
+  if (referencesBoxSubmitted && boxTags.length > maxBoxReferences) {
+    return { error: `A scene holds at most ${maxBoxReferences} references.` };
   }
   if (referencesBoxSubmitted) {
     const outsideBox = await elementTagsOutsideBox(admin, user.id, prompt, boxTags);
@@ -2251,8 +2252,9 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   // as retryClip used to, must not be judged against one it never showed).
   const referencesBoxSubmitted = formData.get("referencesBox") === "1";
   const boxTags = formData.getAll("referenceTag").map((t) => String(t));
-  if (referencesBoxSubmitted && boxTags.length > MAX_REFERENCES) {
-    return { error: `A scene holds at most ${MAX_REFERENCES} references.` };
+  const maxBoxReferences = maxReferencesFor(String(formData.get("modelId") ?? ""));
+  if (referencesBoxSubmitted && boxTags.length > maxBoxReferences) {
+    return { error: `A scene holds at most ${maxBoxReferences} references.` };
   }
   if (referencesBoxSubmitted) {
     const outsideBox = await elementTagsOutsideBox(createAdminClient(), user.id, prompt, boxTags);

@@ -1673,9 +1673,9 @@ describe("UgcColumn's References box", () => {
     expect(screen.getByText("not in prompt")).toBeTruthy();
   });
 
-  it("caps the box at MAX_REFERENCES and disables Add once full", () => {
-    const tenTags = Array.from({ length: 10 }, (_, i) => `ref${i}`);
-    const tenElements: readonly ElementTag[] = tenTags.map((name, i) => ({
+  it("caps the box at 12 on Seedance 2.5 and disables Add once full", () => {
+    const twelveTags = Array.from({ length: 12 }, (_, i) => `ref${i}`);
+    const twelveElements: readonly ElementTag[] = twelveTags.map((name, i) => ({
       id: `el-${i}`,
       name,
       category: "character",
@@ -1684,9 +1684,9 @@ describe("UgcColumn's References box", () => {
       assetKind: "character_ref",
     }));
 
-    renderBox({ id: "scene-1", idx: 1, prompt: "", referenceTags: tenTags }, tenElements);
+    renderBox({ id: "scene-1", idx: 1, prompt: "", referenceTags: twelveTags }, twelveElements);
 
-    expect(screen.getByText("10/10")).toBeTruthy();
+    expect(screen.getByText("12/12")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add" }).hasAttribute("disabled")).toBe(true);
   });
 
@@ -1715,8 +1715,8 @@ describe("UgcColumn's References box", () => {
   });
 
   it("refuses a prompt whose direct tags exceed the reference limit", () => {
-    const nineTags = Array.from({ length: 9 }, (_, i) => `ref${i}`);
-    const nineElements: readonly ElementTag[] = nineTags.map((name, i) => ({
+    const elevenTags = Array.from({ length: 11 }, (_, i) => `ref${i}`);
+    const elevenElements: readonly ElementTag[] = elevenTags.map((name, i) => ({
       id: `el-${i}`,
       name,
       category: "character",
@@ -1725,8 +1725,8 @@ describe("UgcColumn's References box", () => {
       assetKind: "character_ref",
     }));
 
-    renderBox({ id: "scene-1", idx: 1, prompt: "", referenceTags: nineTags }, [
-      ...nineElements,
+    renderBox({ id: "scene-1", idx: 1, prompt: "", referenceTags: elevenTags }, [
+      ...elevenElements,
       jen,
       mia,
     ]);
@@ -1734,7 +1734,7 @@ describe("UgcColumn's References box", () => {
       target: { value: "@jen and @mia are here" },
     });
 
-    expect(screen.getByText(/at most 10 references/i)).toBeTruthy();
+    expect(screen.getByText(/at most 12 references/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /regenerate scene/i }).hasAttribute("disabled")).toBe(
       true,
     );

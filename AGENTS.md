@@ -113,8 +113,8 @@ only). `is_talking_head` drives Kling's `sound`; Seedance always sends `generate
 receipt-before-sale rule as Money above, plus a migration: `spend-category-sql.test.ts`
 refuses any model missing from `spend_category_totals`'s render list.
 
-- **References box** — `scene_references` (PR #140), up to `MAX_REFERENCES` (10,
-  `ugc-references.ts`), ordinal per kind (image 1 = start frame, 2 = end frame). Only
+- **References box** — `scene_references` (PR #140), up to `maxReferencesFor(model)` (12
+  on Seedance 2.5, either route; `MAX_REFERENCES` = 10 elsewhere; `ugc-references.ts`), ordinal per kind (image 1 = start frame, 2 = end frame). Only
   "Use element" adds; an upload never does, and the prompt may only `@tag` what's in the
   box. `attachSceneReferences` writes it on Generate; reopening a scene reseeds it from
   `scene_references` via `referenceTags` (`ugc/[id]/page.tsx`, user-scoped read).
