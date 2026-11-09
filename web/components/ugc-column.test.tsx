@@ -1056,17 +1056,18 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
     expect(hiddenInput.value).toBe("720p");
   });
 
-  it("offers only priced tiers and switches the price and submitted resolution", async () => {
+  it("locks Kling 4.0 to its single 720p tier", async () => {
     const user = userEvent.setup();
     const { container } = render(
       <UgcColumn
         layout="bar"
         projectId="proj-1"
         options={[
-          KLING_STD_OPTION,
           {
             ...KLING_STD_OPTION,
-            resolution: "1080p",
+            modelId: "kling-4.0",
+            label: "Kling 4.0",
+            resolution: "720p",
             creditsPerSecond: 27,
             soundCreditsPerSecond: 27,
             silentCreditsPerSecond: 18,
@@ -1080,35 +1081,23 @@ describe("the Tier pill shows /ugc's display label, kie's real resolution stays 
       />,
     );
 
-    expect(screen.getByRole("button", { name: /generate.*\$0\.40/i })).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Resolution: 480p" }));
-    expect(screen.getByRole("menuitem", { name: /480p.*\$0\.100\/s/ })).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /1080p.*\$0\.135\/s/ })).toBeTruthy();
-    expect(screen.queryByRole("menuitem", { name: /4K/ })).toBeNull();
-    await user.click(screen.getByRole("menuitem", { name: /1080p.*\$0\.135\/s/ }));
-
-    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
-      "1080p",
-    );
     expect(screen.getByRole("button", { name: /generate.*\$0\.54/i })).toBeTruthy();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Resolution: 720p" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Resolution: 720p" }));
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    expect(screen.getByRole("menuitem", { name: /720p.*\$0\.135\/s/ })).toBeTruthy();
+    expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
+      "720p",
+    );
   });
 
-  it("shows every supported resolution and disables tiers without a verified price", async () => {
+  it("locks BytePlus Seedance to 480p", async () => {
     const user = userEvent.setup();
     const { container } = renderColumn(null, [OPTIONS[1]!]);
 
     await user.click(screen.getByRole("button", { name: "Resolution: 480p" }));
-    expect(
-      screen
-        .getByRole("menuitem", { name: /720p.*Price unverified/ })
-        .getAttribute("aria-disabled"),
-    ).toBe("true");
-    expect(
-      screen
-        .getByRole("menuitem", { name: /1080p.*Price unverified/ })
-        .getAttribute("aria-disabled"),
-    ).toBe("true");
+    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    expect(screen.getByRole("menuitem", { name: /480p.*\$0\.140\/s/ })).toBeTruthy();
     expect((container.querySelector('input[name="resolution"]') as HTMLInputElement).value).toBe(
       "480p",
     );
