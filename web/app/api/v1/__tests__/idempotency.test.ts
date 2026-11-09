@@ -58,10 +58,13 @@ const auth = {
 } as const;
 const input: ApiClipInput = {
   prompt: "A quiet sunrise over the sea",
-  modelId: "seedance-2.5",
+  // seedance-2.5 (Kie) is retired; the parser refuses it before any idempotency logic.
+  modelId: "seedance-2.5-byteplus",
   resolution: "480p",
   durationS: 4,
   isTalkingHead: false,
+  // What parseApiClipInput fills in when the request omits aspect_ratio, so the hash matches.
+  aspectRatio: "9:16",
   imageRefs: [],
   videoRefs: [],
   audioRefs: [],
