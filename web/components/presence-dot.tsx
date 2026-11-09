@@ -7,10 +7,12 @@ export function PresenceDot({
   lastSeenAt,
   now = new Date(),
   className,
+  offlineClassName,
 }: {
   lastSeenAt: string | null | undefined;
   now?: Date;
   className?: string;
+  offlineClassName?: string;
 }): JSX.Element {
   const online = isOnline(lastSeenAt, now);
   const label = lastSeenLabel(lastSeenAt, now);
@@ -22,6 +24,7 @@ export function PresenceDot({
       className={cn(
         "inline-block size-2 shrink-0 rounded-full",
         online ? "bg-green-500" : "bg-red-500",
+        !online && offlineClassName,
         className,
       )}
     />

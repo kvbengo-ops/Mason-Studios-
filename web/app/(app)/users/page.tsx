@@ -45,6 +45,8 @@ import { requiresAccountApproval } from "@/lib/account-approval";
 import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
 import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
 import { ImageLightbox } from "@/components/image-lightbox";
+import { PresenceDot } from "@/components/presence-dot";
+import { lastSeenLabel } from "@/lib/presence";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -362,6 +364,7 @@ export default async function UsersPage({
     { spent_today_usd: number; spent_this_week_usd: number }
   >();
   const avatarUrlByUserId = new Map<string, string>();
+  const lastSeenByUserId = new Map<string, string | null>();
   // Per-user sum + count of unexpired allowance_grants
   // (0033_allowance_requests_rls_fix.sql's user_active_grants_usd_by_user) —
   // "clear usage visibility for each editor" (the proposal's own words,
@@ -400,7 +403,7 @@ export default async function UsersPage({
       supabase
         .from("profiles")
         .select(
-          "id, avatar_storage_key, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd",
+          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd",
         )
         .in("id", userIds),
       supabase
@@ -416,7 +419,10 @@ export default async function UsersPage({
         return new Map<string, ActiveGrantTotals>();
       }),
     ]);
-    for (const row of overridesData ?? []) overrideByUserId.set(row.id, row);
+    for (const row of overridesData ?? []) {
+      overrideByUserId.set(row.id, row);
+      lastSeenByUserId.set(row.id, row.last_seen_at);
+    }
     const avatarEntries = await Promise.all(
       (overridesData ?? []).map(async (row) => {
         if (!row.avatar_storage_key) return null;
@@ -691,28 +697,46 @@ export default async function UsersPage({
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-3">
                           {avatarUrlByUserId.get(user.id) ? (
-                            <span className="size-9 shrink-0 overflow-hidden rounded-full border bg-muted">
+                            <span className="relative size-9 shrink-0 overflow-visible rounded-full border bg-muted">
                               <ImageLightbox
                                 src={avatarUrlByUserId.get(user.id)!}
                                 alt={`${user.username || user.email}'s profile picture`}
                                 className="size-full rounded-full object-cover"
                                 showIcon={false}
                               />
+                              <PresenceDot
+                                lastSeenAt={lastSeenByUserId.get(user.id)}
+                                className="absolute bottom-0 right-0 size-3 ring-2 ring-background"
+                                offlineClassName="bg-muted-foreground/50"
+                              />
                             </span>
                           ) : (
-                            <span
-                              aria-hidden="true"
-                              className="flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted text-sm text-muted-foreground"
-                            >
+                            <span className="relative flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted text-sm text-muted-foreground">
                               {user.username?.[0]?.toUpperCase() ||
                                 user.email?.[0]?.toUpperCase() ||
                                 "?"}
+                              <PresenceDot
+                                lastSeenAt={lastSeenByUserId.get(user.id)}
+                                className="absolute bottom-0 right-0 size-3 ring-2 ring-background"
+                                offlineClassName="bg-muted-foreground/50"
+                              />
                             </span>
                           )}
                           <span>{user.email}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{user.username}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-muted-foreground">{user.username}</span>
+                          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <PresenceDot
+                              lastSeenAt={lastSeenByUserId.get(user.id)}
+                              offlineClassName="bg-muted-foreground/50"
+                            />
+                            {lastSeenLabel(lastSeenByUserId.get(user.id))}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <RoleBadge role={user.role} />
                       </TableCell>
