@@ -152,6 +152,8 @@ export async function POST(request: Request): Promise<Response> {
         p_render_settings_override: {
           model: prepared.input.modelId,
           resolution: prepared.input.resolution,
+          aspect_ratio: prepared.input.aspectRatio,
+          ...(prepared.input.modelId === "seedance-2.5-byteplus" ? { quality: "high" } : {}),
         },
         p_dev: isDev(),
         p_api_token_id: auth.tokenId,

@@ -181,4 +181,10 @@ Optionally, generate `docs/openapi.json` from the same content.
 
 ## Research findings
 
-_(R1–R4 results go here, with source links, before the tasks that depend on them start.)_
+**R1 — BytePlus Seedance 2.5.** The [model guide](https://docs.byteplus.com/en/docs/modelark/seedance-2-5-prompt-guide) and [task API](https://docs.byteplus.com/en/docs/modelark/create-video-generation-task-api) allow up to 30 images, 10 reference videos and 10 audio clips, 50 assets total. Reference videos are 2–30 seconds each (4–30 for editing), with a 30-second combined limit. Audio is WAV or MP3, 2–30 seconds each, 30 seconds combined, and 15 MB each. Neither page publishes a numeric text-prompt limit; this remains unresolved. The proposed product limit of 8 images + 1 video + 3 audio fits the documented asset counts, but the timed references must also fit their combined duration limits.
+
+**R2 — Kie prompt limits.** The [Kling 4.0 Reference](https://docs.kie.ai/market/kling/v4-reference-to-video), [Wan 3.0](https://docs.kie.ai/market/wan/3-0-video), and [Gemini Omni Video](https://docs.kie.ai/market/gemini-omni-video) pages do not publish numeric prompt caps. Their exact vendor limits remain unresolved; do not infer a higher cap from the site-wide 20,000-character limit. Existing model descriptors remain the conservative enforcement point where they specify a cap.
+
+**R3 — BytePlus video-input price.** The [BytePlus price sheet](https://docs.byteplus.com/en/docs/ModelArk/1544106) lists Seedance 2.5 at $10.70/M tokens without video input and $6.40/M tokens with video input for 480p/720p. Its estimate counts both input and output video seconds. At 26 output seconds, the 4-second reference increases estimated tokens by 4/26 but drops the rate to $6.40/M; the net quote falls from $2.673 to about $1.845. The rate switch is intentional, so no pricing-code change is needed. Actual cost settles against reported token usage.
+
+**R4 — ChatGPT Image 2.6 and Gemini Omni 1.2.** See `docs/plans/r4-s8-gpt-image-2-6-and-gemini-omni-1-2.md` (findings and the S8 proposal; no models added).

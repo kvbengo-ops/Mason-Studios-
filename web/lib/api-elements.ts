@@ -195,8 +195,13 @@ export async function createApiElement(
   const name = String(formData.get("name") ?? "").trim();
   if (!name || name.length > 64)
     return error(422, "invalid_element_name", "Element name must be 1-64 characters.");
+  const sharedRaw = formData.get("shared");
+  if (sharedRaw !== null && sharedRaw !== "true" && sharedRaw !== "false") {
+    return error(400, "invalid_parameters", "shared must be true or false.");
+  }
+  const shared = sharedRaw === "true";
   const admin = createAdminClient();
-  const nameError = await elementUploadNameError(admin, userId, name, false);
+  const nameError = await elementUploadNameError(admin, userId, name, shared);
   if (nameError) {
     const duplicate = nameError.startsWith("@");
     return error(
@@ -260,7 +265,7 @@ export async function createApiElement(
       description,
       category,
       asset_id: asset.id,
-      is_shared: false,
+      is_shared: shared,
     })
     .select("id, name, category, created_at")
     .single();

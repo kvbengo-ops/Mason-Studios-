@@ -1,16 +1,23 @@
-// The one place MAX_REFERENCES is written down.
-//
-// LIVES HERE, NOT IN actions/ugc.ts, even though attachSceneReferences (the
-// function it was born beside) is the only place that enforces it server-
-// side. A "use server" file can only export async functions — every other
-// top-level export throws at build time — so a plain numeric constant a
-// Client Component also needs (ugc-column.tsx's References box, capping what
-// an operator can put in it) cannot be exported from actions/ugc.ts itself.
-// Same reason lib/brief-guard.ts and lib/compile-guard.ts exist beside their
-// own "use server" files.
-//
-// kie documents reference_image_urls as taking at most ten. The box has to
-// cap at the SAME number attachSceneReferences will actually accept — a box
-// that let in an eleventh reference would let the operator believe it was
-// coming along for a render that silently drops it.
+// The clip picker and API share model-specific limits. Other image workflows
+// still use the original ten-reference cap.
 export const MAX_REFERENCES = 10;
+
+export function referenceLimitsFor(modelId: string) {
+  if (modelId === "seedance-2.5-byteplus") {
+    return { image: 8, video: 1, audio: 3, total: 12, videoSeconds: 30, audioSeconds: 30 };
+  }
+  if (modelId.startsWith("kling-")) {
+    return { image: 2, video: 0, audio: 0, total: 2, videoSeconds: 0, audioSeconds: 0 };
+  }
+  if (modelId === "seedance-2-mini") {
+    return { image: 9, video: 3, audio: 3, total: 10, videoSeconds: 15, audioSeconds: 15 };
+  }
+  return {
+    image: 10,
+    video: 10,
+    audio: 10,
+    total: MAX_REFERENCES,
+    videoSeconds: null,
+    audioSeconds: null,
+  };
+}

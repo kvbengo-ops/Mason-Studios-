@@ -2,13 +2,20 @@ import "server-only";
 
 import { estimateCost } from "@/lib/estimate";
 import { offerable } from "@/lib/kie/offerable";
-import { KIE_MODELS } from "@/lib/kie/models";
+import { KIE_MODELS, videoAspectRatioFor } from "@/lib/kie/models";
 import { quoteClip, type ClipQuote } from "@/lib/kie/cost";
-import { isAudioEnabled, mergeRenderSettings, type RenderSettings } from "@/lib/models";
+import {
+  getModel,
+  isAudioEnabled,
+  mergeRenderSettings,
+  pricingAudioOn,
+  type RenderSettings,
+} from "@/lib/models";
 import { resolveApiReferences, type ResolvedApiReferencesSuccess } from "@/lib/api-references";
 import type { Resolution } from "@/lib/kie/rates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 
 export interface ApiClipInput {
   prompt: string;
@@ -16,6 +23,7 @@ export interface ApiClipInput {
   resolution: Resolution;
   durationS: number;
   isTalkingHead: boolean;
+  aspectRatio: string;
   imageRefs: string[];
   videoRefs: string[];
   audioRefs: string[];
@@ -41,6 +49,8 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
     "resolution",
     "duration_s",
     "is_talking_head",
+    "aspect_ratio",
+    "sound",
     "image_refs",
     "video_refs",
     "audio_refs",
@@ -58,7 +68,6 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
   if (
     typeof prompt !== "string" ||
     prompt.trim().length === 0 ||
-    prompt.length > 5000 ||
     typeof modelId !== "string" ||
     typeof resolution !== "string" ||
     typeof durationS !== "number" ||
@@ -71,6 +80,14 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
       error: "prompt, model_id, resolution, and integer duration_s are required.",
     };
   }
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    return {
+      ok: false,
+      status: 422,
+      code: "prompt_too_long",
+      error: `Prompt has ${prompt.length} characters; the limit is ${MAX_PROMPT_CHARS}.`,
+    };
+  }
   if (body.is_talking_head !== undefined && typeof body.is_talking_head !== "boolean") {
     return {
       ok: false,
@@ -79,10 +96,59 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
       error: "is_talking_head must be a boolean.",
     };
   }
+  if (body.sound !== undefined && typeof body.sound !== "boolean") {
+    return {
+      ok: false,
+      status: 400,
+      code: "invalid_parameters",
+      error: "sound must be a boolean.",
+    };
+  }
+  if (
+    body.is_talking_head !== undefined &&
+    body.sound !== undefined &&
+    body.is_talking_head !== body.sound
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      code: "invalid_parameters",
+      error: "sound and is_talking_head must agree when both are sent.",
+    };
+  }
 
   const model = KIE_MODELS.find((candidate) => candidate.id === modelId);
+  if (modelId === "seedance-2.5") {
+    return {
+      ok: false,
+      status: 422,
+      code: "model_retired",
+      error: "seedance-2.5 is retired; use seedance-2.5-byteplus.",
+    };
+  }
   if (!model) {
     return { ok: false, status: 422, code: "unknown_model", error: `Unknown model "${modelId}".` };
+  }
+  const nativeAudio = getModel(modelId).nativeAudio;
+  if (body.sound === false && !nativeAudio) {
+    return {
+      ok: false,
+      status: 422,
+      code: "unsupported_sound",
+      error: modelId.startsWith("seedance-")
+        ? "Seedance always generates audio; sound:false is unavailable."
+        : `${model.label} cannot disable sound through this API.`,
+    };
+  }
+  const aspectRatio =
+    body.aspect_ratio === undefined ? "9:16" : videoAspectRatioFor(modelId, body.aspect_ratio);
+  if (!aspectRatio) {
+    return {
+      ok: false,
+      status: 422,
+      code: "unsupported_aspect_ratio",
+      error: `${model.label} does not support aspect_ratio "${String(body.aspect_ratio)}".`,
+    };
   }
   if (!model.durationsS.includes(durationS as number)) {
     return {
@@ -102,6 +168,14 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
       status: 422,
       code: "unsupported_resolution",
       error: `${model.label} does not support resolution "${resolution}". Accepted: ${model.resolutions.join(", ")}.`,
+    };
+  }
+  if (modelId === "seedance-2.5-byteplus" && canonicalResolution !== "480p") {
+    return {
+      ok: false,
+      status: 422,
+      code: "unsupported_resolution",
+      error: "seedance-2.5-byteplus accepts only 480p.",
     };
   }
   const refs: Record<"image_refs" | "video_refs" | "audio_refs", string[]> = {
@@ -128,7 +202,10 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
     modelId,
     resolution: canonicalResolution,
     durationS: durationS as number,
-    isTalkingHead: (body.is_talking_head as boolean | undefined) ?? false,
+    isTalkingHead:
+      (body.is_talking_head as boolean | undefined) ??
+      (nativeAudio ? ((body.sound as boolean | undefined) ?? true) : false),
+    aspectRatio,
     imageRefs: refs.image_refs,
     videoRefs: refs.video_refs,
     audioRefs: refs.audio_refs,
@@ -197,7 +274,12 @@ export async function prepareApiClip(
       modelId: input.modelId,
       resolution: input.resolution,
       durationS: input.durationS,
-      withSound: isAudioEnabled(),
+      withSound: pricingAudioOn(
+        getModel(input.modelId),
+        input.resolution,
+        input.isTalkingHead,
+        isAudioEnabled(),
+      ),
     },
     new Date(),
   );
@@ -235,6 +317,5 @@ export function apiClipQuote(prepared: Extract<ApiClipPreparation, { ok: true }>
     price_unpaid: prepared.quote.unpaid,
     promotion_stale: prepared.quote.stale,
     priced_at: prepared.quote.pricedAt,
-    ...(prepared.quote.note ? { note: prepared.quote.note } : {}),
   };
 }
