@@ -46,6 +46,7 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         requestId="request-1"
         requesterEmail="editor@example.com"
         requestedUsd={5000}
+        reason={null}
         defaultGrantAmountUsd={5000}
         defaultExpiresAtIso={inSevenDays()}
         peerMaxGrantUsd={6000}
@@ -81,6 +82,7 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         requestId="request-2"
         requesterEmail="editor@example.com"
         requestedUsd={6999}
+        reason={null}
         defaultGrantAmountUsd={6999}
         defaultExpiresAtIso={inSevenDays()}
         peerMaxGrantUsd={null}
@@ -109,6 +111,7 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         requestId="request-credits"
         requesterEmail="editor@example.com"
         requestedUsd={30}
+        reason={null}
         defaultGrantAmountUsd={30}
         defaultExpiresAtIso={inSevenDays()}
         peerMaxGrantUsd={30}
@@ -145,6 +148,7 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
         requestId="request-dual"
         requesterEmail="editor@example.com"
         requestedUsd={30}
+        reason={null}
         defaultGrantAmountUsd={30}
         defaultExpiresAtIso={inSevenDays()}
         peerMaxGrantUsd={null}
@@ -170,5 +174,35 @@ describe("DecideAllowanceRequestDialog peer mode", () => {
       "approve",
       expect.objectContaining({ grantAmountUsd: 30 }),
     );
+  });
+
+  it("shows the requester's full reason in the Approve and Deny dialogs", async () => {
+    const user = userEvent.setup();
+    const reason = [
+      "Client reshoot for the skincare campaign: 12 extra Seedance clips, line 2",
+      "and a second paragraph.",
+    ].join("\n");
+    render(
+      <DecideAllowanceRequestDialog
+        requestId="request-reason"
+        requesterEmail="editor@example.com"
+        requestedUsd={50}
+        reason={reason}
+        defaultGrantAmountUsd={50}
+        defaultExpiresAtIso={inSevenDays()}
+        peerMaxGrantUsd={null}
+        currentAllowanceUsd={null}
+        usedThisWeekUsd={null}
+        accountFundsUsd={null}
+        outstandingAllowanceUsd={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+    expect(screen.getByRole("dialog").textContent).toContain("a second paragraph");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await user.click(screen.getByRole("button", { name: "Deny" }));
+    expect(screen.getByRole("dialog").textContent).toContain("Client reshoot for the skincare campaign");
   });
 });
