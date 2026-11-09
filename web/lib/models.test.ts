@@ -20,6 +20,8 @@ import {
   blocksInline,
   type ImageModelDescriptor,
   kieIdForImageModel,
+  getImageModel,
+  DEFAULT_IMAGE_MODEL_ID,
   applySceneCostUsd,
   computeUniversalDurationsS,
   clipCostUsd,
@@ -908,14 +910,15 @@ describe("IMAGE_MODELS reference rules", () => {
     // configured today: a base text-to-image endpoint handed reference images
     // accepts them, ignores them, returns 200 and bills. Null must mean refuse,
     // never "send it anyway".
-    const refusing = { ...imageModel("nano-banana"), editId: null };
+    const refusing = { ...imageModel("nano-banana-2-1"), editId: null };
     expect(kieIdForImageModel(refusing, true)).toBeNull();
   });
 
-  it("keeps Nano Banana on its separate edit endpoint", () => {
-    const nanoBanana = imageModel("nano-banana");
-    expect(kieIdForImageModel(nanoBanana, false)).toBe("google/nano-banana");
-    expect(kieIdForImageModel(nanoBanana, true)).toBe("google/nano-banana-edit");
+  it("does not offer plain Nano Banana, and an old saved pick falls back to Nano Banana 2.1", () => {
+    expect(IMAGE_MODELS.map((m) => m.id)).not.toContain("nano-banana");
+    expect(IMAGE_MODELS.map((m) => m.id)).toContain("nano-banana-2-1");
+    expect(getImageModel("nano-banana").id).toBe("nano-banana-2-1");
+    expect(getImageModel(undefined).id).toBe(DEFAULT_IMAGE_MODEL_ID);
   });
 
   it("does not offer Nano Banana 2", () => {

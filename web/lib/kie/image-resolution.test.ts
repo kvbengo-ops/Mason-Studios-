@@ -62,7 +62,8 @@ describe("what a tier costs", () => {
   });
 
   it("is null for a tier the model does not offer", () => {
-    const plain = IMAGE_MODELS.find((m) => m.id === "nano-banana")!;
+    // No remaining model lacks tiers, so strip them from one to model "offers none".
+    const plain = { ...IMAGE_MODELS[0]!, resolutions: undefined, resolutionCostsUsd: undefined };
     expect(imageCostUsd(plain, "2K")).toBeNull();
   });
 });

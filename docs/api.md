@@ -90,7 +90,7 @@ A refused resolution or duration gets `422`, and the error lists what the model 
 
 `seedance-2.5` (Kie) and `seedance-2.5-byteplus` are separate models: you pick one, and neither stands in for the other. Use BytePlus for faces made with Seedream 5.0 Pro. BytePlus dispatch is limited by `BYTEPLUS_MAX_INFLIGHT` (default 3), and does not fall back to Kie.
 
-Image model IDs for `POST /images`: `nano-banana` (default), `nano-banana-2-1`, `seedream-5.0-pro`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, and `gpt-image-2.6-economy` (1K only).
+Image model IDs for `POST /images`: `nano-banana-2-1` (default), `seedream-5.0-pro`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, and `gpt-image-2.6-economy` (1K only).
 
 `GET /allowance` reports `daily_remaining_usd`, `weekly_remaining_usd`, the corresponding caps, and whether the per-user daily cap is enabled. These are current headroom under spend ceilings, not a stored balance.
 

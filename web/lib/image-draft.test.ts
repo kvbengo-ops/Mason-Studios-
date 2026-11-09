@@ -14,7 +14,7 @@
 import { describe, expect, it } from "vitest";
 import { parseImageDraft, serializeImageDraft, type ImageDraft } from "./image-draft";
 
-const MODELS = ["nano-banana", "seedream-5.0-pro"];
+const MODELS = ["nano-banana-2-1", "seedream-5.0-pro"];
 const isSelectable = (id: string): boolean => MODELS.includes(id);
 
 const DRAFT: ImageDraft = {

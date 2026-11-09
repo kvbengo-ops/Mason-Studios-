@@ -185,7 +185,7 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
 
     expect(
       await generatePersonalImage(
-        generateForm({ imageModel: "nano-banana", aspectRatio: "portrait" }),
+        generateForm({ imageModel: "nano-banana-2-1", aspectRatio: "portrait" }),
       ),
     ).toEqual({ error: RATIO_REFUSAL });
   });
@@ -205,7 +205,7 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const outcome = await generatePersonalImage(
-        generateForm({ imageModel: "nano-banana", aspectRatio: "16:9" }),
+        generateForm({ imageModel: "nano-banana-2-1", aspectRatio: "16:9" }),
       ).catch((error: unknown) => error);
 
       // Deliberately NOT an assertion about which error: what is being pinned

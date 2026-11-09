@@ -298,7 +298,7 @@ describe("generatePersonalImage with a key that has been used before", () => {
   const submission = form({
     prompt: "a red ceramic mug on white",
     idempotencyKey: "key-1",
-    imageModel: "nano-banana",
+    imageModel: "nano-banana-2-1",
     aspectRatio: "9:16",
   });
 
@@ -496,7 +496,7 @@ describe("generatePersonalImage hands a new attempt off instead of waiting on ki
       form({
         prompt: "a mug",
         idempotencyKey: "key-2",
-        imageModel: "nano-banana",
+        imageModel: "nano-banana-2-1",
         aspectRatio: "9:16",
       }),
     );

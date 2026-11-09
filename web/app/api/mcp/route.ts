@@ -111,7 +111,7 @@ const TOOLS = [
         prompt: { type: "string" },
         model: {
           type: "string",
-          description: 'Optional, e.g. "nano-banana" (default, cheapest), "seedream-5.0-pro".',
+          description: 'Optional, e.g. "nano-banana-2-1" (default, cheapest), "seedream-5.0-pro".',
         },
         aspect_ratio: {
           type: "string",

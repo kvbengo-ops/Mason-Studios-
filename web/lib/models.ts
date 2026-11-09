@@ -1518,15 +1518,8 @@ export interface ImageModelDescriptor {
  * path lib/kie.ts already names as the real fix, and not before.
  */
 export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
-  {
-    id: "nano-banana",
-    label: "Nano Banana",
-    textToImageId: "google/nano-banana",
-    editId: "google/nano-banana-edit",
-    costUsd: 0.02,
-    observedSeconds: 22,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
-  },
+  // Plain Nano Banana is no longer offered here (owner, 2026-11-10). Its kie ids stay in
+  // lib/kie.ts: the frame and character flows still call generateImage without a model.
   {
     id: "seedream-5.0-pro",
     label: "Seedream 5.0 Pro",
@@ -1605,7 +1598,7 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
   },
 ];
 
-export const DEFAULT_IMAGE_MODEL_ID = "nano-banana";
+export const DEFAULT_IMAGE_MODEL_ID = "nano-banana-2-1";
 
 /**
  * Resolves a picker value to its descriptor, falling back to the default.
