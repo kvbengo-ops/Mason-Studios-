@@ -66,11 +66,10 @@ describe("ugcOptions(true) — the sound picker", () => {
     expect(options.some((o) => o.modelId === "hailuo-2.3-pro")).toBe(false);
   });
 
-  it("offers Kling Reference at its 720p receipt and its published 1080p, warning on the latter", () => {
+  it("offers Kling Reference at 720p only", () => {
     const reference = options.filter((o) => o.modelId === "kling-4.0-reference");
     expect(reference.map((o) => [o.resolution, o.creditsPerSecond, o.unpaid])).toEqual([
       ["720p", 28.5, false],
-      ["1080p", 42.5, true],
     ]);
     expect(reference.every((o) => o.nativeAudio === false)).toBe(true);
   });
