@@ -52,6 +52,7 @@ const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "kling-4.0-reference",
   "wan-3.0",
   "gemini-omni-video",
+  "gemini-omni-1.2",
 ]);
 
 export function ugcOptions(withSound: boolean, role: ProfileRole | null = null): UgcOption[] {

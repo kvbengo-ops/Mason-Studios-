@@ -265,6 +265,20 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 			return
 		}
 	}
+	if model.ID == "gemini-omni-1.2" {
+		imageCount := 0
+		for _, r := range refs {
+			if r.Kind != "image" {
+				failScene(ctx, deps, logger, scene, fmt.Errorf("Gemini Omni 1.2 accepts image references only"))
+				return
+			}
+			imageCount++
+		}
+		if imageCount > 6 {
+			failScene(ctx, deps, logger, scene, fmt.Errorf("Gemini Omni 1.2 accepts at most six image references"))
+			return
+		}
+	}
 	// kling4RefInput sends images only. A voice or video it dropped would be
 	// a render the operator believed carried one; refuse it unbilled instead.
 	if model.ID == "kling-4.0-reference" {

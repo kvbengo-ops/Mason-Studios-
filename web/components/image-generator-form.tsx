@@ -1,5 +1,5 @@
 "use client";
-import { formatUsd } from "@/lib/format-usd";
+import { formatUsdRate } from "@/lib/format-usd";
 
 import { useEffect, useState, useTransition } from "react";
 import type { FormEvent, JSX } from "react";
@@ -202,11 +202,11 @@ export function ImageGeneratorForm({
   const selectedResolution = selectedModel.resolutions?.includes(resolution) ? resolution : "1K";
   const selectedCostUsd = imageCostUsd(selectedModel, selectedResolution);
   const costLabel =
-    selectedCostUsd === null ? "Pricing verification pending" : formatUsd(selectedCostUsd);
+    selectedCostUsd === null ? "Pricing verification pending" : formatUsdRate(selectedCostUsd);
   const batchCostLabel =
     selectedCostUsd === null
       ? "Pricing verification pending"
-      : formatUsd(selectedCostUsd * imageCount);
+      : formatUsdRate(selectedCostUsd * imageCount);
 
   // ---------------------------------------------------------------------
   // DRAFT PERSISTENCE (0088)
@@ -663,7 +663,7 @@ export function ImageGeneratorForm({
                               <span className="truncate text-xs text-muted-foreground">
                                 {m.costUsd === null
                                   ? "Pricing verification pending"
-                                  : `${formatUsd(m.costUsd)} per image`}
+                                  : `${formatUsdRate(m.costUsd)} per image`}
                                 {m.editId === null
                                   ? m.referenceDisabledReason
                                     ? " · references temporarily unavailable"
@@ -748,7 +748,7 @@ export function ImageGeneratorForm({
                               >
                                 <span className="flex-1">{tier}</span>
                                 <span className="text-xs font-normal text-muted-foreground">
-                                  {cost === null ? "Pricing pending" : formatUsd(cost)}
+                                  {cost === null ? "Pricing pending" : formatUsdRate(cost)}
                                 </span>
                                 {tier === selectedResolution ? (
                                   <Check aria-hidden="true" className="size-4 text-foreground" />

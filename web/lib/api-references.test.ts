@@ -397,6 +397,23 @@ describe("resolveApiReferences", () => {
     }
   });
 
+  it("allows Gemini Omni 1.2 prompts without references and refuses video references", async () => {
+    const admin = makeFakeAdmin({ ownedElements: baseElements, assets: baseAssets });
+    const args = {
+      admin,
+      userId: "user-1",
+      modelId: "gemini-omni-1.2",
+      resolution: "720p",
+      prompt: "A camera tracks a cyclist",
+    };
+    expect((await resolveApiReferences(args)).ok).toBe(true);
+    expect(await resolveApiReferences({ ...args, videoRefs: ["el-vid-1"] })).toMatchObject({
+      ok: false,
+      status: 422,
+      code: "too_many_references",
+    });
+  });
+
   it("attachApiSceneReferences detects fencing when attach_scene_references_fenced returns false", async () => {
     const admin = makeFakeAdmin({
       ownedElements: baseElements,

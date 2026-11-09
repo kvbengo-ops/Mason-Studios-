@@ -78,6 +78,14 @@ describe("published prices are sold on /ugc", () => {
       // Every published rate is sold since 2026-10-30 (offerable.ts's header),
       // so this pins exactly which tiers are on kie's word alone.
       [
+        "gemini-omni-1.2 1080p (sound=false)",
+        "gemini-omni-1.2 1080p (sound=true)",
+        "gemini-omni-1.2 360p (sound=false)",
+        "gemini-omni-1.2 360p (sound=true)",
+        "gemini-omni-1.2 4k (sound=false)",
+        "gemini-omni-1.2 4k (sound=true)",
+        "gemini-omni-1.2 720p (sound=false)",
+        "gemini-omni-1.2 720p (sound=true)",
         "gemini-omni-video 1080p (sound=false)",
         "gemini-omni-video 1080p (sound=true)",
         "gemini-omni-video 4k (sound=false)",
@@ -126,6 +134,14 @@ describe("published prices are sold on /ugc", () => {
     // before anyone read the log.
     expect(offered.sort()).toEqual(
       [
+        "gemini-omni-1.2 360p sound=false",
+        "gemini-omni-1.2 360p sound=true",
+        "gemini-omni-1.2 720p sound=false",
+        "gemini-omni-1.2 720p sound=true",
+        "gemini-omni-1.2 1080p sound=false",
+        "gemini-omni-1.2 1080p sound=true",
+        "gemini-omni-1.2 4k sound=false",
+        "gemini-omni-1.2 4k sound=true",
         // Receipt 2026-09-14: 63 credits for 4s. One price schedule and native
         // audio (no switch in kie's payload), so sound mode shares it.
         "gemini-omni-video 720p sound=false",

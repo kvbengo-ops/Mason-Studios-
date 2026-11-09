@@ -516,8 +516,13 @@ describe("VIDEO_MODELS invariants", () => {
     expect(
       VIDEO_MODELS.map((m) => m.id),
       "a model in one list and not the other resolves through getModel's fallback and renders as something else",
-    ).toEqual(KIE_MODELS.filter((m) => m.id !== "gemini-omni-video").map((m) => m.id));
+    ).toEqual(
+      KIE_MODELS.filter((m) => m.id !== "gemini-omni-video" && m.id !== "gemini-omni-1.2").map(
+        (m) => m.id,
+      ),
+    );
     expect(VIDEO_MODELS.some((m) => m.id === "gemini-omni-video")).toBe(false);
+    expect(VIDEO_MODELS.some((m) => m.id === "gemini-omni-1.2")).toBe(false);
   });
 
   it("every model's defaultFps is in its own allowedFps", () => {

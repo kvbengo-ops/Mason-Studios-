@@ -140,6 +140,19 @@ export const GEMINI_OMNI_VIDEO: KieModel = {
   note: "Published pricing only; held out of /ugc until a paid receipt exists.",
 };
 
+/** Kie's newer Gemini endpoint. Audio is native; only image and text inputs are offered. */
+export const GEMINI_OMNI_1_2: KieModel = {
+  id: "gemini-omni-1.2",
+  kieModelName: "google/gemini-omni-flash-1-2",
+  label: "Gemini Omni 1.2 Flash",
+  resolutions: ["360p", "720p", "1080p", "4k"],
+  defaultResolution: "720p",
+  durationsS: seconds(3, 15),
+  aspectRatios: ["9:16", "16:9"],
+  maxPromptChars: 20_000,
+  longestRenderedS: 0,
+};
+
 /**
  * Seedance 2.5 — no longer the only model with more than one resolution
  * (Kling has two priced tiers now; Seedance 2 and 2 Fast list several
@@ -291,6 +304,7 @@ export const KIE_MODELS: readonly KieModel[] = [
   HAILUO_2_3_PRO,
   WAN_3,
   GEMINI_OMNI_VIDEO,
+  GEMINI_OMNI_1_2,
 ];
 
 /** The submitted ratio when this model takes it, else undefined (renders 9:16). */

@@ -18,6 +18,9 @@ import type { ImageAspectRatio } from "../image-aspect-ratios";
 import type { ImageResolutionId } from "../image-resolutions";
 import { gptImage25Input, isGptImage25Id } from "./gpt-image-2-5";
 
+export const GPT_IMAGE_2_6_ECONOMY_TEXT = "gpt-image-2-6/economy-text-to-image";
+export const GPT_IMAGE_2_6_ECONOMY_EDIT = "gpt-image-2-6/economy-image-to-image";
+
 /**
  * Nano Banana 2 — https://docs.kie.ai/market/google/nanobanana2
  *
@@ -42,6 +45,17 @@ export function kieImageInput(
   refImageUrls: readonly string[] = [],
   resolution: ImageResolutionId = "1K",
 ): Record<string, unknown> {
+  if (model === GPT_IMAGE_2_6_ECONOMY_TEXT || model === GPT_IMAGE_2_6_ECONOMY_EDIT) {
+    if (resolution !== "1K") throw new Error("GPT Image 2.6 Economy offers 1K only.");
+    if ((model === GPT_IMAGE_2_6_ECONOMY_EDIT) !== refImageUrls.length > 0) {
+      throw new Error("GPT Image 2.6 Economy references require the image-to-image endpoint.");
+    }
+    return {
+      prompt,
+      aspect_ratio: aspectRatio,
+      ...(refImageUrls.length ? { input_urls: [...refImageUrls] } : {}),
+    };
+  }
   if (isGptImage25Id(model)) {
     return gptImage25Input(model, prompt, aspectRatio, refImageUrls, resolution);
   }

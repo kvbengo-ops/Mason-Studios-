@@ -3,6 +3,9 @@
 export const MAX_REFERENCES = 10;
 
 export function referenceLimitsFor(modelId: string) {
+  if (modelId === "gemini-omni-1.2") {
+    return { image: 6, video: 0, audio: 0, total: 6, videoSeconds: 0, audioSeconds: 0 };
+  }
   if (modelId === "seedance-2.5-byteplus") {
     return { image: 8, video: 1, audio: 3, total: 12, videoSeconds: 30, audioSeconds: 30 };
   }
