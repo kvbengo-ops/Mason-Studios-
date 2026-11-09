@@ -525,13 +525,8 @@ describe("Length is a control, and it reprices the button", () => {
 
   it("sends High quality by default, and the pick from the Quality menu", async () => {
     const user = userEvent.setup();
-    const { container } = renderColumn({
-      id: "scene-1",
-      idx: 1,
-      prompt: "",
-      modelId: "seedance-2-fast",
-      resolution: "480p",
-    });
+    // Seedance 2.0 Fast only: the pinned BytePlus Seedance is absent, so the column opens here.
+    const { container } = renderColumn(null, [OPTIONS[0]!]);
     const field = () =>
       (container.querySelector('input[name="quality"]') as HTMLInputElement).value;
 
