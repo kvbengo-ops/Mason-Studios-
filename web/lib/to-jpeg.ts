@@ -1,16 +1,15 @@
 import "server-only";
 
-// Every picture an operator uploads is stored as JPEG. A closed list, not
-// "any image/* that isn't JPEG": these are exactly the formats the upload
-// dialogs accept (lib/file-type.ts), so anything else — audio, video, or a
-// format nobody decided to support — passes through untouched rather than
-// being handed to a decoder on a guess.
-const CONVERTIBLE_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/png", "image/webp"]);
+// Only WebP is re-encoded: Kling rejects it (KLING_FRAME_EXTS), and PNG and JPEG are
+// kept byte-for-byte so providers get the original. A closed list, not "any image/* that
+// isn't JPEG": anything else (audio, video, an unsupported format) passes through
+// untouched rather than being handed to a decoder on a guess.
+const CONVERTIBLE_IMAGE_TYPES: ReadonlySet<string> = new Set(["image/webp"]);
 
 const JPEG_QUALITY = 90;
 
 /**
- * Re-encodes a PNG or WebP upload as JPEG; returns every other file as-is.
+ * Re-encodes a WebP upload as JPEG; returns every other file as-is, PNG included.
  * `.rotate()` applies the EXIF orientation before metadata is dropped, and
  * transparency is flattened onto white because JPEG has no alpha channel.
  */

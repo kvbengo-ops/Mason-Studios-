@@ -11,9 +11,9 @@ async function image(format: "png" | "webp", alpha: number): Promise<Buffer> {
 }
 
 describe("toJpeg", () => {
-  it.each(["png", "webp"] as const)("re-encodes a %s upload as a .jpg JPEG", async (format) => {
-    const file = new File([new Uint8Array(await image(format, 1))], `shot.${format}`, {
-      type: `image/${format}`,
+  it("re-encodes a webp upload as a .jpg JPEG", async () => {
+    const file = new File([new Uint8Array(await image("webp", 1))], "shot.webp", {
+      type: "image/webp",
     });
 
     const out = await toJpeg(file);
@@ -25,9 +25,9 @@ describe("toJpeg", () => {
     expect([meta.width, meta.height]).toEqual([8, 4]);
   });
 
-  it("flattens transparency onto white", async () => {
-    const file = new File([new Uint8Array(await image("png", 0))], "logo.png", {
-      type: "image/png",
+  it("flattens webp transparency onto white", async () => {
+    const file = new File([new Uint8Array(await image("webp", 0))], "logo.webp", {
+      type: "image/webp",
     });
 
     const out = await toJpeg(file);
@@ -36,6 +36,14 @@ describe("toJpeg", () => {
       .raw()
       .toBuffer({ resolveWithObject: true });
     expect(Math.min(...data)).toBeGreaterThan(245);
+  });
+
+  it("keeps a PNG byte-for-byte", async () => {
+    const file = new File([new Uint8Array(await image("png", 0))], "logo.png", {
+      type: "image/png",
+    });
+    const out = await toJpeg(file);
+    expect(out).toBe(file);
   });
 
   it("returns a JPEG untouched", async () => {

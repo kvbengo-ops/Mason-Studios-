@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0098`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0130`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;
@@ -81,6 +81,26 @@ rows. Any `MOCK_*` env var is dead text.
 Captions are gone. Subtitles are added in CapCut after export.
 
 ## `/ugc` is a picker now, not a pin
+
+- **Seedance 2.5 on Kie is retired for new renders** (2026-11-09). The picker does not list
+  it, and `retargetRetiredModel` / `movedOffRetiredModel` move a `/ugc` scene on it to
+  `seedance-2.5-byteplus` at 480p. The descriptors stay: old clips resolve through them. The
+  scripted pipeline's default model is still `seedance-2.5` (`DEFAULT_MODEL_ID`), so only
+  `kind = 'clip'` projects are rewritten.
+- **BytePlus Seedance is 480p and quality `high`, fixed.** `ugc-options.ts` offers no other
+  tier, the Quality menu is hidden, and `generateClip`/`regenerateClip` force the pair and
+  refuse any other resolution.
+- **`profiles.team`** (`hybrid_editor`, `ai_animator`, null) gates video models only, not
+  spend. `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor cannot use `wan-3.0`;
+  null is unrestricted. Set by an admin in Accounts Control (`setAccountTeam`); no client
+  can write it (no UPDATE policy on `profiles`).
+- **`profiles.last_seen_at`** is the presence heartbeat (`touchPresence`, every 60 s per
+  visible tab); Accounts Control shows green within 2 minutes.
+- **Uploads keep PNG and JPEG as sent.** `toJpeg` converts WebP only (Kling rejects it).
+- **Prompts are capped at `MAX_PROMPT_CHARS` = 20,000** (`lib/prompt-limits.ts`) on `/ugc`;
+  a lower per-model vendor cap (`maxPromptChars`) still wins.
+- **Image ratios are 9:16, 1:1 and 16:9 on every model**; Nano Banana 2 is gone from the
+  picker (`nano-banana-2-1` stays).
 
 `PINNED_MODEL_ID`/`PINNED_RESOLUTION`/`PINNED_DURATION_S` (`ugc-column.tsx`) are the
 **default for a new scene**, not a fixed value — the picker offers every `offerable()`

@@ -10,14 +10,9 @@ import type { ImageAspectRatio } from "./image-aspect-ratios";
  */
 export const SEEDREAM_PRO_ID = "byteplus/seedream-5.0-pro";
 
-/** The ratios lib/byteplus-image.ts has pixel sizes for. */
+/** The three ratios the app offers (see lib/image-aspect-ratios.ts). */
 export const SEEDREAM_PRO_ASPECT_RATIOS: readonly ImageAspectRatio[] = [
   "9:16",
   "1:1",
-  "3:4",
-  "2:3",
   "16:9",
-  "4:3",
-  "3:2",
-  "21:9",
 ];

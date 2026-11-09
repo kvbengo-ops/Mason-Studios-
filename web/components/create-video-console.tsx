@@ -65,7 +65,7 @@ export async function CreateVideoConsole({
   snapshot: AccountBudgetSnapshot;
   initialSceneId?: string;
 }): Promise<JSX.Element> {
-  const { user } = await requireUser();
+  const { user, profile } = await requireUser();
   const supabase = await createClient();
 
   const { data: projectRows } = await supabase
@@ -317,7 +317,7 @@ export async function CreateVideoConsole({
               // personal project and the clip appears on the wall above.
               projectId=""
               ensureProject={ensurePersonalClipProject}
-              options={ugcOptions(withSound)}
+              options={ugcOptions(withSound, profile.team ?? null)}
               budget={{
                 dailyCapEnabled: snapshot.dailyCapEnabled,
                 dailyRemainingUsd: snapshot.dailyRemainingUsd,

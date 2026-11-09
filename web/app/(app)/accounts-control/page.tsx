@@ -21,6 +21,8 @@ import { BinThumbnail } from "@/components/bin-thumbnail";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PaginationControls } from "@/components/pagination-controls";
 import { RoleBadge } from "@/components/role-badge";
+import { PresenceDot } from "@/components/presence-dot";
+import { TeamSelect } from "@/components/team-select";
 import { GlobalSpendCapControl } from "@/components/global-spend-cap-control";
 import {
   Table,
@@ -1142,8 +1144,9 @@ export default async function AccountsControlPage({
                               {account.username.slice(0, 2)}
                             </span>
                             <span className="min-w-0">
-                              <span className="block truncate text-sm font-medium text-foreground">
-                                {account.username}
+                              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                                <PresenceDot lastSeenAt={account.lastSeenAt} />
+                                <span className="truncate">{account.username}</span>
                               </span>
                               <span className="block truncate text-[11px] text-muted-foreground">
                                 {account.email}
@@ -1200,10 +1203,16 @@ export default async function AccountsControlPage({
                           role={selectedAccount.role}
                           status={selectedAccount.status}
                         />
+                        <PresenceDot lastSeenAt={selectedAccount.lastSeenAt} className="size-2.5" />
                       </div>
                       <p className="break-all text-xs text-muted-foreground">
                         {selectedAccount.email}
                       </p>
+                      <TeamSelect
+                        key={selectedAccount.id}
+                        userId={selectedAccount.id}
+                        team={selectedAccount.team ?? null}
+                      />
                     </div>
 
                     <nav aria-label="Creation categories" className={SEGMENTED}>

@@ -16,12 +16,7 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
-      "seedance-2.5/480p",
-      "seedance-2.5/720p",
-      "seedance-2.5/1080p",
       "seedance-2.5-byteplus/480p",
-      "seedance-2.5-byteplus/720p",
-      "seedance-2.5-byteplus/1080p",
       "kling-4.0/720p",
       "kling-4.0/1080p",
       "kling-4.0-reference/720p",
@@ -42,7 +37,6 @@ describe("ugcOptions(true) — the sound picker", () => {
     );
     const bySecond = Object.fromEntries(firsts.map((o) => [o.modelId, o.videoCreditsPerSecond]));
     expect(bySecond).toEqual({
-      "seedance-2.5": 17,
       "seedance-2.5-byteplus": 12.2976,
       "kling-4.0": null,
       "kling-4.0-reference": null,
@@ -52,7 +46,8 @@ describe("ugcOptions(true) — the sound picker", () => {
   });
 
   it("never shows a hidden model, even one offerable() still prices", () => {
-    for (const id of ["seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
+    // seedance-2.5 is Kie's retired Seedance: old scenes resolve through it, the picker never lists it.
+    for (const id of ["seedance-2.5", "seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
       expect(
         options.some((o) => o.modelId === id),
         id,
@@ -101,17 +96,30 @@ describe("ugcOptions(true) — the sound picker", () => {
   });
 });
 
+describe("ugcOptions — team access and the prompt cap", () => {
+  it("hides Wan 3.0 from a Hybrid Editor and shows it to an AI Animator or no team", () => {
+    const ids = (team: Parameters<typeof ugcOptions>[1]): string[] =>
+      ugcOptions(true, team).map((o) => o.modelId);
+    expect(ids("hybrid_editor")).not.toContain("wan-3.0");
+    expect(ids("hybrid_editor")).toContain("kling-4.0");
+    expect(ids("ai_animator")).toContain("wan-3.0");
+    expect(ids(null)).toContain("wan-3.0");
+  });
+
+  it("carries the lower of the vendor cap and the 20,000 character cap", () => {
+    const byId = (id: string): number | undefined =>
+      ugcOptions(true).find((o) => o.modelId === id)?.maxPromptChars;
+    expect(byId("seedance-2.5-byteplus")).toBe(20_000);
+    expect(byId("kling-4.0")).toBeLessThanOrEqual(20_000);
+  });
+});
+
 describe("ugcOptions(false) — the silent picker", () => {
   const options = ugcOptions(false);
 
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
-      "seedance-2.5/480p/28",
-      "seedance-2.5/720p/63",
-      "seedance-2.5/1080p/158",
       "seedance-2.5-byteplus/480p/20.56005",
-      "seedance-2.5-byteplus/720p/46.224",
-      "seedance-2.5-byteplus/1080p/113.724",
       "kling-4.0/720p/28.5",
       "kling-4.0/1080p/42.5",
       "kling-4.0-reference/720p/28.5",
