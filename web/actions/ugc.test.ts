@@ -1465,6 +1465,7 @@ describe("regenerateClip applies the settings it was given", () => {
       expect(written.render_settings_override).toEqual({
         model: "seedance-2",
         resolution: "480p",
+        quality: "high",
       });
     } finally {
       if (previous === undefined) delete process.env.AUDIO_ENABLED;
@@ -1554,6 +1555,7 @@ describe("regenerateClip applies the settings it was given", () => {
       expect(written.render_settings_override).toEqual({
         model: "kling-3.0-pro",
         resolution: "720p",
+        quality: "high",
       });
       // The Start frame was copied into a fresh asset, and the scene points
       // at it — see regenerateClip's own comment on why this always copies
@@ -1953,6 +1955,7 @@ describe("generateClip writes is_talking_head from the chosen model", () => {
       expect(written.render_settings_override).toEqual({
         model: "kling-3.0-pro",
         resolution: "720p",
+        quality: "high",
       });
 
       // 20 cr/s (std, sound) * 4s / 200 credits-per-$ = $0.40, not the pro
