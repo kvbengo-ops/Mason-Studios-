@@ -164,7 +164,8 @@ describe("resolveApiReferences", () => {
       id: `el-${i}`,
       user_id: "user-1",
       name: `ref_${i}`,
-      category: kind,
+      // Images are filed as characters; the asset kind below decides what the ref is.
+      category: kind === "image" ? "character" : kind,
       description: null,
       ai_description: null,
       asset_id: `asset-${i}`,
