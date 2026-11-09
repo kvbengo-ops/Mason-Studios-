@@ -217,6 +217,17 @@ describe("resolveApiReferences", () => {
       code: "invalid_media_file",
       error: expect.stringMatching(/30 seconds per video/),
     });
+    // App-uploaded voices carry no duration_s; they pass through rather than being refused.
+    assets[8]!.duration_s = 4;
+    assets[9]!.duration_s = null;
+    expect(
+      (
+        await resolveApiReferences({
+          ...args,
+          admin: makeFakeAdmin({ ownedElements: elements, assets }),
+        })
+      ).ok,
+    ).toBe(true);
   });
 
   it("preserves array ordinal identity when @Image 2 is mentioned before @Image 1", async () => {

@@ -537,18 +537,18 @@ export async function resolveApiReferences(args: {
     }
   }
   if (limits.audioSeconds !== null) {
-    const durations = orderedAudios.map((ref) => ref.durationS);
-    if (durations.some((seconds) => typeof seconds !== "number" || !Number.isFinite(seconds))) {
-      return {
-        ok: false,
-        status: 422,
-        code: "invalid_media_file",
-        error: `${model.label} requires measured audio reference durations.`,
-      };
-    }
-    const totalSeconds = durations.reduce((sum, seconds) => sum + (seconds ?? 0), 0);
+    // Only measured lengths are checked. Audio uploaded through the app has no duration_s
+    // (actions/elements.ts), and an unreadable length passes through to the vendor, as the
+    // app's own dropzone does, rather than refusing a voice the editor already uses.
+    // shortcut: an unmeasured clip is left out of the total; measure app uploads to close it.
+    const durations = orderedAudios
+      .map((ref) => ref.durationS)
+      .filter(
+        (seconds): seconds is number => typeof seconds === "number" && Number.isFinite(seconds),
+      );
+    const totalSeconds = durations.reduce((sum, seconds) => sum + seconds, 0);
     if (
-      durations.some((seconds) => (seconds ?? 0) > limits.audioSeconds!) ||
+      durations.some((seconds) => seconds > limits.audioSeconds!) ||
       totalSeconds > limits.audioSeconds
     ) {
       return {
