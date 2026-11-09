@@ -68,6 +68,12 @@ import type { RenderBudgetFigures } from "@/lib/render-budget";
 import type { ActionNotice, ActionResult } from "@/lib/action-result";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
 import { kieModel, SEEDANCE_2_5_BYTEPLUS } from "@/lib/kie/models";
+import {
+  DEFAULT_VIDEO_QUALITY,
+  VIDEO_QUALITIES,
+  VIDEO_QUALITY_LABELS,
+  type VideoQuality,
+} from "@/lib/video-quality";
 import { cn } from "@/lib/utils";
 import {
   beginGeneratePending,
@@ -232,6 +238,8 @@ export function UgcColumn({
     voice?: string | null;
     /** Stored aspect_ratio override, or null for the 9:16 default. */
     aspectRatio?: string | null;
+    /** Stored re-encode quality, or null for DEFAULT_VIDEO_QUALITY. */
+    quality?: VideoQuality | null;
     /**
      * This scene's saved References box — the non-null `tag` values off its
      * `scene_references` rows, ordered by kind then ordinal (ugc/[id]/page.tsx
@@ -523,6 +531,9 @@ export function UgcColumn({
   const [klingSoundOn, setKlingSoundOn] = useState(selectedScene?.isTalkingHead ?? true);
   const [geminiVoice, setGeminiVoice] = useState(selectedScene?.voice ?? "");
   const [aspectRatio, setAspectRatio] = useState(selectedScene?.aspectRatio ?? "9:16");
+  const [quality, setQuality] = useState<VideoQuality>(
+    selectedScene?.quality ?? DEFAULT_VIDEO_QUALITY,
+  );
 
   // NO REFINE. There was a button here that sent the whole prompt to Sonnet
   // and replaced the field with what came back.
@@ -562,6 +573,7 @@ export function UgcColumn({
     setKlingSoundOn(selectedScene?.isTalkingHead ?? true);
     setGeminiVoice(selectedScene?.voice ?? "");
     setAspectRatio(selectedScene?.aspectRatio ?? "9:16");
+    setQuality(selectedScene?.quality ?? DEFAULT_VIDEO_QUALITY);
     // THE PICKER FOLLOWS THE SCENE. The model decides which form renders
     // (Kling's frames or Seedance's box), so a picker left on the previous
     // scene's model opened a Seedance scene in Kling mode: its first picture
@@ -1161,6 +1173,7 @@ export function UgcColumn({
         {activeAspectRatio ? (
           <input type="hidden" name="aspectRatio" value={activeAspectRatio} />
         ) : null}
+        <input type="hidden" name="quality" value={quality} />
         {isKling ? (
           <>
             {/* KLING'S OWN PAIR, not elementId/referencesBox. actions/ugc.ts's
@@ -2011,6 +2024,41 @@ export function UgcColumn({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Our own re-encode bitrate (lib/video-quality.ts). No price change. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={readOnly}
+                aria-label={`Quality: ${VIDEO_QUALITY_LABELS[quality].label}`}
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              >
+                <Sparkles aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                {VIDEO_QUALITY_LABELS[quality].label}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-56 rounded-2xl p-2"
+              >
+                <DropdownMenuLabel>Quality</DropdownMenuLabel>
+                {VIDEO_QUALITIES.map((q) => (
+                  <DropdownMenuItem
+                    key={q}
+                    onSelect={() => setQuality(q)}
+                    className="gap-2 rounded-lg"
+                  >
+                    <span className="flex-1">{VIDEO_QUALITY_LABELS[q].label}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {VIDEO_QUALITY_LABELS[q].hint}
+                    </span>
+                    {q === quality ? (
+                      <Check aria-hidden="true" className="size-4 text-primary" />
+                    ) : null}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {bar && option.modelId === "gemini-omni-video" ? (
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -2176,6 +2224,7 @@ export function UgcColumn({
                     formData.set("geminiVoice", geminiVoice);
                   }
                   if (activeAspectRatio) formData.set("aspectRatio", activeAspectRatio);
+                  formData.set("quality", quality);
                   if (isKling) {
                     // KLING'S OWN PAIR, not the box's marker/tags — see the
                     // hidden-fields block above this form's effectiveReference

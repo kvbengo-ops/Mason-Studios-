@@ -140,10 +140,10 @@ func TestConcat_MixedAudioSources_AudioCoversFullDuration(t *testing.T) {
 	normA := filepath.Join(dir, "norm_a.mp4")
 	normB := filepath.Join(dir, "norm_b.mp4")
 	ctx := context.Background()
-	if err := r.Normalize(ctx, srcWithAudio, normA, "9:16"); err != nil {
+	if err := r.Normalize(ctx, srcWithAudio, normA, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize(with audio) error = %v", err)
 	}
-	if err := r.Normalize(ctx, srcSilent, normB, "9:16"); err != nil {
+	if err := r.Normalize(ctx, srcSilent, normB, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize(silent) error = %v", err)
 	}
 

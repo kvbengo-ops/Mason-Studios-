@@ -1017,6 +1017,9 @@ type RenderSettings struct {
 	// AspectRatio is the operator's choice from VideoAspectRatios; empty means
 	// the model's own default (9:16 for every model that takes one).
 	AspectRatio string `json:"aspect_ratio"`
+	// Quality is the editor's re-encode pick in /ugc ("standard", "high", "max");
+	// empty means standard. media.CRFFor maps it. No vendor sees it, no price moves.
+	Quality string `json:"quality"`
 }
 
 // DefaultRenderSettings is what an empty `{}` means. The column's SQL
@@ -1045,6 +1048,7 @@ func ParseRenderSettings(raw []byte) (RenderSettings, error) {
 		FPS         *int    `json:"fps"`
 		Voice       *string `json:"voice"`
 		AspectRatio *string `json:"aspect_ratio"`
+		Quality     *string `json:"quality"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		return RenderSettings{}, fmt.Errorf("invalid render settings: %w", err)
@@ -1088,6 +1092,10 @@ func ParseRenderSettings(raw []byte) (RenderSettings, error) {
 	// own AspectRatio applies, the same fallback resolution gets.
 	if parsed.AspectRatio != nil && containsString(model.AllowedAspectRatios, *parsed.AspectRatio) {
 		settings.AspectRatio = *parsed.AspectRatio
+	}
+	// An unknown quality is dropped to standard, like an untaken ratio above.
+	if parsed.Quality != nil && containsString([]string{"standard", "high", "max"}, *parsed.Quality) {
+		settings.Quality = *parsed.Quality
 	}
 	return settings, nil
 }

@@ -137,9 +137,24 @@ func FrameSize(aspectRatio string) (w, h int) {
 // file must be read to reach it — see the verification notes accompanying
 // this change.
 //
+// CRFFor maps a scene's render_settings quality (editor's pick in /ugc) to x264's
+// CRF. Lower is a higher bitrate and a bigger file; unset or unknown keeps the
+// long-standing 20, so the API and older scenes encode exactly as before.
+func CRFFor(quality string) int {
+	switch quality {
+	case "high":
+		return 17
+	case "max":
+		return 14
+	default:
+		return 20
+	}
+}
+
 // aspectRatio picks the frame (FrameSize): 1080x1920 for 9:16 and anything
-// unrecognised, 1920x1080 for 16:9, 1080x1080 for 1:1.
-func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio string) error {
+// unrecognised, 1920x1080 for 16:9, 1080x1080 for 1:1. crf is x264's quality
+// (lower = higher bitrate); callers take it from CRFFor.
+func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio string, crf int) error {
 	hasAudio, err := r.probeHasAudio(ctx, inPath)
 	if err != nil {
 		return fmt.Errorf("media: normalize %s: probe audio: %w", inPath, err)
@@ -156,7 +171,7 @@ func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio str
 	}
 	args = append(args,
 		"-vf", fmt.Sprintf("scale=%[1]d:%[2]d:force_original_aspect_ratio=increase,crop=%[1]d:%[2]d,fps=24", w, h),
-		"-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+		"-c:v", "libx264", "-preset", "veryfast", "-crf", strconv.Itoa(crf),
 		"-c:a", "aac", "-ar", audioSampleRateHz, "-ac", audioChannels, "-b:a", audioBitrate,
 	)
 	if !hasAudio {

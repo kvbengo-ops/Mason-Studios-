@@ -169,7 +169,7 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 	outFile.Close()
 	defer os.Remove(outPath)
 
-	if err := deps.Media.Normalize(ctx, inPath, outPath, model.AspectRatio); err != nil {
+	if err := deps.Media.Normalize(ctx, inPath, outPath, model.AspectRatio, media.CRFFor(settings.Quality)); err != nil {
 		return fmt.Errorf("ingest: scene %s: %w", scene.ID, err)
 	}
 

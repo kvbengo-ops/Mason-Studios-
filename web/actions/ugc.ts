@@ -94,6 +94,7 @@ import { requireAdmin, requireProject, requireScene, requireUser } from "@/actio
 import type { Database, SceneStatus } from "@/types/db";
 import { offerable } from "@/lib/kie/offerable";
 import { videoAspectRatioFor } from "@/lib/kie/models";
+import { videoQualityFor } from "@/lib/video-quality";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
 import {
@@ -1750,11 +1751,14 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   const voice = geminiVoiceFor(chosen.model.id, formData.get("geminiVoice"));
   // No price effect: kie bills per second by resolution, not by frame shape.
   const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
+  // No price effect either: only our own re-encode reads it (lib/video-quality.ts).
+  const quality = videoQualityFor(formData.get("quality"));
   const override = {
     model: chosen.model.id,
     resolution,
     ...(voice && { voice }),
     ...(aspectRatio && { aspect_ratio: aspectRatio }),
+    ...(quality && { quality }),
   };
 
   const settings = mergeRenderSettings(project.render_settings, override);
@@ -2309,6 +2313,7 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
       resolution: string;
       voice?: string;
       aspect_ratio?: string;
+      quality?: string;
     };
     duration_s?: number;
     video_prompt?: string;
@@ -2363,11 +2368,13 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     // own note on the zod strip this avoids.
     const voice = geminiVoiceFor(chosen.model.id, formData.get("geminiVoice"));
     const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
+    const quality = videoQualityFor(formData.get("quality"));
     updates.render_settings_override = {
       model: chosen.model.id,
       resolution,
       ...(voice && { voice }),
       ...(aspectRatio && { aspect_ratio: aspectRatio }),
+      ...(quality && { quality }),
     };
     // Same rule generateClip's insert follows now — see its own comment.
     // Switching Seedance -> Kling here must turn sound on, and Kling ->

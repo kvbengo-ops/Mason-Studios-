@@ -523,6 +523,20 @@ describe("Length is a control, and it reprices the button", () => {
     expect(screen.queryByRole("slider", { name: "Length in seconds" })).toBeNull();
   });
 
+  it("sends High quality by default, and the pick from the Quality menu", async () => {
+    const user = userEvent.setup();
+    const { container } = renderColumn(null);
+    const field = () =>
+      (container.querySelector('input[name="quality"]') as HTMLInputElement).value;
+
+    expect(field()).toBe("high");
+    await user.click(screen.getByRole("button", { name: "Quality: High" }));
+    await user.click(screen.getByRole("menuitem", { name: /Max/ }));
+    expect(field()).toBe("max");
+    // Re-encode only: the price on the button does not move.
+    expect(screen.getByRole("button", { name: /Generate · \$0\.56/ })).toBeTruthy();
+  });
+
   it("changes the credits on the button when the length changes", async () => {
     const user = userEvent.setup();
     renderColumn(null);
