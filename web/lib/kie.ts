@@ -53,6 +53,8 @@ import type { ImageAspectRatio } from "./image-aspect-ratios";
 import type { ImageResolutionId } from "./image-resolutions";
 import { kieImageInput } from "./kie/image-input";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
+import { SEEDREAM_PRO_TEXT_ID } from "./kie/seedream-image";
+import { generateBytePlusSeedreamImage } from "./byteplus-image";
 
 // Two endpoints, not one. The base model is text-to-image; passing image_urls
 // to it is silently ignored. Reference-conditioned generation — which is how a
@@ -164,7 +166,7 @@ export interface GenerateImageResult {
    * with one vendor: a caller writing `runs.vendor` reads what actually
    * ran off the result, not a literal it typed itself.
    */
-  vendor: "kie";
+  vendor: "kie" | "byteplus";
   /**
    * The actual amount this call is known to have cost, in USD — non-null
    * whenever kie's response carries a billing figure (recordInfo's
@@ -520,6 +522,21 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
   }
 
   const model = modelForImageArgs(args);
+
+  // Seedream text-to-image runs on BytePlus, so its faces pass Seedance 2.5 there
+  // (lib/byteplus-image.ts). Synchronous: no task id, so onTaskCreated is never called.
+  if (model === SEEDREAM_PRO_TEXT_ID) {
+    try {
+      const image = await generateBytePlusSeedreamImage({
+        prompt,
+        aspectRatio: args.aspectRatio ?? ASPECT_RATIO,
+        resolution: args.resolution ?? "1K",
+      });
+      return { url: image.url, vendor: "byteplus", costUsd: image.costUsd };
+    } catch (error) {
+      throw new ImageGenerationError(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   // Which field carries the references is per-model — see kie/image-input.ts.
   const input = kieImageInput(

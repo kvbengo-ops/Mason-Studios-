@@ -997,14 +997,11 @@ describe("blocksInline", () => {
     expect(blocksInline(split, true)).toBe(false);
   });
 
-  it("hands off BOTH seedream paths — its text path is over the margin too", () => {
-    // Worth pinning, because it is the surprising half. 91.9s is not "inside" a
-    // 100s budget in any useful sense: it is 92% of it, so ordinary variance
-    // times it out. The reference path at 149s is merely the obvious case. If
-    // someone later widens the margin to win this test back, that is the
-    // decision to argue with, not an incidental number.
+  it("blocks seedream's BytePlus text path but hands off its kie reference path", () => {
+    // Text-to-image moved to BytePlus (42s, synchronous — it has no task id to hand
+    // off by, so it MUST fit inline). The reference path stays on kie at 149s.
     const seedream = IMAGE_MODELS.find((m) => m.id === "seedream-5.0-pro")!;
-    expect(blocksInline(seedream, false)).toBe(false);
+    expect(blocksInline(seedream, false)).toBe(true);
     expect(blocksInline(seedream, true)).toBe(false);
   });
 

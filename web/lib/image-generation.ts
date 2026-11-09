@@ -33,6 +33,7 @@ import {
   type ImageModelDescriptor,
 } from "@/lib/models";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
+import { SEEDREAM_PRO_TEXT_ID } from "@/lib/kie/seedream-image";
 import { isDev } from "@/lib/mode";
 import { assertKieBalanceCoversEstimate, resolveImageAttemptCeilings } from "@/lib/spend";
 import {
@@ -556,7 +557,8 @@ export async function generateImageFor(
   // a mocked generation costs nothing, so a real drained balance would refuse a
   // call that was never going to spend. A failed READ also skips -- see
   // getKieAccountBalanceUsd, which returns null rather than throwing.
-  if (!isDev() && estimateUsd > 0) {
+  // Seedream text-to-image bills BytePlus, not kie (lib/byteplus-image.ts).
+  if (!isDev() && estimateUsd > 0 && model !== SEEDREAM_PRO_TEXT_ID) {
     const balanceUsd = await getKieAccountBalanceUsd();
     if (balanceUsd !== null) {
       const refusal = guardResult(() => assertKieBalanceCoversEstimate(balanceUsd, estimateUsd));
@@ -760,9 +762,19 @@ export async function generateImageFor(
 async function settleAndStore(
   owner: ImageDestination,
   runId: string,
-  generated: { url: string; costUsd: number | null },
+  generated: { url: string; costUsd: number | null; vendor?: string },
 ): Promise<GenerateProjectImageResult> {
   const admin = createAdminClient();
+
+  // reserve_image_attempt writes vendor 'kie' for every image; correct it when another
+  // vendor served the call. Spend categories key on the model, so they are unaffected.
+  if (generated.vendor && generated.vendor !== "kie") {
+    const { error: vendorError } = await admin
+      .from("runs")
+      .update({ vendor: generated.vendor })
+      .eq("id", runId);
+    if (vendorError) console.error(`settleAndStore: vendor not recorded for ${runId}`, vendorError);
+  }
 
   // Settle BEFORE storing. The charge is real the moment kie returns an image,
   // whether or not we manage to keep the file, and a settlement that waited for

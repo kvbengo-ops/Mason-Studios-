@@ -112,10 +112,15 @@ services:
         sync: false
       # BytePlus IAM AK/SK (BillingCenterReadOnlyAccess) for the Accounts
       # Control balance tile only (lib/byteplus-balance.ts). Optional: unset
-      # shows "Unavailable". Not BYTEPLUS_API_KEY, which the worker renders with.
+      # shows "Unavailable".
       - key: BYTEPLUS_ACCESS_KEY_ID
         sync: false
       - key: BYTEPLUS_SECRET_ACCESS_KEY
+        sync: false
+      # Seedream 5.0 Pro text-to-image (lib/byteplus-image.ts). MUST be the same
+      # BytePlus ACCOUNT as ugc-worker's BYTEPLUS_API_KEY: Seedance trusts only
+      # faces Seedream made under the same account. Unset = Seedream text-to-image fails.
+      - key: BYTEPLUS_API_KEY
         sync: false
       # All seven *_CAP_USD values below must be a bare non-negative number
       # as a string — "20", not "$20" or "20 USD". web/lib/spend.ts parses

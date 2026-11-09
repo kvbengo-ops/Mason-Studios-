@@ -1542,8 +1542,14 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     // It is slower than the blocking request budget, so abandoned/slow calls
     // are recovered by the persisted attempt panel on the image-generator page.
     editId: SEEDREAM_PRO_EDIT_ID,
-    costUsd: 0.035,
-    observedSeconds: 91.9,
+    // TWO VENDORS since 2026-11-09: text-to-image runs on BytePlus (lib/byteplus-image.ts,
+    // so its faces pass Seedance 2.5), image-to-image stays on kie. This is the estimate
+    // for both, so it is the higher of the two: BytePlus's published $0.045 (no receipt —
+    // BytePlus reports an image count, not dollars) over kie's measured $0.035. A kie
+    // edit still settles at kie's own reported charge.
+    costUsd: 0.045,
+    // BytePlus text-to-image, largest of three calls on 2026-11-09 (33-42s). Kie's was 91.9.
+    observedSeconds: 42,
     // MEASURED, from three real image-to-image tasks on the live account
     // (d5134c8d…: 138s, 8eb0528e…: 131s, ba22bc78…: 149s, all
     // seedream/5-pro-image-to-image, all 7.5 credits, all successful). The
@@ -1553,8 +1559,8 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     editObservedSeconds: 149,
     aspectRatios: SEEDREAM_PRO_ASPECT_RATIOS,
     resolutions: ["1K", "2K"],
-    // kie.ai/seedream-5-0-pro: 14 credits at 2K.
-    resolutionCostsUsd: { "2K": 0.07 },
+    // BytePlus's published 2K rate (kie's is $0.07, 14 credits); the higher, as above.
+    resolutionCostsUsd: { "2K": 0.09 },
   },
   // The three below are MEASURED, 2026-10-25, with scripts/measure-image-model.ts
   // at 9:16 and the 1K tier the builders send: one real call per path, both
