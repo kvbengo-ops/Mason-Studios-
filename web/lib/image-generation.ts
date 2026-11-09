@@ -33,7 +33,7 @@ import {
   type ImageModelDescriptor,
 } from "@/lib/models";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
-import { SEEDREAM_PRO_TEXT_ID } from "@/lib/kie/seedream-image";
+import { SEEDREAM_PRO_ID } from "@/lib/seedream";
 import { isDev } from "@/lib/mode";
 import { assertKieBalanceCoversEstimate, resolveImageAttemptCeilings } from "@/lib/spend";
 import {
@@ -557,8 +557,8 @@ export async function generateImageFor(
   // a mocked generation costs nothing, so a real drained balance would refuse a
   // call that was never going to spend. A failed READ also skips -- see
   // getKieAccountBalanceUsd, which returns null rather than throwing.
-  // Seedream text-to-image bills BytePlus, not kie (lib/byteplus-image.ts).
-  if (!isDev() && estimateUsd > 0 && model !== SEEDREAM_PRO_TEXT_ID) {
+  // Seedream bills BytePlus, not kie (lib/byteplus-image.ts).
+  if (!isDev() && estimateUsd > 0 && model !== SEEDREAM_PRO_ID) {
     const balanceUsd = await getKieAccountBalanceUsd();
     if (balanceUsd !== null) {
       const refusal = guardResult(() => assertKieBalanceCoversEstimate(balanceUsd, estimateUsd));
@@ -677,7 +677,7 @@ export async function generateImageFor(
   // BLOCK, OR SUBMIT AND HAND OFF.
   //
   // A model measured slower than the poll budget is not waited on: blocking
-  // 100s to rediscover that seedream's image-to-image path takes 149 costs a
+  // 100s to rediscover that a kie path takes 149 costs a
   // server worker, the operator's time, and nothing else — the timeout was
   // going to fire either way. Passing 0 makes generateImage submit, persist the
   // task id, and return at once; the attempt panel finishes it by task id.

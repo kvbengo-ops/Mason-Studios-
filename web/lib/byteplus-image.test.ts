@@ -4,7 +4,7 @@ import {
   BYTEPLUS_SEEDREAM_SIZES,
   generateBytePlusSeedreamImage,
 } from "./byteplus-image";
-import { SEEDREAM_PRO_ASPECT_RATIOS } from "./kie/seedream-image";
+import { SEEDREAM_PRO_ASPECT_RATIOS } from "./seedream";
 
 describe("BYTEPLUS_SEEDREAM_SIZES", () => {
   it("covers every Seedream ratio at both tiers, inside BytePlus's pixel limits", () => {
@@ -59,6 +59,17 @@ describe("generateBytePlusSeedreamImage", () => {
     });
     expect(sent).toMatchObject({ size: "2048x2048" });
     expect(out.costUsd).toBe(0.09);
+  });
+
+  it("sends one reference as a string and several as an array", async () => {
+    respond(200, { data: [{ url: "https://img/r.jpeg" }], usage: { generated_images: 1 } });
+    const base = { prompt: "x", aspectRatio: "9:16", resolution: "1K" } as const;
+    await generateBytePlusSeedreamImage({ ...base, refImageUrls: ["https://a"] });
+    expect(sent).toMatchObject({ image: "https://a" });
+    await generateBytePlusSeedreamImage({ ...base, refImageUrls: ["https://a", "https://b"] });
+    expect(sent).toMatchObject({ image: ["https://a", "https://b"] });
+    await generateBytePlusSeedreamImage(base);
+    expect(sent).not.toHaveProperty("image");
   });
 
   it("surfaces BytePlus's own error code on a refusal", async () => {

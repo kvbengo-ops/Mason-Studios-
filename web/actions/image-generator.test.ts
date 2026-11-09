@@ -127,8 +127,8 @@ describe("resolvePromptReferences — an audio element's description never reach
 //
 // `!isImageAspectRatio(v) || !imageModel.aspectRatios.includes(v)` is two
 // checks, and only the first is obvious. The second is the one with no other
-// backstop for Nano Banana: seedreamProInput re-validates the ratio before it
-// builds a payload, so a bad Seedream ratio would still be refused somewhere —
+// backstop for Nano Banana: byteplus-image.ts re-checks the ratio before it
+// builds a request, so a bad Seedream ratio would still be refused somewhere —
 // as a thrown 500 rather than a sentence — but nano-banana's args go to kie
 // unvalidated, so for those models this line is the only thing between the
 // operator and a 422 they paid the reservation for.

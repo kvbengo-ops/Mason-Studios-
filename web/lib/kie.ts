@@ -53,7 +53,7 @@ import type { ImageAspectRatio } from "./image-aspect-ratios";
 import type { ImageResolutionId } from "./image-resolutions";
 import { kieImageInput } from "./kie/image-input";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
-import { SEEDREAM_PRO_TEXT_ID } from "./kie/seedream-image";
+import { SEEDREAM_PRO_ID } from "./seedream";
 import { generateBytePlusSeedreamImage } from "./byteplus-image";
 
 // Two endpoints, not one. The base model is text-to-image; passing image_urls
@@ -523,14 +523,16 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
 
   const model = modelForImageArgs(args);
 
-  // Seedream text-to-image runs on BytePlus, so its faces pass Seedance 2.5 there
-  // (lib/byteplus-image.ts). Synchronous: no task id, so onTaskCreated is never called.
-  if (model === SEEDREAM_PRO_TEXT_ID) {
+  // Seedream runs on BytePlus only, with or without references, so its faces pass
+  // Seedance 2.5 there (lib/byteplus-image.ts). Synchronous: no task id, so
+  // onTaskCreated is never called.
+  if (model === SEEDREAM_PRO_ID) {
     try {
       const image = await generateBytePlusSeedreamImage({
         prompt,
         aspectRatio: args.aspectRatio ?? ASPECT_RATIO,
         resolution: args.resolution ?? "1K",
+        refImageUrls: refImageUrls ?? [],
       });
       return { url: image.url, vendor: "byteplus", costUsd: image.costUsd };
     } catch (error) {

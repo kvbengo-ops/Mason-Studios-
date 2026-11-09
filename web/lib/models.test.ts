@@ -40,6 +40,7 @@ import {
   renderSettingsSchemaFor,
 } from "./models";
 import { KIE_MODELS } from "@/lib/kie/models";
+import { SEEDREAM_PRO_ID } from "./seedream";
 
 describe("priceForSecond", () => {
   // Reads straight through lib/kie/rates.ts — see that module for the
@@ -873,10 +874,7 @@ describe("getModel against KIE_MODELS", () => {
 // These three rules were all bought with a real paid measurement, and each one
 // costs money if it silently flips:
 //
-//   * Seedream 5.0 Pro's image-to-image path measured 105.2s against a 100s
-//     request budget (docs/seedream-pro-integration.md). It is enabled anyway
-//     since 0088, because a request that gives up no longer loses the picture —
-//     see the warning above that describe block.
+//   * Seedream 5.0 Pro runs on BytePlus only, one id for both paths.
 //   * Nano Banana takes references through a SEPARATE -edit endpoint.
 //   * Nano Banana 2 takes them through the SAME id — `nano-banana-2-edit` is
 //     rejected by kie, which is not the same thing as having no reference path.
@@ -892,29 +890,11 @@ describe("IMAGE_MODELS reference rules", () => {
     return found;
   };
 
-  // ⚠️ THIS PINS THE CURRENT CONFIGURATION, WHICH IS UNDER REVIEW.
-  //
-  // Seedream's reference path is ENABLED here, on the reasoning recorded beside
-  // editId: the measured 105.2s call overruns the blocking request budget, but
-  // 0088's recovery flow now settles and stores the image afterwards rather
-  // than losing it. The cost is that the operator's own request still fails
-  // first and the picture appears in the attempts panel a moment later.
-  //
-  // If that trade is rejected — the standing instruction has been that Seedream
-  // stays prompt-only until a webhook exists — the change is `editId: null` plus
-  // restoring referenceDisabledReason, and THIS TEST FLIPS WITH IT. It is
-  // written as one assertion pair so that flip is a two-line edit.
-  it("offers Seedream 5.0 Pro references through the image-to-image endpoint", () => {
+  it("sends Seedream 5.0 Pro to BytePlus on both paths, never a kie id", () => {
+    // Owner's rule (2026-11-09): BytePlus generations never fall back to kie.
     const seedream = imageModel("seedream-5.0-pro");
-    expect(seedream.editId).toBe("seedream/5-pro-image-to-image");
-    expect(kieIdForImageModel(seedream, true)).toBe("seedream/5-pro-image-to-image");
-  });
-
-  it("still offers Seedream 5.0 Pro for prompt-only images", () => {
-    // The reference decision must not disturb the prompt-only path, which is
-    // the one with an unambiguous receipt behind it.
-    const seedream = imageModel("seedream-5.0-pro");
-    expect(kieIdForImageModel(seedream, false)).toBe("seedream/5-pro-text-to-image");
+    expect(kieIdForImageModel(seedream, false)).toBe(SEEDREAM_PRO_ID);
+    expect(kieIdForImageModel(seedream, true)).toBe(SEEDREAM_PRO_ID);
     expect(seedream.costUsd).not.toBeNull();
   });
 
@@ -947,9 +927,9 @@ describe("IMAGE_MODELS reference rules", () => {
     }
   });
 
-  it("does not offer Seedream the 4:5 ratio kie never documented for it", () => {
-    // Model-specific ratios are not decoration: SEEDREAM_PRO_ASPECT_RATIOS is
-    // the documented list, and seedreamProInput throws on anything outside it.
+  it("does not offer Seedream a 4:5 ratio it has no BytePlus size for", () => {
+    // Model-specific ratios are not decoration: byteplus-image.ts has pixel sizes
+    // only for SEEDREAM_PRO_ASPECT_RATIOS and refuses anything else.
     expect(imageModel("seedream-5.0-pro").aspectRatios).not.toContain("4:5");
   });
 });
@@ -997,12 +977,10 @@ describe("blocksInline", () => {
     expect(blocksInline(split, true)).toBe(false);
   });
 
-  it("blocks seedream's BytePlus text path but hands off its kie reference path", () => {
-    // Text-to-image moved to BytePlus (42s, synchronous — it has no task id to hand
-    // off by, so it MUST fit inline). The reference path stays on kie at 149s.
+  it("blocks both seedream paths — BytePlus is synchronous, with no task id to hand off", () => {
     const seedream = IMAGE_MODELS.find((m) => m.id === "seedream-5.0-pro")!;
     expect(blocksInline(seedream, false)).toBe(true);
-    expect(blocksInline(seedream, true)).toBe(false);
+    expect(blocksInline(seedream, true)).toBe(true);
   });
 
   it("falls back to the text measurement when the edit path has none", () => {

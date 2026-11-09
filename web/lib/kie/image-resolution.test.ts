@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { IMAGE_MODELS, imageCostUsd } from "@/lib/models";
-import { SEEDREAM_PRO_TEXT_ID } from "./seedream-image";
 import { GPT_IMAGE_2_5_IDS } from "./gpt-image-2-5";
 import { NANO_BANANA_2_ID, kieImageInput } from "./image-input";
 
@@ -20,12 +19,6 @@ describe("the image resolution tier on kie's payload", () => {
   it("sends GPT Image 2.5's tier as `resolution`", () => {
     expect(input(GPT_IMAGE_2_5_IDS.flare.text)).toMatchObject({ resolution: "1K" });
     expect(input(GPT_IMAGE_2_5_IDS.sunburst.text, "2K")).toMatchObject({ resolution: "2K" });
-  });
-
-  it("maps Seedream's tiers onto `quality`, and has no 4K", () => {
-    expect(input(SEEDREAM_PRO_TEXT_ID, "1K")).toMatchObject({ quality: "basic" });
-    expect(input(SEEDREAM_PRO_TEXT_ID, "2K")).toMatchObject({ quality: "high" });
-    expect(() => input(SEEDREAM_PRO_TEXT_ID, "4K")).toThrow(/4K/);
   });
 
   it("refuses a tier on a model kie documents none for, since kie would drop it and still bill", () => {

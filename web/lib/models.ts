@@ -33,11 +33,7 @@
 import { z } from "zod";
 import { IMAGE_ASPECT_RATIOS, type ImageAspectRatio } from "./image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, type ImageResolutionId } from "./image-resolutions";
-import {
-  SEEDREAM_PRO_TEXT_ID,
-  SEEDREAM_PRO_EDIT_ID,
-  SEEDREAM_PRO_ASPECT_RATIOS,
-} from "./kie/seedream-image";
+import { SEEDREAM_PRO_ID, SEEDREAM_PRO_ASPECT_RATIOS } from "./seedream";
 import { NANO_BANANA_2_ID, NANO_BANANA_2_1_ID } from "./kie/image-input";
 import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
@@ -1454,7 +1450,7 @@ export interface ImageModelDescriptor {
   /**
    * The pixel tiers kie offers for this model, from its docs, `1K` first.
    * Absent means kie documents none (google/nano-banana) and the picker shows
-   * no control. Seedream's `quality` basic/high is exactly 1K/2K.
+   * no control. Seedream's 1K/2K are BytePlus pixel sizes (lib/byteplus-image.ts).
    */
   resolutions?: readonly ImageResolutionId[];
   /**
@@ -1474,7 +1470,7 @@ export interface ImageModelDescriptor {
    *
    * This field exists because its absence cost real money. `observedSeconds`
    * was read as "how long this model takes", but it only ever recorded the
-   * text-to-image path, and seedream-5.0-pro's image-to-image path runs about
+   * text-to-image path, and one model's image-to-image path ran about
    * 1.6x longer — 91.9s measured one way, 131-149s the other. The model was
    * therefore offered as comfortably inside the 100s budget while its reference
    * path could not fit in it at all, and every @tagged or chained generation
@@ -1524,8 +1520,8 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     // through one builder rather than assumed to be `image_urls`.
     editId: NANO_BANANA_2_ID,
     // From the TEXT-TO-IMAGE receipt. The reference path has no receipt of its
-    // own yet; both other models bill their two paths identically (nano-banana
-    // 4/4 credits, Seedream 7/7), so this is the honest expectation rather than
+    // own yet; nano-banana bills its two paths identically (4/4 credits), so
+    // this is the honest expectation rather than
     // a measured fact — take one with REF_IMAGE_URL set to settle it.
     costUsd: 0.04,
     observedSeconds: 23,
@@ -1537,29 +1533,18 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
   {
     id: "seedream-5.0-pro",
     label: "Seedream 5.0 Pro",
-    textToImageId: SEEDREAM_PRO_TEXT_ID,
-    // The reference path is supported through Kie's image-to-image endpoint.
-    // It is slower than the blocking request budget, so abandoned/slow calls
-    // are recovered by the persisted attempt panel on the image-generator page.
-    editId: SEEDREAM_PRO_EDIT_ID,
-    // TWO VENDORS since 2026-11-09: text-to-image runs on BytePlus (lib/byteplus-image.ts,
-    // so its faces pass Seedance 2.5), image-to-image stays on kie. This is the estimate
-    // for both, so it is the higher of the two: BytePlus's published $0.045 (no receipt —
-    // BytePlus reports an image count, not dollars) over kie's measured $0.035. A kie
-    // edit still settles at kie's own reported charge.
+    // BytePlus ModelArk only (lib/byteplus-image.ts), so its faces pass Seedance 2.5.
+    // One id for both paths: references travel in the same request's `image` field.
+    textToImageId: SEEDREAM_PRO_ID,
+    editId: SEEDREAM_PRO_ID,
+    // BytePlus's published price per output image; no receipt, because BytePlus reports
+    // an image count, not dollars (owner's 2026-10-30 rule allows the published rate).
     costUsd: 0.045,
-    // BytePlus text-to-image, largest of three calls on 2026-11-09 (33-42s). Kie's was 91.9.
+    // Largest of three text-to-image calls on 2026-11-09 (33-42s). The reference path is
+    // unmeasured and falls back to this; byteplus-image.ts gives up at 90s.
     observedSeconds: 42,
-    // MEASURED, from three real image-to-image tasks on the live account
-    // (d5134c8d…: 138s, 8eb0528e…: 131s, ba22bc78…: 149s, all
-    // seedream/5-pro-image-to-image, all 7.5 credits, all successful). The
-    // largest is recorded rather than the mean: this number decides whether a
-    // request blocks, and being wrong in the optimistic direction is what
-    // produced the held attempts in the first place.
-    editObservedSeconds: 149,
     aspectRatios: SEEDREAM_PRO_ASPECT_RATIOS,
     resolutions: ["1K", "2K"],
-    // BytePlus's published 2K rate (kie's is $0.07, 14 credits); the higher, as above.
     resolutionCostsUsd: { "2K": 0.09 },
   },
   // The three below are MEASURED, 2026-10-25, with scripts/measure-image-model.ts
@@ -1669,8 +1654,8 @@ export function observedSecondsForPath(
  * A model with NO measured time still blocks: an unmeasured model is the one
  * case where waiting is how the number gets discovered.
  *
- * The 0.8 margin is for variance, not caution theatre. The three seedream
- * receipts span 131-149s, an 18s spread on a 140s mean, so a path measured just
+ * The 0.8 margin is for variance, not caution theatre. Three receipts of one
+ * reference path spanned 131-149s, an 18s spread on a 140s mean, so a path measured just
  * under the budget will sometimes land just over it.
  */
 export function blocksInline(model: ImageModelDescriptor, hasRefs: boolean): boolean {

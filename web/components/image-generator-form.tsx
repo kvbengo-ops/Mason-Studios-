@@ -100,7 +100,7 @@ export interface ImageGeneratorFormProps {
 const HANDOFF_POLL_MS = 3000;
 /**
  * Stop waiting here after this long; the attempt keeps running and the Runs
- * panel finishes it. Well past the slowest measured path (seedream, ~149s).
+ * panel finishes it. Well past the slowest measured kie path (~149s).
  */
 const HANDOFF_WAIT_LIMIT_MS = 6 * 60_000;
 

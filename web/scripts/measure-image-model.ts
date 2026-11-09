@@ -22,7 +22,6 @@
 // copied from lib/kie.ts's verified header; if kie ever changes it, that file
 // is the source of truth and this follows it.
 
-import { SEEDREAM_PRO_EDIT_ID } from "../lib/kie/seedream-image";
 import { kieImageInput } from "../lib/kie/image-input";
 
 const BASE_URL = "https://api.kie.ai";
@@ -51,11 +50,6 @@ type Envelope<T> = { code: number; msg?: string; data?: T };
 
 async function createTask(model: string): Promise<string> {
   const referenceUrl = process.env.REF_IMAGE_URL;
-  if (model === SEEDREAM_PRO_EDIT_ID && !referenceUrl) {
-    throw new Error(
-      "Set REF_IMAGE_URL to the text-to-image receipt's output before measuring edits.",
-    );
-  }
   // REF_IMAGE_URL is what selects the reference path, for every model — it has
   // to be, now that nano-banana-2 serves both paths from one id and the model
   // id alone no longer says which one is being measured.

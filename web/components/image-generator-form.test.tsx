@@ -29,11 +29,10 @@ vi.mock("@/components/image-lightbox", () => ({
 const model: ImageModelDescriptor = {
   id: "seedream-5.0-pro",
   label: "Seedream 5.0 Pro",
-  textToImageId: "seedream/5-pro-text-to-image",
-  editId: "seedream/5-pro-image-to-image",
-  costUsd: 0.035,
-  observedSeconds: 91.9,
-  editObservedSeconds: 149,
+  textToImageId: "byteplus/seedream-5.0-pro",
+  editId: "byteplus/seedream-5.0-pro",
+  costUsd: 0.045,
+  observedSeconds: 42,
   aspectRatios: ["9:16"],
 };
 

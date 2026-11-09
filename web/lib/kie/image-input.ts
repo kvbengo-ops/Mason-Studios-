@@ -8,7 +8,6 @@
 //
 //   google/nano-banana-edit      image_urls   separate -edit model id
 //   nano-banana-2                image_input  SAME id as text-to-image
-//   seedream/5-pro-image-to-image image_urls  separate model id
 //   nano-banana-2-1              image_input  SAME id as text-to-image
 //   gpt-image-2-5-*-image-to-image input_urls separate model id
 //
@@ -18,7 +17,6 @@
 import type { ImageAspectRatio } from "../image-aspect-ratios";
 import type { ImageResolutionId } from "../image-resolutions";
 import { gptImage25Input, isGptImage25Id } from "./gpt-image-2-5";
-import { SEEDREAM_PRO_TEXT_ID, SEEDREAM_PRO_EDIT_ID, seedreamProInput } from "./seedream-image";
 
 /**
  * Nano Banana 2 — https://docs.kie.ai/market/google/nanobanana2
@@ -44,9 +42,6 @@ export function kieImageInput(
   refImageUrls: readonly string[] = [],
   resolution: ImageResolutionId = "1K",
 ): Record<string, unknown> {
-  if (model === SEEDREAM_PRO_TEXT_ID || model === SEEDREAM_PRO_EDIT_ID) {
-    return seedreamProInput(model, prompt, aspectRatio, refImageUrls, resolution);
-  }
   if (isGptImage25Id(model)) {
     return gptImage25Input(model, prompt, aspectRatio, refImageUrls, resolution);
   }

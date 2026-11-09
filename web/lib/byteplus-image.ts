@@ -4,17 +4,15 @@ import type { ImageAspectRatio } from "./image-aspect-ratios";
 import type { ImageResolutionId } from "./image-resolutions";
 
 /**
- * Seedream 5.0 Pro TEXT-TO-IMAGE on BytePlus ModelArk, the same account the worker
- * renders Seedance 2.5 with (BYTEPLUS_API_KEY). Faces generated here are accepted as
- * Seedance 2.5 references, which Kie's Seedream faces are not: BytePlus trusts its own
- * Seedream 5.0 text-to-image outputs for 30 days, same account only
+ * Seedream 5.0 Pro on BytePlus ModelArk — the only vendor Seedream runs on — under the
+ * same account the worker renders Seedance 2.5 with (BYTEPLUS_API_KEY). Faces generated
+ * here are accepted as Seedance 2.5 references: BytePlus trusts its own Seedream 5.0
+ * text-to-image outputs for 30 days, same account only
  * (docs.byteplus.com/en/docs/modelark/seedance-portrait-asset-guide), and a 2026-11-09
  * test passed 4 of 4 such faces through Seedance, re-encoded ones included.
  *
- * Text-to-image only. Image-to-image stays on Kie: its outputs are not on BytePlus's
- * trusted list, and this API is synchronous — Seedream's reference path ran 131-149s on
- * Kie, which the platform proxy cuts off mid-request, losing a billed image. Kie's
- * task-id recovery handles that; this call has no task id to recover by.
+ * Reference calls (`image`) run here too. BytePlus's docs list only text-to-image as
+ * trusted; the re-encoded faces passing suggests its own outputs are not flagged at all.
  */
 
 const ENDPOINT = "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations";
@@ -77,7 +75,13 @@ export async function generateBytePlusSeedreamImage(args: {
   prompt: string;
   aspectRatio: ImageAspectRatio;
   resolution: ImageResolutionId;
+  /** Reference images, in prompt order. Seedream 5.0 Pro takes 1, or 2-10. */
+  refImageUrls?: readonly string[];
 }): Promise<{ url: string; costUsd: number }> {
+  const refs = args.refImageUrls ?? [];
+  if (refs.length > 10) {
+    throw new BytePlusImageError("Seedream 5.0 Pro takes at most 10 reference images.");
+  }
   const apiKey = process.env.BYTEPLUS_API_KEY;
   if (!apiKey) throw new BytePlusImageError("BYTEPLUS_API_KEY is not set on the web service.");
   if (args.resolution !== "1K" && args.resolution !== "2K") {
@@ -94,6 +98,7 @@ export async function generateBytePlusSeedreamImage(args: {
       body: JSON.stringify({
         model: process.env.BYTEPLUS_SEEDREAM_MODEL || DEFAULT_MODEL,
         prompt: args.prompt,
+        ...(refs.length === 1 ? { image: refs[0] } : refs.length > 1 ? { image: refs } : {}),
         size,
         response_format: "url",
         watermark: false,
