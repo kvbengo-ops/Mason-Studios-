@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { openSceneVersion } from "@/actions/enqueue";
 import { requireApiToken } from "@/lib/api-auth";
 import { attachApiSceneReferences, ensurePersonalClipProjectForUser } from "@/lib/api-references";
-import { apiClipQuote, parseApiClipInput, prepareApiClip } from "@/lib/api-clip";
+import { apiClipQuote, parseApiClipInput, prepareApiClip, teamModelRefusal } from "@/lib/api-clip";
 import {
   apiGenerateRequestHash,
   discardOwnedPreparation,
@@ -54,6 +54,8 @@ export async function POST(request: Request): Promise<Response> {
   if ("ok" in parsedInput) {
     return apiError(parsedInput.error, parsedInput.code, parsedInput.status);
   }
+  const teamRefusal = teamModelRefusal(auth.profile.team, parsedInput.modelId);
+  if (teamRefusal) return apiError(teamRefusal.error, teamRefusal.code, teamRefusal.status);
 
   const admin = createAdminClient();
   let projectId: string;

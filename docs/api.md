@@ -7,6 +7,7 @@ Base URL: `https://app.vbgstudio.site/api/v1`. JSON in and out, except element u
 Every request: `Authorization: Bearer ms_live_…` — a personal API token from **Profile → Manage API tokens**.
 
 - Only **trusted editors and admins** can create or use tokens (`403 role_not_allowed` otherwise).
+- The account's **team** limits video models, the same as on the website: a Hybrid Editor cannot use `wan-3.0`; an AI Animator, or an account with no team, can use every model. `/quote` and `/generate` return `403 model_not_allowed` before any spend.
 - Each token has scopes: `read`, `upload`, `generate`. The scope is checked first, before any parsing, upload or spend.
 - Spend counts against the token owner's normal USD caps, plus the token's own optional monthly cap.
 
@@ -112,4 +113,4 @@ Active element and generated asset files have no automatic expiry in Mason Stora
 
 ## Errors
 
-Every error is `{ "error": "<message>", "code": "<code>" }` with the HTTP status. Common codes: `missing_token`, `invalid_token`, `token_revoked`, `token_expired`, `account_inactive`, `role_not_allowed`, `insufficient_scope`, `rate_limited`, `unknown_field`, `invalid_parameters`, `unknown_model`, `model_retired`, `unsupported_resolution`, `unsupported_aspect_ratio`, `unsupported_sound`, `unsupported_duration`, `unavailable_rate`, `too_many_references`, `prompt_too_long`, `file_too_large`, `invalid_media_file`, `invalid_audio_duration`, `invalid_description`, `duplicate_element`, `idempotency_conflict`. A read+upload token gets `403 insufficient_scope` on `/generate` and `/images` before their bodies are parsed. `/quote` needs only `read` and may return validation errors for that token.
+Every error is `{ "error": "<message>", "code": "<code>" }` with the HTTP status. Common codes: `missing_token`, `invalid_token`, `token_revoked`, `token_expired`, `account_inactive`, `role_not_allowed`, `model_not_allowed`, `insufficient_scope`, `rate_limited`, `unknown_field`, `invalid_parameters`, `unknown_model`, `model_retired`, `unsupported_resolution`, `unsupported_aspect_ratio`, `unsupported_sound`, `unsupported_duration`, `unavailable_rate`, `too_many_references`, `prompt_too_long`, `file_too_large`, `invalid_media_file`, `invalid_audio_duration`, `invalid_description`, `duplicate_element`, `idempotency_conflict`. A read+upload token gets `403 insufficient_scope` on `/generate` and `/images` before their bodies are parsed. `/quote` needs only `read` and may return validation errors for that token.
