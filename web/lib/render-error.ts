@@ -269,6 +269,18 @@ export function classifyRenderError(raw: string | null | undefined): RenderError
     };
   }
 
+  // BytePlus's own refusal codes (worker/internal/byteplus/client.go readable()): a verdict on
+  // the input, unbilled. Its wrap says "(HTTP 400)", which REJECTED_MARKERS below never matched.
+  if (/SensitiveContentDetected/i.test(text)) {
+    return {
+      category: "rejected",
+      retryable: false,
+      message: /PrivacyInformation/i.test(text)
+        ? "BytePlus refused a reference that may show a real person. Use a different reference, or choose Seedance 2.5 · Kie for this scene. Nothing was charged."
+        : "BytePlus blocked this as sensitive content. Change the prompt or references. Nothing was charged.",
+    };
+  }
+
   if (REJECTED_MARKERS.some((pattern) => pattern.test(text))) {
     return {
       category: "rejected",
