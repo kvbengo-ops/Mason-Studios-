@@ -15,12 +15,15 @@ export const config = {
      * - image/font/static asset file extensions
      * - api/health, api/issue-image (unauthenticated: Render's health poll
      *   and GitHub's image proxy have no session to refresh)
+     * - api/v1, api/mcp (bearer-token auth, no session; skipping the proxy also
+     *   skips its 10 MB body buffer, which truncated larger uploads into a
+     *   misleading "must be multipart" error)
      *
      * Extension exclusion is scoped to a single path segment ([^/]+) on purpose:
      * this prevents application routes that end with something that looks like a
      * file extension (e.g. /projects/anything.js) from bypassing session refresh.
      * Static assets are served from the public/ directory (top-level), not nested routes.
      */
-    "/((?!api/health|api/issue-image|_next/static|_next/image|favicon\\.ico|[^/]+\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff|woff2|ttf)$).*)",
+    "/((?!api/health|api/issue-image|api/v1|api/mcp|_next/static|_next/image|favicon\\.ico|[^/]+\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|map|woff|woff2|ttf)$).*)",
   ],
 };

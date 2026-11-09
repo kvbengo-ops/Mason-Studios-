@@ -1,10 +1,14 @@
 import "server-only";
 
 import { elementUploadNameError } from "@/lib/element-upload-name";
+import { parseAudioDurationSeconds } from "@/lib/audio-duration";
 import {
+  isAcceptedReferenceAudioDuration,
   MAX_REFERENCE_AUDIO_BYTES,
+  MAX_REFERENCE_AUDIO_SECONDS,
   MAX_REFERENCE_IMAGE_BYTES,
   MAX_REFERENCE_VIDEO_BYTES,
+  MIN_REFERENCE_AUDIO_SECONDS,
 } from "@/lib/file-type";
 import { parseMp4DurationSeconds } from "@/lib/mp4-duration";
 import { downloadStagedUpload, removeStorageObjects, uploadFile } from "@/lib/storage";
@@ -32,6 +36,10 @@ type DetectedReference = {
   contentType: string;
   maxBytes: number;
 };
+
+// The app sets no cap; this is the API's trust-boundary sanity limit. It is substituted
+// into Kie prompts, whose own per-model limits still apply at quote/generate time.
+const MAX_DESCRIPTION_CHARS = 2000;
 
 const ELEMENT_CATEGORIES: readonly ElementCategory[] = [
   "image",
@@ -162,9 +170,26 @@ export async function createApiElement(
     );
   }
 
-  const durationS = detected.kind === "video" ? parseMp4DurationSeconds(bytes) : null;
+  const durationS =
+    detected.kind === "video"
+      ? parseMp4DurationSeconds(bytes)
+      : detected.kind === "audio"
+        ? parseAudioDurationSeconds(bytes, detected.extension as "wav" | "mp3")
+        : null;
   if (detected.kind === "video" && durationS === null) {
     return error(422, "invalid_media_file", "The MP4 has no supported movie duration.");
+  }
+  // An unreadable audio length passes through, as in the app; a readable one must fit kie's range.
+  if (
+    detected.kind === "audio" &&
+    durationS !== null &&
+    !isAcceptedReferenceAudioDuration(durationS)
+  ) {
+    return error(
+      422,
+      "invalid_audio_duration",
+      `Voice clips must be ${MIN_REFERENCE_AUDIO_SECONDS}-${MAX_REFERENCE_AUDIO_SECONDS} seconds; this one is ${durationS.toFixed(1)} s.`,
+    );
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -178,6 +203,16 @@ export async function createApiElement(
       duplicate ? 409 : 422,
       duplicate ? "duplicate_element" : "invalid_element_name",
       nameError,
+    );
+  }
+
+  // Same reading as the app's updateElement (actions/elements.ts): blank means none.
+  const description = String(formData.get("description") ?? "").trim() || null;
+  if (description && description.length > MAX_DESCRIPTION_CHARS) {
+    return error(
+      422,
+      "invalid_description",
+      `description must be at most ${MAX_DESCRIPTION_CHARS} characters.`,
     );
   }
 
@@ -222,7 +257,7 @@ export async function createApiElement(
     .insert({
       user_id: userId,
       name,
-      description: null,
+      description,
       category,
       asset_id: asset.id,
       is_shared: false,

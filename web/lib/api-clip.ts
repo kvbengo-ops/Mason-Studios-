@@ -92,12 +92,16 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
       error: `${model.label} does not support duration_s ${durationS}.`,
     };
   }
-  if (!model.resolutions.includes(resolution as Resolution)) {
+  // Case-insensitive: Wan 3.0 spells "480P" while every other model spells "480p".
+  const canonicalResolution = model.resolutions.find(
+    (r) => r.toLowerCase() === (resolution as string).toLowerCase(),
+  );
+  if (!canonicalResolution) {
     return {
       ok: false,
       status: 422,
       code: "unsupported_resolution",
-      error: `${model.label} does not support resolution "${resolution}".`,
+      error: `${model.label} does not support resolution "${resolution}". Accepted: ${model.resolutions.join(", ")}.`,
     };
   }
   const refs: Record<"image_refs" | "video_refs" | "audio_refs", string[]> = {
@@ -122,7 +126,7 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
   return {
     prompt,
     modelId,
-    resolution: resolution as Resolution,
+    resolution: canonicalResolution,
     durationS: durationS as number,
     isTalkingHead: (body.is_talking_head as boolean | undefined) ?? false,
     imageRefs: refs.image_refs,

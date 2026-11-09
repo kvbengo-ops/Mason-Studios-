@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+const MAX_DIRECT_UPLOAD_BYTES = 16 * 1024 * 1024;
+
 export async function GET(request: Request): Promise<Response> {
   const auth = await requireApiToken(request, "read");
   if (!auth.ok) return auth.response;
@@ -58,6 +60,16 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const auth = await requireApiToken(request, "upload");
   if (!auth.ok) return auth.response;
+
+  // Refuse before buffering: the largest accepted file is 15 MB, plus the multipart envelope.
+  const contentLength = Number(request.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_DIRECT_UPLOAD_BYTES) {
+    return apiError(
+      "This upload is over 16 MB. Images may be up to 10 MB, and audio and video up to 15 MB.",
+      "file_too_large",
+      413,
+    );
+  }
 
   let formData: FormData;
   try {
