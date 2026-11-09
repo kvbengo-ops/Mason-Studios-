@@ -248,10 +248,17 @@ describe("BULK_ALLOWANCE_SCOPE_ROLES", () => {
     }
   });
 
-  it("keeps the two tiers separable, and 'all' the union of them", () => {
+  it("keeps each tier separable, and 'all' the union of them", () => {
     expect(BULK_ALLOWANCE_SCOPE_ROLES.editor).toEqual(["editor"]);
     expect(BULK_ALLOWANCE_SCOPE_ROLES.trusted_editor).toEqual(["trusted_editor"]);
-    expect([...BULK_ALLOWANCE_SCOPE_ROLES.all].sort()).toEqual(["editor", "trusted_editor"]);
+    expect(BULK_ALLOWANCE_SCOPE_ROLES.hybrid_editor).toEqual(["hybrid_editor"]);
+    expect(BULK_ALLOWANCE_SCOPE_ROLES.ai_animator).toEqual(["ai_animator"]);
+    expect([...BULK_ALLOWANCE_SCOPE_ROLES.all].sort()).toEqual([
+      "ai_animator",
+      "editor",
+      "hybrid_editor",
+      "trusted_editor",
+    ]);
   });
 });
 

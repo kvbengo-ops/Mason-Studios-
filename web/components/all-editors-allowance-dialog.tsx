@@ -102,6 +102,9 @@ export function AllEditorsAllowanceDialog({
    * below writes to one tier or the other, and the copy names the number it
    * is about to change. */
   trustedEditorCount,
+  /** Accounts on `hybrid_editor` / `ai_animator` (0131), counted per scope like the two above. */
+  hybridEditorCount = 0,
+  aiAnimatorCount = 0,
   /** Editor-tier accounts the daily on/off moves (it is installation-wide, not per role). */
   followingDefaultCount,
   /** Whether any editor-tier account has an hourly cap now — the hourly switch's starting state. */
@@ -112,6 +115,8 @@ export function AllEditorsAllowanceDialog({
   dailyCapEnabled?: boolean;
   editorCount: number;
   trustedEditorCount: number;
+  hybridEditorCount?: number;
+  aiAnimatorCount?: number;
   followingDefaultCount: number;
   hourlyCapInUse?: boolean;
 }): JSX.Element {
@@ -131,12 +136,14 @@ export function AllEditorsAllowanceDialog({
 
   // What the chosen scope will actually write to, so every number on screen
   // is the number the Server Action is about to change.
-  const scopedCount =
-    scope === "editor"
-      ? editorCount
-      : scope === "trusted_editor"
-        ? trustedEditorCount
-        : editorCount + trustedEditorCount;
+  const countByScope: Record<BulkAllowanceScope, number> = {
+    editor: editorCount,
+    trusted_editor: trustedEditorCount,
+    hybrid_editor: hybridEditorCount,
+    ai_animator: aiAnimatorCount,
+    all: editorCount + trustedEditorCount + hybridEditorCount + aiAnimatorCount,
+  };
+  const scopedCount = countByScope[scope];
   const plural = (n: number): string => `${n} account${n === 1 ? "" : "s"}`;
 
   /**
@@ -278,8 +285,14 @@ export function AllEditorsAllowanceDialog({
               <SelectItem value="trusted_editor">
                 {BULK_ALLOWANCE_SCOPE_LABELS.trusted_editor} ({trustedEditorCount})
               </SelectItem>
+              <SelectItem value="hybrid_editor">
+                {BULK_ALLOWANCE_SCOPE_LABELS.hybrid_editor} ({hybridEditorCount})
+              </SelectItem>
+              <SelectItem value="ai_animator">
+                {BULK_ALLOWANCE_SCOPE_LABELS.ai_animator} ({aiAnimatorCount})
+              </SelectItem>
               <SelectItem value="all">
-                {BULK_ALLOWANCE_SCOPE_LABELS.all} ({editorCount + trustedEditorCount})
+                {BULK_ALLOWANCE_SCOPE_LABELS.all} ({countByScope.all})
               </SelectItem>
             </SelectContent>
           </Select>

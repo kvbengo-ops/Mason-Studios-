@@ -39,6 +39,7 @@ export function DecideAllowanceRequestDialog({
   requestId,
   requesterEmail,
   requestedUsd,
+  reason,
   defaultGrantAmountUsd,
   defaultExpiresAtIso,
   peerMaxGrantUsd,
@@ -50,6 +51,8 @@ export function DecideAllowanceRequestDialog({
   requestId: string;
   requesterEmail: string;
   requestedUsd: number;
+  /** The requester's own reason, shown in full before deciding. Null when they gave none. */
+  reason: string | null;
   /** lib/allowance.ts's defaultGrantAmountUsd(requestedUsd), computed server-side. */
   defaultGrantAmountUsd: number;
   /** lib/spend.ts's endOfManilaWeekIso(), computed server-side — the default grant expiry. */
@@ -177,6 +180,8 @@ export function DecideAllowanceRequestDialog({
             </DialogDescription>
           </DialogHeader>
 
+          <RequestReason reason={reason} />
+
           {/* Part 3 of the task that added this: "can I approve this?"
               answered here, not on three other pages — the requester's own
               current allowance and usage, next to kie's real
@@ -278,6 +283,8 @@ export function DecideAllowanceRequestDialog({
             </DialogDescription>
           </DialogHeader>
 
+          <RequestReason reason={reason} />
+
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`deny-note-${requestId}`}>Note (optional)</Label>
             <Textarea
@@ -300,6 +307,18 @@ export function DecideAllowanceRequestDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** The requester's reason, in full: the table row truncates it, and it is what is being decided. */
+function RequestReason({ reason }: { reason: string | null }): JSX.Element {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-border p-3">
+      <span className="text-xs font-medium text-muted-foreground">Reason</span>
+      <p className="max-h-48 overflow-y-auto text-sm whitespace-pre-wrap break-words text-foreground">
+        {reason?.trim() ? reason : "No reason given."}
+      </p>
     </div>
   );
 }

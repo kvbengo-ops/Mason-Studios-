@@ -322,7 +322,7 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
 // one had no way to leave the other alone.
 // ---------------------------------------------------------------------------
 
-export type BulkAllowanceScope = "editor" | "trusted_editor" | "all";
+export type BulkAllowanceScope = "editor" | "trusted_editor" | "hybrid_editor" | "ai_animator" | "all";
 
 /**
  * Which roles each scope writes to.
@@ -340,13 +340,17 @@ export type BulkAllowanceScope = "editor" | "trusted_editor" | "all";
 export const BULK_ALLOWANCE_SCOPE_ROLES: Record<BulkAllowanceScope, readonly ProfileRole[]> = {
   editor: ["editor"],
   trusted_editor: ["trusted_editor"],
-  all: ["editor", "trusted_editor"],
+  hybrid_editor: ["hybrid_editor"],
+  ai_animator: ["ai_animator"],
+  all: ["editor", "trusted_editor", "hybrid_editor", "ai_animator"],
 };
 
 /** What each scope is called on screen. Singular-agnostic — the dialog adds its own counts. */
 export const BULK_ALLOWANCE_SCOPE_LABELS: Record<BulkAllowanceScope, string> = {
   editor: "Editors only",
   trusted_editor: "Trusted editors only",
+  hybrid_editor: "Hybrid Editors only",
+  ai_animator: "AI Animators only",
   all: "All editor tiers",
 };
 

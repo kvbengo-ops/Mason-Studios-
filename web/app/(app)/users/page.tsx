@@ -17,6 +17,7 @@ import type { ParsedSort } from "@/lib/sort-params";
 import { formatUsd } from "@/lib/format-usd";
 import { decideAccountApproval } from "@/actions/account";
 import { AllEditorsAllowanceDialog } from "@/components/all-editors-allowance-dialog";
+import { BULK_ALLOWANCE_SCOPE_ROLES } from "@/lib/allowance";
 import { Badge } from "@/components/ui/badge";
 import { DailyCapSwitch } from "@/components/daily-cap-switch";
 import { UserRowActions } from "@/components/user-row-actions";
@@ -269,6 +270,8 @@ export default async function UsersPage({
   const [
     { count: plainEditorCount },
     { count: trustedEditorCount },
+    { count: hybridEditorCount },
+    { count: aiAnimatorCount },
     { count: followingDefaultCount },
     { count: hourlyCappedCount },
   ] = await Promise.all([
@@ -277,6 +280,11 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("role", "trusted_editor"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "hybrid_editor"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "ai_animator"),
     // Every editor-tier account, which since 0078 is exactly the set the
     // installation default decides for — there is no per-account override
     // left to exempt anyone. Named in the disable dialog so an admin sees
@@ -284,13 +292,13 @@ export default async function UsersPage({
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .in("role", ["editor", "trusted_editor"]),
+      .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all]),
     // Whether the Spending limits panel's hourly switch starts on: hourly has
     // no installation setting, an account is capped exactly when it has one.
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .in("role", ["editor", "trusted_editor"])
+      .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all])
       .not("hourly_cap_override_usd", "is", null),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
@@ -503,6 +511,8 @@ export default async function UsersPage({
               dailyCapEnabled={dailyCapEnabled}
               editorCount={plainEditorCount ?? 0}
               trustedEditorCount={trustedEditorCount ?? 0}
+              hybridEditorCount={hybridEditorCount ?? 0}
+              aiAnimatorCount={aiAnimatorCount ?? 0}
               followingDefaultCount={followingDefaultCount ?? 0}
               hourlyCapInUse={(hourlyCappedCount ?? 0) > 0}
             />
@@ -661,7 +671,6 @@ export default async function UsersPage({
                   // pending label, label, and which of the two it is). Named
                   // once here so the row cannot end up offering "Make
                   // trusted" while sending "untrust".
-                  const isTrusted = user.role === "trusted_editor";
                   const allowance =
                     caps && maxWeeklyCapUsd !== null && maxDailyCapUsd !== null
                       ? {
@@ -765,7 +774,7 @@ export default async function UsersPage({
                             <UserRowActions
                               userId={user.id}
                               email={user.email}
-                              isTrusted={false}
+                              role={user.role}
                               allowance={allowance}
                               allowanceOnly
                               canDemote={user.id !== viewer.id}
@@ -791,7 +800,7 @@ export default async function UsersPage({
                               <UserRowActions
                                 userId={user.id}
                                 email={user.email}
-                                isTrusted={isTrusted}
+                                role={user.role}
                                 /* Null when lib/spend did not load: the caps
                                    pre-fill the numbers the admin just read in
                                    this row, and a limit editor that cannot
