@@ -494,19 +494,16 @@ describe("the prompt placeholder cannot be mistaken for a written prompt", () =>
 // button BEFORE anything is spent — a length control that did not move the
 // quote would be the same trap the pinned row was.
 describe("Length is a control, and it reprices the button", () => {
-  it("opens the slider only on request and uses only durations the model sells", async () => {
+  it("offers only durations the model sells, and closes once one is picked", async () => {
     const user = userEvent.setup();
     renderColumn(null);
 
-    expect(screen.queryByRole("slider", { name: "Length in seconds" })).toBeNull();
+    expect(screen.queryByRole("menu")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Length: 4 seconds" }));
-    const slider = screen.getByRole("slider", { name: "Length in seconds" });
-    expect(slider.getAttribute("max")).toBe("1");
-    expect(slider.getAttribute("aria-valuetext")).toBe("4 seconds");
-    fireEvent.change(slider, { target: { value: "1" } });
-    expect(slider.getAttribute("aria-valuetext")).toBe("8 seconds");
-    await user.click(screen.getByRole("button", { name: "Length: 8 seconds" }));
-    expect(screen.queryByRole("slider", { name: "Length in seconds" })).toBeNull();
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["4s", "8s"]);
+    await user.click(screen.getByRole("menuitem", { name: "8 seconds" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("button", { name: "Length: 8 seconds" })).toBeTruthy();
   });
 
   it("changes the credits on the button when the length changes", async () => {
@@ -517,15 +514,10 @@ describe("Length is a control, and it reprices the button", () => {
     expect(screen.getByRole("button", { name: /Generate · \$0\.56/ })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Length: 4 seconds" }));
-    fireEvent.change(screen.getByRole("slider", { name: "Length in seconds" }), {
-      target: { value: "1" },
-    });
+    await user.click(screen.getByRole("menuitem", { name: "8 seconds" }));
 
     // 28 cr/s x 8s, quoted before the press rather than discovered after it.
     expect(screen.getByRole("button", { name: /Generate · \$1\.12/ })).toBeTruthy();
-    expect(
-      screen.getByRole("slider", { name: "Length in seconds" }).getAttribute("aria-valuetext"),
-    ).toBe("8 seconds");
   });
 });
 
@@ -845,9 +837,7 @@ describe("UgcColumn — Generate confirms before it spends", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
     await user.click(screen.getByRole("button", { name: "Length: 4 seconds" }));
-    fireEvent.change(screen.getByRole("slider", { name: "Length in seconds" }), {
-      target: { value: "1" },
-    });
+    await user.click(screen.getByRole("menuitem", { name: "8 seconds" }));
     await user.click(screen.getByRole("button", { name: /^Generate ·/ }));
 
     const reopened = await screen.findByRole("dialog");
