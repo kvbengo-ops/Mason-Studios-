@@ -134,15 +134,12 @@ describe("quoteClip refuses rather than substituting", () => {
 
 describe("cheapestFor", () => {
   it.each([
-    // Not obvious, and it changes with duration: Hailuo wins at 6s and cannot
-    // render at 4s at all, where Kling silent wins instead — at std/720p
-    // (14 cr/s) since 2026-09-10, cheaper than the 72 credits pro/1080p
-    // (18 cr/s) used to be the only silent Kling tier on file.
-    [4, "kling-3.0-pro", 56],
-    [6, "hailuo-2.3-pro", 54],
-    [10, "hailuo-2.3-pro", 90],
+    // Gemini Omni 1.2's published 360p rate is 4 credits per second.
+    [4, "gemini-omni-1.2", 16],
+    [6, "gemini-omni-1.2", 24],
+    [10, "gemini-omni-1.2", 40],
   ] as const)(
-    "at %ds the cheapest silent clip is %s at %d credits",
+    "at %ds the cheapest sound-off quote is %s at %d credits",
     (durationS, modelId, credits) => {
       const best = cheapestFor(durationS, false, NOW);
       expect(best?.modelId).toBe(modelId);
