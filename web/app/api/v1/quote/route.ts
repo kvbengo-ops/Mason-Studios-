@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireApiToken } from "@/lib/api-auth";
-import { apiClipQuote, parseApiClipInput, prepareApiClip } from "@/lib/api-clip";
+import { apiClipQuote, parseApiClipInput, prepareApiClip, teamModelRefusal } from "@/lib/api-clip";
 import { apiError, readJsonObject } from "@/lib/api-v1";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -16,6 +16,8 @@ export async function POST(request: Request): Promise<Response> {
   if ("ok" in parsedInput) {
     return apiError(parsedInput.error, parsedInput.code, parsedInput.status);
   }
+  const teamRefusal = teamModelRefusal(auth.profile.team, parsedInput.modelId);
+  if (teamRefusal) return apiError(teamRefusal.error, teamRefusal.code, teamRefusal.status);
 
   try {
     const prepared = await prepareApiClip(createAdminClient(), auth.userId, parsedInput);
