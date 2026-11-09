@@ -491,6 +491,42 @@ func TestRLSProfiles(t *testing.T) {
 		})
 	})
 
+	// 0129 (team) and 0130 (last_seen_at) add columns, not policies. Neither is
+	// writable from a client: team is admin-only through setAccountTeam's
+	// service-role client, last_seen_at through touchPresence's.
+	for _, column := range []struct{ name, value string }{
+		{"team", "'ai_animator'"},
+		{"last_seen_at", "now()"},
+	} {
+		column := column
+		t.Run("non_admin_cannot_set_own_"+column.name, func(t *testing.T) {
+			runAsUser(ctx, t, s, userA, func(tx pgx.Tx) {
+				tag, err := tx.Exec(ctx,
+					`update profiles set `+column.name+` = `+column.value+` where id = $1`, userA)
+				if err != nil {
+					t.Fatalf("update own %s: %v", column.name, err)
+				}
+				if tag.RowsAffected() != 0 {
+					t.Errorf("update of own %s affected %d rows, want 0", column.name, tag.RowsAffected())
+				}
+			})
+		})
+
+		t.Run("admin_cannot_set_"+column.name+"_through_the_client_either", func(t *testing.T) {
+			runAsUser(ctx, t, s, adminUser, func(tx pgx.Tx) {
+				tag, err := tx.Exec(ctx,
+					`update profiles set `+column.name+` = `+column.value+` where id = $1`, userB)
+				if err != nil {
+					t.Fatalf("admin update %s: %v", column.name, err)
+				}
+				if tag.RowsAffected() != 0 {
+					t.Errorf("admin client update of %s affected %d rows, want 0 (only the service-role action writes it)",
+						column.name, tag.RowsAffected())
+				}
+			})
+		})
+	}
+
 	// Admin gets no special treatment either — profiles_select_admin is a
 	// SELECT policy only; there is no admin-scoped UPDATE policy to widen.
 	t.Run("unqualified_update_never_touches_any_profile_admin", func(t *testing.T) {

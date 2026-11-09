@@ -34,13 +34,17 @@ import {
   videoRateFor,
 } from "@/lib/kie/rates";
 import { getModel } from "@/lib/models";
+import { canUseVideoModel, type Team } from "@/lib/model-access";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
+import { BYTEPLUS_SEEDANCE_ID, BYTEPLUS_SEEDANCE_RESOLUTION } from "@/lib/ugc-model-rules";
 import type { UgcOption } from "@/components/ugc-column";
 
 // The only models the picker shows (owner's call, 2026-11-07). Display only:
 // offerable() still prices and validates the rest, so old scenes stay readable.
 // kling-4.0-reference is Kling 4.0's References mode, not a separate model.
+// Seedance 2.5 on Kie is retired (2026-11-09): it is not listed, though old scenes
+// still resolve through it. Seedance 2.5 on BytePlus is offered at 480p only.
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
-  "seedance-2.5",
   "seedance-2.5-byteplus",
   "kling-4.0",
   "kling-4.0-reference",
@@ -48,13 +52,18 @@ const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "gemini-omni-video",
 ]);
 
-export function ugcOptions(withSound: boolean): UgcOption[] {
-  const shown = offerable(withSound).filter((offer) => SHOWN_MODEL_IDS.has(offer.model.id));
+export function ugcOptions(withSound: boolean, team: Team | null = null): UgcOption[] {
+  const shown = offerable(withSound).filter(
+    (offer) =>
+      SHOWN_MODEL_IDS.has(offer.model.id) &&
+      canUseVideoModel(team, offer.model.id) &&
+      (offer.model.id !== BYTEPLUS_SEEDANCE_ID || offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
+  );
   return shown.map((offer) => {
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;
     return {
       modelId: offer.model.id,
-      label: offer.model.id === "seedance-2.5" ? `${offer.model.label} · Kie` : offer.model.label,
+      label: offer.model.label,
       resolution: offer.resolution,
       durationsS: offer.model.durationsS,
       creditsPerSecond: rate.creditsPerSecond,
@@ -63,7 +72,8 @@ export function ugcOptions(withSound: boolean): UgcOption[] {
       // own comment for how it was found. Carried onto the option so the
       // column can refuse an over-long prompt without importing the model
       // table, the same way videoCreditsPerSecond is.
-      maxPromptChars: offer.model.maxPromptChars,
+      // The lower of the vendor's cap and ours, so the column's one over-limit check covers both.
+      maxPromptChars: Math.min(offer.model.maxPromptChars ?? Infinity, MAX_PROMPT_CHARS),
       // WHAT A TAGGED VIDEO COSTS, so the confirm dialog can quote the
       // render the operator is actually buying. Null when nobody has been
       // billed for this pair with a video attached; the column refuses to

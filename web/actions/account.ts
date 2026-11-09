@@ -10,6 +10,7 @@ import { requireAdmin } from "@/actions/guard";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { ActionResult } from "@/lib/action-result";
 import type { ProfileRole, ProfileStatus } from "@/types/db";
+import { isTeam } from "@/lib/model-access";
 import {
   BULK_ALLOWANCE_SCOPE_ROLES,
   dailyCapOverrideError,
@@ -219,6 +220,27 @@ export async function setTrustedEditor(
   }
 
   revalidatePath(USERS_PATH);
+}
+
+/**
+ * Sets (or clears, with null) an account's team from Accounts Control. The team only gates
+ * which video models the account may use (lib/model-access.ts); role and caps are untouched.
+ * requireAdmin first, and the write goes through the admin client because profiles has no
+ * UPDATE policy at all (0002_rls.sql), which is also why no client can set its own team.
+ */
+export async function setAccountTeam(userId: string, team: string | null): Promise<ActionResult> {
+  await requireAdmin();
+  if (team !== null && !isTeam(team)) return { error: "Choose a valid team." };
+
+  const { data, error } = await createAdminClient()
+    .from("profiles")
+    .update({ team })
+    .eq("id", userId)
+    .select("id");
+  if (error) throw new Error(`Failed to set the team for account ${userId}: ${error.message}`);
+  if ((data ?? []).length === 0) return { error: "That account no longer exists." };
+
+  revalidatePath(ACCOUNTS_CONTROL_PATH);
 }
 
 /** Promotes an active editor to admin, from /users. */

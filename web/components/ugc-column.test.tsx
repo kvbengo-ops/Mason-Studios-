@@ -525,7 +525,8 @@ describe("Length is a control, and it reprices the button", () => {
 
   it("sends High quality by default, and the pick from the Quality menu", async () => {
     const user = userEvent.setup();
-    const { container } = renderColumn(null);
+    // Seedance 2.0 Fast only: the pinned BytePlus Seedance is absent, so the column opens here.
+    const { container } = renderColumn(null, [OPTIONS[0]!]);
     const field = () =>
       (container.querySelector('input[name="quality"]') as HTMLInputElement).value;
 
@@ -533,8 +534,17 @@ describe("Length is a control, and it reprices the button", () => {
     await user.click(screen.getByRole("button", { name: "Quality: High" }));
     await user.click(screen.getByRole("menuitem", { name: /Max/ }));
     expect(field()).toBe("max");
-    // Re-encode only: the price on the button does not move.
-    expect(screen.getByRole("button", { name: /Generate · \$0\.56/ })).toBeTruthy();
+    // Re-encode only: the price on the button does not move (11.7 cr/s x 4s).
+    expect(screen.getByRole("button", { name: /Generate · \$0\.23/ })).toBeTruthy();
+  });
+
+  it("hides the Quality menu on Seedance 2.5 BytePlus and always sends high", () => {
+    const { container } = renderColumn(null);
+
+    expect(screen.queryByRole("button", { name: /^Quality:/ })).toBeNull();
+    expect((container.querySelector('input[name="quality"]') as HTMLInputElement).value).toBe(
+      "high",
+    );
   });
 
   it("changes the credits on the button when the length changes", async () => {

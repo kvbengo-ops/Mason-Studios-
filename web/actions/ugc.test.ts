@@ -25,7 +25,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { RenderSettingsOverrideSchema, mergeRenderSettings, getModel } from "@/lib/models";
 import { offerable } from "@/lib/kie/offerable";
-import { rateFor } from "@/lib/kie/rates";
+import { rateFor, videoRateFor } from "@/lib/kie/rates";
 import type * as StorageModule from "@/lib/storage";
 
 describe("RenderSettingsOverrideSchema refuses what it does not understand", () => {
@@ -160,9 +160,18 @@ describe("createClipProject", () => {
 // ---------------------------------------------------------------------------
 
 /** An offered model/resolution pair, read from the same table the route uses. */
+// Seedance 2.5 on BytePlus at 480p: the one pair /ugc sells that is not Kling. The first
+// offerable pair is Kie's retired seedance-2.5, which generateClip now moves to this one.
+function firstOffer() {
+  const first = offerable(false).find(
+    (o) => o.model.id === "seedance-2.5-byteplus" && o.resolution === "480p",
+  );
+  if (!first) throw new Error("seedance-2.5-byteplus/480p is not offerable — nothing to render");
+  return first;
+}
+
 function anOfferedPair() {
-  const [first] = offerable(false);
-  if (!first) throw new Error("offerable(false) is empty — this suite has nothing to render");
+  const first = firstOffer();
   return { modelId: first.model.id, resolution: first.resolution };
 }
 
@@ -186,6 +195,8 @@ function aClipForm(overrides: Record<string, string | File> = {}): FormData {
  * `capRefusal` is the knob: null lets the cap pass, an ActionResult refuses.
  */
 function mockWriteSurfaces(opts: {
+  /** The caller's profiles.team; default none. */
+  team?: string | null;
   capRefusal?: { error: string } | null;
   element?: { asset_id: string; user_id: string } | null;
   /**
@@ -267,7 +278,7 @@ function mockWriteSurfaces(opts: {
     requireProject: async () => ({
       project: { id: "proj-1", render_settings: {} },
       user: { id: "user-1" },
-      profile: {},
+      profile: { team: opts.team ?? null },
     }),
     requireScene: async () => ({}),
   }));
@@ -595,6 +606,55 @@ describe("generateClip refuses without writing", () => {
     expect(result).toEqual({ error: "Daily cap reached." });
   });
 
+  it("moves a submission for retired Kie seedance-2.5 to BytePlus 480p, quality high", async () => {
+    const spies = mockWriteSurfaces({});
+
+    const { generateClip } = await import("./ugc");
+    await generateClip(aClipForm({ modelId: "seedance-2.5", resolution: "1080p" }));
+
+    const sceneCall = spies.insert.mock.calls.find(
+      (call) => (call[0] as Record<string, unknown>).video_prompt !== undefined,
+    );
+    expect(sceneCall, "no scene row was inserted at all").toBeTruthy();
+    expect(
+      (sceneCall![0] as { render_settings_override?: unknown }).render_settings_override,
+    ).toEqual({ model: "seedance-2.5-byteplus", resolution: "480p", quality: "high" });
+  });
+
+  it("refuses BytePlus Seedance at any resolution but 480p, before consulting the cap", async () => {
+    const spies = mockWriteSurfaces({});
+
+    const { generateClip } = await import("./ugc");
+    const result = await generateClip(
+      aClipForm({ modelId: "seedance-2.5-byteplus", resolution: "720p" }),
+    );
+
+    expect(result?.error).toMatch(/480p only/i);
+    expect(spies.assertWithinSpendCaps).not.toHaveBeenCalled();
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a model the caller's team may not use, before consulting the cap", async () => {
+    const spies = mockWriteSurfaces({ team: "hybrid_editor" });
+
+    const { generateClip } = await import("./ugc");
+    const result = await generateClip(aClipForm({ modelId: "wan-3.0", resolution: "480P" }));
+
+    expect(result?.error).toMatch(/not available to your team/i);
+    expect(spies.assertWithinSpendCaps).not.toHaveBeenCalled();
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses a prompt over the 20,000 character cap, Seedance included", async () => {
+    const spies = mockWriteSurfaces({});
+
+    const { generateClip } = await import("./ugc");
+    const result = await generateClip(aClipForm({ prompt: "a".repeat(20_001) }));
+
+    expect(result?.error).toMatch(/20,000/);
+    expect(spies.insert).not.toHaveBeenCalled();
+  });
+
   it("refuses a model/resolution pair it may not sell, before consulting the cap", async () => {
     // offerable() is a stronger check than a shape schema: it asks whether
     // the price is REAL, not whether the field exists. A pair that slipped
@@ -861,6 +921,7 @@ function mockSceneSurfaces(opts: {
     requireProject: async () => ({}),
     requireScene: async () => ({
       user: { id: "user-1" },
+      profile: {},
       project: { id: "proj-1", render_settings: {} },
       scene,
     }),
@@ -1246,8 +1307,7 @@ describe("regenerateClip applies the settings it was given", () => {
   });
 
   function aRegenerateForm(over: Record<string, string> = {}): FormData {
-    const [first] = offerable(false);
-    if (!first) throw new Error("nothing offerable");
+    const first = firstOffer();
     const form = new FormData();
     form.set("sceneId", "scene-1");
     form.set("prompt", "the prompt already on the row");
@@ -1269,13 +1329,68 @@ describe("regenerateClip applies the settings it was given", () => {
       render_settings_override?: { model: string; resolution: string };
       duration_s?: number;
     };
-    const [first] = offerable(false);
+    const first = firstOffer();
+    // BytePlus Seedance always stores quality "high".
     expect(written.render_settings_override).toEqual({
-      model: first!.model.id,
-      resolution: first!.resolution,
+      model: first.model.id,
+      resolution: first.resolution,
+      quality: "high",
     });
     expect(written.duration_s).toBe(first!.model.durationsS[0]);
     expect(spies.rerenderScene).toHaveBeenCalled();
+  });
+
+  it("moves a scene on retired Kie seedance-2.5 to BytePlus 480p, quality high", async () => {
+    const spies = mockSceneSurfaces({});
+    const { regenerateClip } = await import("./ugc");
+
+    const result = await regenerateClip(
+      aRegenerateForm({ modelId: "seedance-2.5", resolution: "1080p", durationS: "4" }),
+    );
+
+    expect(result?.error).toBeUndefined();
+    const written = spies.update.mock.calls[0]?.[0] as {
+      render_settings_override?: { model: string; resolution: string; quality: string };
+    };
+    expect(written.render_settings_override).toEqual({
+      model: "seedance-2.5-byteplus",
+      resolution: "480p",
+      quality: "high",
+    });
+  });
+
+  it("refuses 720p on BytePlus Seedance and writes nothing", async () => {
+    const spies = mockSceneSurfaces({});
+    const { regenerateClip } = await import("./ugc");
+
+    const result = await regenerateClip(
+      aRegenerateForm({ modelId: "seedance-2.5-byteplus", resolution: "720p", durationS: "4" }),
+    );
+
+    expect(result?.error).toMatch(/480p only/i);
+    expect(spies.update).not.toHaveBeenCalled();
+  });
+
+  it("forces quality high on BytePlus Seedance whatever was posted", async () => {
+    const spies = mockSceneSurfaces({});
+    const { regenerateClip } = await import("./ugc");
+
+    await regenerateClip(aRegenerateForm({ quality: "standard" }));
+
+    const written = spies.update.mock.calls[0]?.[0] as {
+      render_settings_override?: { quality?: string };
+    };
+    expect(written.render_settings_override?.quality).toBe("high");
+  });
+
+  it("refuses a prompt over the 20,000 character cap before writing", async () => {
+    const spies = mockSceneSurfaces({});
+    const { regenerateClip } = await import("./ugc");
+
+    const result = await regenerateClip(aRegenerateForm({ prompt: "a".repeat(20_001) }));
+
+    expect(result?.error).toMatch(/20,000/);
+    expect(spies.update).not.toHaveBeenCalled();
   });
 
   it("refuses a pair this route may not sell, and writes nothing", async () => {
@@ -1366,8 +1481,8 @@ describe("regenerateClip applies the settings it was given", () => {
     // Computed, not guessed: 7s looked like an obvious reject and is in fact a
     // length Seedance offers, so the first version of this test asserted a
     // refusal that never came.
-    const [first] = offerable(false);
-    const tooLong = Math.max(...first!.model.durationsS) + 1;
+    const first = firstOffer();
+    const tooLong = Math.max(...first.model.durationsS) + 1;
     const result = await regenerateClip(aRegenerateForm({ durationS: String(tooLong) }));
 
     expect(result?.error).toMatch(new RegExp(`does not render ${tooLong}s`, "i"));
@@ -1500,12 +1615,12 @@ describe("regenerateClip applies the settings it was given", () => {
     expect(spies.rerenderScene).not.toHaveBeenCalled();
   });
 
-  it("switching a scene to seedance-2.5/480p turns is_talking_head off", async () => {
+  it("switching a scene to seedance-2.5-byteplus/480p turns is_talking_head off", async () => {
     const spies = mockSceneSurfaces({});
     const { regenerateClip } = await import("./ugc");
 
     const result = await regenerateClip(
-      aRegenerateForm({ modelId: "seedance-2.5", resolution: "480p", durationS: "4" }),
+      aRegenerateForm({ modelId: "seedance-2.5-byteplus", resolution: "480p", durationS: "4" }),
     );
 
     expect(result?.error).toBeUndefined();
@@ -1855,11 +1970,13 @@ describe("generateClip writes is_talking_head from the chosen model", () => {
     }
   });
 
-  it("seedance-2.5/480p -> is_talking_head stays false (regression pin)", async () => {
+  it("seedance-2.5-byteplus/480p -> is_talking_head stays false (regression pin)", async () => {
     const spies = mockWriteSurfaces({});
     const { generateClip } = await import("./ugc");
 
-    await generateClip(aClipForm({ modelId: "seedance-2.5", resolution: "480p", durationS: "4" }));
+    await generateClip(
+      aClipForm({ modelId: "seedance-2.5-byteplus", resolution: "480p", durationS: "4" }),
+    );
 
     const sceneCall = spies.insert.mock.calls.find(
       (call) => (call[0] as Record<string, unknown>).video_prompt !== undefined,
@@ -3671,24 +3788,25 @@ describe("generateClip prices the video reference into the cap check", () => {
       prompt: "@greta sips coffee, @clip1 style",
       durationS: "4",
       resolution: "480p",
-      modelId: "seedance-2.5",
+      modelId: "seedance-2.5-byteplus",
     });
 
     const { generateClip } = await import("./ugc");
     await generateClip(form);
 
-    // The production receipt for exactly this shape: 136 credits, $0.68.
-    // Output-only would have offered the cap 0.56 and under-quoted by 21%.
+    // Output seconds plus the video's own, at the with-video rate. Output-only would have
+    // offered the cap less than the bill. Credits are whole numbers, hence two digits.
+    const credits = videoRateFor("seedance-2.5-byteplus", "480p")!.creditsPerSecond * (4 + 4.064);
     const charged = (spies.assertWithinSpendCaps.mock.calls[0] as unknown[])?.[2] as number;
     expect(charged, "the cap was checked against a number that is not the bill").toBeCloseTo(
-      0.68,
-      6,
+      credits / 200,
+      2,
     );
   });
 
   it("leaves an ordinary clip's cap check exactly where it was", async () => {
     // The branch that must not move. Every render without a video still
-    // prices off the sound table at 28 cr/s.
+    // prices off the sound table.
     const spies = mockWriteSurfaces({
       elementNames: [{ name: "greta", assetKind: "ref_frame" }],
       element: { asset_id: "asset-greta", user_id: "user-1" },
@@ -3697,15 +3815,15 @@ describe("generateClip prices the video reference into the cap check", () => {
       prompt: "@greta sips coffee",
       durationS: "4",
       resolution: "480p",
-      modelId: "seedance-2.5",
+      modelId: "seedance-2.5-byteplus",
     });
 
     const { generateClip } = await import("./ugc");
     await generateClip(form);
 
     expect((spies.assertWithinSpendCaps.mock.calls[0] as unknown[])?.[2] as number).toBeCloseTo(
-      0.56,
-      6,
+      (rateFor("seedance-2.5-byteplus", "480p", true)!.creditsPerSecond * 4) / 200,
+      2,
     );
   });
 
@@ -3725,7 +3843,7 @@ describe("generateClip prices the video reference into the cap check", () => {
       prompt: "@greta sips coffee, @clip1 style",
       durationS: "4",
       resolution: "480p",
-      modelId: "seedance-2.5",
+      modelId: "seedance-2.5-byteplus",
     });
 
     const { generateClip } = await import("./ugc");
@@ -3832,7 +3950,7 @@ describe("generateClip refuses a prompt longer than the model accepts", () => {
       prompt: "@greta sips coffee",
       durationS: "4",
       resolution: "480p",
-      modelId: "seedance-2.5",
+      modelId: "seedance-2.5-byteplus",
     });
 
     const { generateClip } = await import("./ugc");

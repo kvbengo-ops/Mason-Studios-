@@ -13,6 +13,7 @@ import { UploadProgressBar } from "@/components/upload-progress-bar";
 import { AppBanner } from "@/components/app-banner";
 import { readAppBannerConfig } from "@/lib/app-banner";
 import { RefreshOnFocus } from "@/components/refresh-on-focus";
+import { PresenceHeartbeat } from "@/components/presence-heartbeat";
 
 // Persistent left sidebar shell. Stays a Server Component so requireUser()
 // runs here; the interactive pieces (nav links needing usePathname(), the
@@ -189,6 +190,7 @@ export default async function AppLayout({
           />
           {appBanner ? <AppBanner config={appBanner} /> : null}
           <RefreshOnFocus />
+          <PresenceHeartbeat />
 
           {/* @container: makes step-rail.tsx's full-bleed header possible. The
           rail used to render inside the `mx-auto max-w-6xl` div below,

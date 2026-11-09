@@ -47,6 +47,7 @@ import { stageFiles } from "@/lib/stage-files";
 import { SceneRerenderDialog } from "@/components/scene-rerender-dialog";
 import { UgcReferencePicker, type PickedReference } from "@/components/ugc-reference-picker";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
+import { BYTEPLUS_SEEDANCE_ID, BYTEPLUS_SEEDANCE_QUALITY } from "@/lib/ugc-model-rules";
 import { findElementByTag, KLING_FRAME_EXTS, TAG_PATTERN, type ElementTag } from "@/lib/elements";
 import { tagLeadIsWordish, tagsInOrder } from "@/lib/element-tags";
 import { unknownPromptTags, unknownTagsWarning } from "@/lib/unknown-tags";
@@ -534,6 +535,8 @@ export function UgcColumn({
   const [quality, setQuality] = useState<VideoQuality>(
     selectedScene?.quality ?? DEFAULT_VIDEO_QUALITY,
   );
+  // Seedance 2.5 on BytePlus is always High, whatever the menu last held.
+  const sentQuality = option?.modelId === BYTEPLUS_SEEDANCE_ID ? BYTEPLUS_SEEDANCE_QUALITY : quality;
 
   // NO REFINE. There was a button here that sent the whole prompt to Sonnet
   // and replaced the field with what came back.
@@ -1173,7 +1176,7 @@ export function UgcColumn({
         {activeAspectRatio ? (
           <input type="hidden" name="aspectRatio" value={activeAspectRatio} />
         ) : null}
-        <input type="hidden" name="quality" value={quality} />
+        <input type="hidden" name="quality" value={sentQuality} />
         {isKling ? (
           <>
             {/* KLING'S OWN PAIR, not elementId/referencesBox. actions/ugc.ts's
@@ -1567,6 +1570,8 @@ export function UgcColumn({
                 boxClassName={bar ? "pr-32" : undefined}
                 name="prompt"
                 value={prompt}
+                charCount={submittedPromptLength}
+                maxChars={option.maxPromptChars}
                 onChange={updatePromptDraft}
                 // The scene the history belongs to. "new" rather than
                 // undefined for the unsaved one, so switching from a saved
@@ -2024,7 +2029,9 @@ export function UgcColumn({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Our own re-encode bitrate (lib/video-quality.ts). No price change. */}
+            {/* Our own re-encode bitrate (lib/video-quality.ts). No price change.
+                Hidden for Seedance 2.5 on BytePlus, which is always High. */}
+            {option.modelId !== BYTEPLUS_SEEDANCE_ID ? (
             <DropdownMenu>
               <DropdownMenuTrigger
                 disabled={readOnly}
@@ -2058,6 +2065,7 @@ export function UgcColumn({
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            ) : null}
 
             {bar && option.modelId === "gemini-omni-video" ? (
               <DropdownMenu>
@@ -2224,7 +2232,7 @@ export function UgcColumn({
                     formData.set("geminiVoice", geminiVoice);
                   }
                   if (activeAspectRatio) formData.set("aspectRatio", activeAspectRatio);
-                  formData.set("quality", quality);
+                  formData.set("quality", sentQuality);
                   if (isKling) {
                     // KLING'S OWN PAIR, not the box's marker/tags — see the
                     // hidden-fields block above this form's effectiveReference

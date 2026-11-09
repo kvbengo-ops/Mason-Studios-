@@ -143,6 +143,9 @@ export interface UgcPromptEditorProps {
   /** The operator's own saved references — resolved server-side, signed URLs and all. Empty is a normal state (nobody has saved one yet). */
   elements: readonly ElementTag[];
   placeholder?: string;
+  /** Live "n / max" counter under the box; red once n passes max. Omit to hide it. */
+  charCount?: number;
+  maxChars?: number;
   /**
    * What the history belongs to — the scene id.
    *
@@ -256,6 +259,8 @@ export function UgcPromptEditor({
   onChange,
   elements,
   placeholder,
+  charCount,
+  maxChars,
   historyKey,
   textareaClassName,
   boxClassName,
@@ -571,7 +576,18 @@ export function UgcPromptEditor({
       </div>
 
       {/* Keep editing controls outside the text and its highlight mirror. */}
-      <div className="flex shrink-0 justify-end gap-1 pt-1" role="group" aria-label="Edit history">
+      <div className="flex shrink-0 items-center justify-end gap-1 pt-1" role="group" aria-label="Edit history">
+        {charCount !== undefined && maxChars !== undefined ? (
+          <span
+            data-testid="prompt-counter"
+            className={cn(
+              "mr-auto text-[10px] tabular-nums text-muted-foreground",
+              charCount > maxChars && "font-medium text-destructive",
+            )}
+          >
+            {charCount.toLocaleString()} / {maxChars.toLocaleString()}
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={undo}

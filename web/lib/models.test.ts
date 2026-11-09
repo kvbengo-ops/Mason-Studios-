@@ -913,10 +913,8 @@ describe("IMAGE_MODELS reference rules", () => {
     expect(kieIdForImageModel(nanoBanana, true)).toBe("google/nano-banana-edit");
   });
 
-  it("keeps Nano Banana 2 on one id for both paths", () => {
-    const nanoBanana2 = imageModel("nano-banana-2");
-    expect(kieIdForImageModel(nanoBanana2, false)).toBe("nano-banana-2");
-    expect(kieIdForImageModel(nanoBanana2, true)).toBe("nano-banana-2");
+  it("does not offer Nano Banana 2", () => {
+    expect(IMAGE_MODELS.map((m) => m.id)).not.toContain("nano-banana-2");
   });
 
   it("gives every model at least one supported aspect ratio", () => {
@@ -927,10 +925,10 @@ describe("IMAGE_MODELS reference rules", () => {
     }
   });
 
-  it("does not offer Seedream a 4:5 ratio it has no BytePlus size for", () => {
-    // Model-specific ratios are not decoration: byteplus-image.ts has pixel sizes
-    // only for SEEDREAM_PRO_ASPECT_RATIOS and refuses anything else.
-    expect(imageModel("seedream-5.0-pro").aspectRatios).not.toContain("4:5");
+  it("offers 9:16, 1:1 and 16:9 on every image model, and nothing else", () => {
+    for (const model of IMAGE_MODELS) {
+      expect([...model.aspectRatios], model.id).toEqual(["9:16", "1:1", "16:9"]);
+    }
   });
 });
 

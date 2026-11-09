@@ -27,7 +27,7 @@ describe("the image resolution tier on kie's payload", () => {
 });
 
 describe("what a tier costs", () => {
-  const nb2 = IMAGE_MODELS.find((m) => m.id === "nano-banana-2")!;
+  const nb2 = IMAGE_MODELS.find((m) => m.id === "nano-banana-2-1")!;
 
   it("is the model's measured price at 1K", () => {
     expect(imageCostUsd(nb2)).toBe(nb2.costUsd);
@@ -41,8 +41,8 @@ describe("what a tier costs", () => {
         expect(imageCostUsd(model, tier)).toBe(model.resolutionCostsUsd?.[tier] ?? null);
       }
     }
-    // kie.ai/nano-banana-2's card: 18 credits at 4K.
-    expect(imageCostUsd(nb2, "4K")).toBe(0.09);
+    // kie.ai/nano-banana-2-1's card: 9 credits at 4K.
+    expect(imageCostUsd(nb2, "4K")).toBe(0.045);
   });
 
   it("is null for a tier the model does not offer", () => {

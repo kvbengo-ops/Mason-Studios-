@@ -23,8 +23,8 @@ describe("gptImage25Input", () => {
     );
   });
 
-  it("refuses 4:5, which kie does not document for this model", () => {
-    expect(() => gptImage25Input(GPT_IMAGE_2_5_IDS.flare.text, "a mug", "4:5")).toThrow(
+  it("refuses a ratio this app does not offer, 4:5 here", () => {
+    expect(() => gptImage25Input(GPT_IMAGE_2_5_IDS.flare.text, "a mug", "4:5" as never)).toThrow(
       "GPT Image 2.5 does not support this aspect ratio.",
     );
   });
