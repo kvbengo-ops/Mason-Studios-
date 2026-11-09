@@ -202,7 +202,7 @@ describe("the rate table itself", () => {
     }
   });
 
-  it("never charges LESS for sound than for silence, and only one pair is allowed to tie", () => {
+  it("never charges less for sound than for silence except documented equal-price pairs", () => {
     // Seedance 2.5 publishes one price per tier regardless of audio, on kie
     // and on BytePlus (per token, audio included). Kling 4.0 has no sound
     // input and one published price per resolution.
@@ -217,6 +217,10 @@ describe("the rate table itself", () => {
       "kling-4.0 1080p",
       "kling-4.0-reference 720p",
       "kling-4.0-reference 1080p",
+      "gemini-omni-1.2 360p",
+      "gemini-omni-1.2 720p",
+      "gemini-omni-1.2 1080p",
+      "gemini-omni-1.2 4k",
     ]);
 
     for (const model of KIE_MODELS) {
