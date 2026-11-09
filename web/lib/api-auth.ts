@@ -16,6 +16,15 @@ export const API_TOKEN_PREFIX = "ms_live_";
 const API_TOKEN_REGEX = /^ms_live_[0-9a-f]{64}$/;
 const LAST_USED_UPDATE_INTERVAL_MS = 60_000;
 
+/**
+ * Personal API tokens are for trusted editors and admins only (owner's call,
+ * 2026-11-09). Checked on every use as well as at creation, so demoting an
+ * account switches its existing tokens off without revoking them.
+ */
+export function canUseApiTokens(profile: Pick<ProfileRow, "role">): boolean {
+  return profile.role === "admin" || profile.role === "trusted_editor";
+}
+
 export function hashApiToken(rawToken: string): string {
   return createHash("sha256").update(rawToken, "utf8").digest("hex");
 }
@@ -51,6 +60,7 @@ export interface ApiAuthFailure {
     | "token_revoked"
     | "token_expired"
     | "account_inactive"
+    | "role_not_allowed"
     | "insufficient_scope"
     | "rate_limited";
   error: string;
@@ -154,6 +164,14 @@ export async function requireApiToken(
       403,
       "account_inactive",
       "Account is suspended or pending approval.",
+    );
+  }
+
+  if (!canUseApiTokens(profile)) {
+    return makeAuthErrorResponse(
+      403,
+      "role_not_allowed",
+      "Personal API tokens are available to trusted editors and admins only.",
     );
   }
 

@@ -237,6 +237,45 @@ describe("requireApiToken", () => {
     }
   });
 
+  it("rejects a regular editor's token with 403 role_not_allowed", async () => {
+    const { rawToken, tokenPrefix, tokenHash } = generateApiTokenMaterial();
+    setupMockAdmin({
+      tokenRow: {
+        id: "tok-editor",
+        user_id: "user-editor",
+        name: "Editor Token",
+        token_prefix: tokenPrefix,
+        token_hash: tokenHash,
+        scopes: ["read", "upload", "generate"],
+        monthly_cap_usd: null,
+        expires_at: null,
+        last_used_at: null,
+        revoked_at: null,
+      },
+      profileRow: {
+        id: "user-editor",
+        email: "editor@example.com",
+        role: "editor",
+        status: "active",
+        daily_cap_override_usd: null,
+        weekly_cap_override_usd: null,
+        hourly_cap_override_usd: null,
+      },
+    });
+
+    const res = await requireApiToken(
+      new Request("https://example.com/api/v1/quote", {
+        headers: { Authorization: `Bearer ${rawToken}` },
+      }),
+      "read",
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.status).toBe(403);
+      expect(res.code).toBe("role_not_allowed");
+    }
+  });
+
   it("rejects tokens missing the required scope with 403 insufficient_scope", async () => {
     const { rawToken, tokenPrefix, tokenHash } = generateApiTokenMaterial();
     setupMockAdmin({

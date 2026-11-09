@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/actions/guard";
 import type { ActionResult } from "@/lib/action-result";
-import { generateApiTokenMaterial } from "@/lib/api-auth";
+import { canUseApiTokens, generateApiTokenMaterial } from "@/lib/api-auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { ApiTokenScope } from "@/lib/api-auth";
 
@@ -65,7 +65,10 @@ export async function listApiTokens(): Promise<ApiTokenMetadata[]> {
  * digest in `api_tokens.token_hash` and returning the plaintext token once.
  */
 export async function createApiToken(formData: FormData): Promise<CreateApiTokenResult> {
-  const { user } = await requireUser();
+  const { user, profile } = await requireUser();
+  if (!canUseApiTokens(profile)) {
+    return { error: "Personal API tokens are available to trusted editors and admins only." };
+  }
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name || name.length > 80) {

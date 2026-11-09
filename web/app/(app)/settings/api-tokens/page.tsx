@@ -3,10 +3,12 @@ import Link from "next/link";
 import { listApiTokens } from "@/actions/api-tokens";
 import { requireUser } from "@/actions/guard";
 import { ApiTokensManager } from "@/components/api-tokens-manager";
+import { canUseApiTokens } from "@/lib/api-auth";
 
 export default async function ApiTokensSettingsPage(): Promise<JSX.Element> {
-  await requireUser();
-  const tokens = await listApiTokens();
+  const { profile } = await requireUser();
+  const allowed = canUseApiTokens(profile);
+  const tokens = allowed ? await listApiTokens() : [];
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -23,7 +25,13 @@ export default async function ApiTokensSettingsPage(): Promise<JSX.Element> {
         </Link>
       </div>
 
-      <ApiTokensManager initialTokens={tokens} />
+      {allowed ? (
+        <ApiTokensManager initialTokens={tokens} />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          Personal API tokens are available to trusted editors and admins only.
+        </p>
+      )}
     </div>
   );
 }

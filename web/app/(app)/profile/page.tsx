@@ -4,6 +4,7 @@ import { requireUser } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
+import { canUseApiTokens } from "@/lib/api-auth";
 import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { UsernameForm } from "@/components/username-form";
@@ -254,23 +255,25 @@ export default async function ProfilePage(): Promise<JSX.Element> {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Personal API Tokens</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 px-6">
-          <p className="text-sm text-muted-foreground">
-            Create and manage personal API tokens for scripts and MCP integrations against{" "}
-            <code>/api/v1/*</code>.
-          </p>
-          <Link
-            href="/settings/api-tokens"
-            className="text-sm font-medium text-foreground underline underline-offset-4"
-          >
-            Manage API tokens &rarr;
-          </Link>
-        </CardContent>
-      </Card>
+      {canUseApiTokens(profile) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Personal API Tokens</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap items-center justify-between gap-4 px-6">
+            <p className="text-sm text-muted-foreground">
+              Create and manage personal API tokens for scripts and MCP integrations against{" "}
+              <code>/api/v1/*</code>.
+            </p>
+            <Link
+              href="/settings/api-tokens"
+              className="text-sm font-medium text-foreground underline underline-offset-4"
+            >
+              Manage API tokens &rarr;
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Same ActionForm + SubmitButton pattern as the sidebar footer's own
           sign-out control (app/(app)/layout.tsx) — this page's copy exists
