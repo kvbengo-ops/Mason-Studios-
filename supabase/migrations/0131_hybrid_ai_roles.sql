@@ -18,9 +18,14 @@
 --   notify_limits_changed (0126)                   - limits-changed notice
 --   outstanding_allowance_usd (0085)               - their own weekly default
 -- Each body is copied verbatim from its latest definition with only the role
--- lists widened. outstanding_allowance_usd gains two parameters, so the old
--- two-argument overload is dropped first (a call with two named args would
--- otherwise be ambiguous) and its only caller (lib/db-aggregates.ts) passes four.
+-- lists widened. outstanding_allowance_usd gains a four-argument overload beside
+-- the old two-argument one (no defaults, so a named-argument call is never
+-- ambiguous); lib/db-aggregates.ts calls the four-argument one.
+--
+-- BACKWARD-COMPATIBLE ON PURPOSE: applied before the code that uses it deploys,
+-- so the old code must keep working. 0129's team column and the two-argument
+-- outstanding_allowance_usd are therefore KEPT; drop both in a later migration
+-- once this release is live.
 -- =============================================================================
 
 alter table public.profiles drop constraint profiles_role_check;
@@ -28,8 +33,8 @@ alter table public.profiles
   add constraint profiles_role_check
   check (role in ('admin', 'editor', 'trusted_editor', 'hybrid_editor', 'ai_animator'));
 
--- 0129's team tag is superseded by the roles above (nothing in prod used it).
-alter table public.profiles drop column if exists team;
+-- 0129's team tag is superseded by the roles above. The column stays until the
+-- previous release (which still selects it) is gone; nothing reads it after this one.
 
 create or replace function public.pass_allowance(
   p_from_user_id        uuid,
@@ -355,7 +360,7 @@ begin
 end;
 $$;
 
-drop function if exists outstanding_allowance_usd(numeric, numeric);
+-- The two-argument overload stays for the previous release; see the header.
 
 create or replace function outstanding_allowance_usd(
   editor_weekly_default numeric,
