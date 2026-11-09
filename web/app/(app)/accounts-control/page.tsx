@@ -22,7 +22,7 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { PaginationControls } from "@/components/pagination-controls";
 import { RoleBadge } from "@/components/role-badge";
 import { PresenceDot } from "@/components/presence-dot";
-import { TeamSelect } from "@/components/team-select";
+import { RoleSelect } from "@/components/role-select";
 import { GlobalSpendCapControl } from "@/components/global-spend-cap-control";
 import {
   Table,
@@ -1208,10 +1208,10 @@ export default async function AccountsControlPage({
                       <p className="break-all text-xs text-muted-foreground">
                         {selectedAccount.email}
                       </p>
-                      <TeamSelect
+                      <RoleSelect
                         key={selectedAccount.id}
                         userId={selectedAccount.id}
-                        team={selectedAccount.team ?? null}
+                        role={selectedAccount.role}
                       />
                     </div>
 

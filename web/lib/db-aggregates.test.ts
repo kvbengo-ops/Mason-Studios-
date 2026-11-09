@@ -509,8 +509,20 @@ describe("getUserActiveGrantsTotals", () => {
     const rpc = vi.fn(() =>
       Promise.resolve({
         data: [
-          { user_id: "u1", total_usd: 15, grant_count: 2, approver_grant_count: 1, latest_transfer_amount_usd: null },
-          { user_id: "u2", total_usd: 5, grant_count: 2, approver_grant_count: 0, latest_transfer_amount_usd: -0.5 },
+          {
+            user_id: "u1",
+            total_usd: 15,
+            grant_count: 2,
+            approver_grant_count: 1,
+            latest_transfer_amount_usd: null,
+          },
+          {
+            user_id: "u2",
+            total_usd: 5,
+            grant_count: 2,
+            approver_grant_count: 0,
+            latest_transfer_amount_usd: -0.5,
+          },
         ],
         error: null,
       }),
@@ -527,9 +539,19 @@ describe("getUserActiveGrantsTotals", () => {
       target_user_ids: ["u1", "u2"],
       at_ts: "2026-08-14T00:00:00.000Z",
     });
-    expect(result.get("u1")).toEqual({ totalUsd: 15, count: 2, endableCount: 1, latestTransferAmountUsd: null });
+    expect(result.get("u1")).toEqual({
+      totalUsd: 15,
+      count: 2,
+      endableCount: 1,
+      latestTransferAmountUsd: null,
+    });
     // Latest direction stays outgoing even when the net transfer total is positive.
-    expect(result.get("u2")).toEqual({ totalUsd: 5, count: 2, endableCount: 0, latestTransferAmountUsd: -0.5 });
+    expect(result.get("u2")).toEqual({
+      totalUsd: 5,
+      count: 2,
+      endableCount: 0,
+      latestTransferAmountUsd: -0.5,
+    });
   });
 
   it("leaves a user with no active grants (no row in the result) absent from the Map", async () => {
@@ -581,15 +603,17 @@ describe("getUserActiveGrantsTotals", () => {
 // its callers: the right args reach the RPC, and its result/null/error
 // handling matches every other thin `.rpc(...)` wrapper in this file.
 describe("getOutstandingAllowanceUsd", () => {
-  it("calls outstanding_allowance_usd with the two role-default weekly figures and returns the total", async () => {
+  it("calls outstanding_allowance_usd with the four role-default weekly figures and returns the total", async () => {
     const rpc = vi.fn(() => Promise.resolve({ data: 169, error: null }));
     const supabase = fakeClient({ rpc });
 
-    const result = await getOutstandingAllowanceUsd(supabase, 10, 25);
+    const result = await getOutstandingAllowanceUsd(supabase, 10, 25, 700, 700);
 
     expect(rpc).toHaveBeenCalledWith("outstanding_allowance_usd", {
       editor_weekly_default: 10,
       trusted_weekly_default: 25,
+      hybrid_editor_weekly_default: 700,
+      ai_animator_weekly_default: 700,
     });
     expect(result).toBe(169);
   });
@@ -598,7 +622,7 @@ describe("getOutstandingAllowanceUsd", () => {
     const rpc = vi.fn(() => Promise.resolve({ data: null, error: null }));
     const supabase = fakeClient({ rpc });
 
-    const result = await getOutstandingAllowanceUsd(supabase, 10, 25);
+    const result = await getOutstandingAllowanceUsd(supabase, 10, 25, 700, 700);
 
     expect(result).toBe(0);
   });
@@ -607,7 +631,7 @@ describe("getOutstandingAllowanceUsd", () => {
     const rpc = vi.fn(() => Promise.resolve({ data: null, error: { message: "boom" } }));
     const supabase = fakeClient({ rpc });
 
-    await expect(getOutstandingAllowanceUsd(supabase, 10, 25)).rejects.toThrow(/boom/);
+    await expect(getOutstandingAllowanceUsd(supabase, 10, 25, 700, 700)).rejects.toThrow(/boom/);
   });
 });
 

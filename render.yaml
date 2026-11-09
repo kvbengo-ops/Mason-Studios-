@@ -122,7 +122,7 @@ services:
       # faces Seedream made under the same account. Unset = Seedream text-to-image fails.
       - key: BYTEPLUS_API_KEY
         sync: false
-      # All seven *_CAP_USD values below must be a bare non-negative number
+      # All eleven *_CAP_USD values below must be a bare non-negative number
       # as a string — "20", not "$20" or "20 USD". web/lib/spend.ts parses
       # each one through parseCapEnvUsd, which THROWS at process startup on
       # anything else (a stray "$", an empty value, a negative number) —
@@ -192,6 +192,17 @@ services:
           # web/lib/spend.ts's own fallback default — chosen so this stays generous
           # enough to never be the practical binding constraint for an admin, unlike
           # the editor tiers above where the weekly figure is meant to bind.
+      # Hybrid Editor / AI Animator (0131): their own caps, defaulting to the global
+      # cap's default ($100/day, 7x weekly), so the team-wide global cap is what binds.
+      # Lower these to give either role a tighter ceiling of its own.
+      - key: HYBRID_EDITOR_DAILY_CAP_USD
+        value: "100"
+      - key: HYBRID_EDITOR_WEEKLY_CAP_USD
+        value: "700"
+      - key: AI_ANIMATOR_DAILY_CAP_USD
+        value: "100"
+      - key: AI_ANIMATOR_WEEKLY_CAP_USD
+        value: "700"
       # Declared here on purpose, not left to the dashboard. This was set
       # manually on the service while the blueprint said nothing about it —
       # which meant a blueprint sync could silently drop it and put the

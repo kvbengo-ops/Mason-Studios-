@@ -102,14 +102,14 @@ describe("ugcOptions(true) — the sound picker", () => {
   });
 });
 
-describe("ugcOptions — team access and the prompt cap", () => {
-  it("hides Wan 3.0 from a Hybrid Editor and shows it to an AI Animator or no team", () => {
-    const ids = (team: Parameters<typeof ugcOptions>[1]): string[] =>
-      ugcOptions(true, team).map((o) => o.modelId);
+describe("ugcOptions — role access and the prompt cap", () => {
+  it("hides Wan 3.0 from a Hybrid Editor and shows it to an AI Animator or any other role", () => {
+    const ids = (role: Parameters<typeof ugcOptions>[1]): string[] =>
+      ugcOptions(true, role).map((o) => o.modelId);
     expect(ids("hybrid_editor")).not.toContain("wan-3.0");
     expect(ids("hybrid_editor")).toContain("kling-4.0");
     expect(ids("ai_animator")).toContain("wan-3.0");
-    expect(ids(null)).toContain("wan-3.0");
+    expect(ids("editor")).toContain("wan-3.0");
   });
 
   it("carries the lower of the vendor cap and the 20,000 character cap", () => {

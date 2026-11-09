@@ -25,12 +25,21 @@ import { Button } from "@/components/ui/button";
 import { WeeklyAllowanceDialog } from "@/components/weekly-allowance-dialog";
 import { DeactivateAccountDialog } from "@/components/deactivate-account-dialog";
 import { PromoteAdminDialog } from "@/components/promote-admin-dialog";
-import { demoteAdmin, setTrustedEditor } from "@/actions/account";
+import { demoteAdmin, setAccountRole } from "@/actions/account";
+import { ASSIGNABLE_ROLES, type AssignableRole } from "@/lib/model-access";
+import type { ProfileRole } from "@/types/db";
+
+const MAKE_ROLE_LABEL: Record<AssignableRole, string> = {
+  editor: "Make editor",
+  trusted_editor: "Make trusted",
+  hybrid_editor: "Make Hybrid Editor",
+  ai_animator: "Make AI Animator",
+};
 
 export function UserRowActions({
   userId,
   email,
-  isTrusted,
+  role,
   allowanceOnly = false,
   /** Admin rows only: offer demotion. False on the viewer's own row. */
   canDemote = false,
@@ -39,7 +48,8 @@ export function UserRowActions({
 }: {
   userId: string;
   email: string;
-  isTrusted: boolean;
+  /** The row's current role: the menu offers every OTHER non-admin role (setAccountRole). */
+  role: ProfileRole;
   allowanceOnly?: boolean;
   canDemote?: boolean;
   allowance: {
@@ -60,11 +70,11 @@ export function UserRowActions({
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  function toggleTrusted(): void {
+  function changeRole(next: ProfileRole): void {
     setErrorMessage(null);
     startTransition(async () => {
       try {
-        const result = await setTrustedEditor(userId, isTrusted ? "untrust" : "trust");
+        const result = await setAccountRole(userId, next);
         // The lost-race branch (someone else changed this role first) comes
         // back as data, not a throw — see lib/action-result.ts.
         if (result?.error) setErrorMessage(result.error);
@@ -107,9 +117,13 @@ export function UserRowActions({
         <DropdownMenuContent align="end">
           {!allowanceOnly ? (
             <>
-              <DropdownMenuItem onSelect={() => toggleTrusted()}>
-                {isTrusted ? "Remove trusted" : "Make trusted"}
-              </DropdownMenuItem>
+              {/* Every non-admin role but the current one (0131 added Hybrid Editor and
+                  AI Animator). Admin has its own confirm dialog below. */}
+              {ASSIGNABLE_ROLES.filter((next) => next !== role).map((next) => (
+                <DropdownMenuItem key={next} onSelect={() => changeRole(next)}>
+                  {MAKE_ROLE_LABEL[next]}
+                </DropdownMenuItem>
+              ))}
               <DropdownMenuItem
                 onSelect={(event) => {
                   event.preventDefault();

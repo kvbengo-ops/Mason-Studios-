@@ -14,7 +14,7 @@ const body = JSON.stringify({
   duration_s: 5,
 });
 
-function asTeam(team: "hybrid_editor" | "ai_animator" | null) {
+function asRole(role: "hybrid_editor" | "ai_animator" | "trusted_editor") {
   vi.mocked(requireApiToken).mockResolvedValueOnce({
     ok: true,
     userId: "user-1",
@@ -22,16 +22,16 @@ function asTeam(team: "hybrid_editor" | "ai_animator" | null) {
     tokenPrefix: "ms_live_test",
     scopes: ["read", "upload", "generate"],
     monthlyCapUsd: null,
-    profile: { id: "user-1", team } as never,
+    profile: { id: "user-1", role } as never,
   } as never);
 }
 
-describe("team model access on the API", () => {
+describe("role model access on the API", () => {
   it.each([
     ["/quote", quote],
     ["/generate", generate],
   ])("refuses wan-3.0 to a Hybrid Editor at %s before any spend", async (path, handler) => {
-    asTeam("hybrid_editor");
+    asRole("hybrid_editor");
     const response = await handler(
       new Request(`https://example.test/api/v1${path}`, {
         method: "POST",

@@ -259,7 +259,12 @@ describe("promoteToAdmin", () => {
     expect(builder.update).toHaveBeenCalledWith({ role: "admin" });
     expect(builder.eq).toHaveBeenCalledWith("id", "user-1");
     expect(builder.eq).toHaveBeenCalledWith("status", "active");
-    expect(builder.in).toHaveBeenCalledWith("role", ["editor", "trusted_editor"]);
+    expect(builder.in).toHaveBeenCalledWith("role", [
+      "editor",
+      "trusted_editor",
+      "hybrid_editor",
+      "ai_animator",
+    ]);
   });
 
   it("returns an error and refreshes the list when the account no longer qualifies", async () => {
@@ -454,7 +459,7 @@ describe("setAllEditorsHourlyCap", () => {
 });
 
 describe("setAllEditorsWeeklyCap", () => {
-  it("targets both editor tiers by name and reports how many it changed", async () => {
+  it("targets every editor tier by name and reports how many it changed", async () => {
     vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
     const builder = fakeBuilder({ data: [{ id: "a" }, { id: "b" }], error: null });
     vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
@@ -463,7 +468,7 @@ describe("setAllEditorsWeeklyCap", () => {
 
     // Named explicitly rather than "not admin": this writes to many rows at
     // once, so adding a future role must be a deliberate edit here.
-    expect(builder.in).toHaveBeenCalledWith("role", ["editor", "trusted_editor"]);
+    expect(builder.in).toHaveBeenCalledWith("role", ["editor", "trusted_editor", "hybrid_editor", "ai_animator"]);
     expect(builder.update).toHaveBeenCalledWith({ weekly_cap_override_usd: 25 });
     expect(result).toEqual({ updated: 2 });
   });
@@ -471,7 +476,9 @@ describe("setAllEditorsWeeklyCap", () => {
   it.each([
     ["editor", ["editor"]],
     ["trusted_editor", ["trusted_editor"]],
-    ["all", ["editor", "trusted_editor"]],
+    ["hybrid_editor", ["hybrid_editor"]],
+    ["ai_animator", ["ai_animator"]],
+    ["all", ["editor", "trusted_editor", "hybrid_editor", "ai_animator"]],
   ] as const)("scope %s writes to exactly %j", async (scope, roles) => {
     vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
     const builder = fakeBuilder({ data: [{ id: "a" }], error: null });

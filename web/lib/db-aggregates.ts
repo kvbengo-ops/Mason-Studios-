@@ -318,10 +318,16 @@ export async function getOutstandingAllowanceUsd(
   supabase: SupabaseClient<Database>,
   editorWeeklyDefaultUsd: number,
   trustedWeeklyDefaultUsd: number,
+  hybridEditorWeeklyDefaultUsd: number,
+  aiAnimatorWeeklyDefaultUsd: number,
 ): Promise<number> {
+  // All four role defaults (0131 added the last two): passed in, not imported, because
+  // lib/spend.ts imports this file.
   const { data, error } = await supabase.rpc("outstanding_allowance_usd", {
     editor_weekly_default: editorWeeklyDefaultUsd,
     trusted_weekly_default: trustedWeeklyDefaultUsd,
+    hybrid_editor_weekly_default: hybridEditorWeeklyDefaultUsd,
+    ai_animator_weekly_default: aiAnimatorWeeklyDefaultUsd,
   });
 
   if (error) {

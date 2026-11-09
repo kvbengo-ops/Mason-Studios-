@@ -241,6 +241,32 @@ export const ADMIN_WEEKLY_CAP_USD = parseCapEnvUsd(
 // Fresh app_settings value. Admins can change its amount, window, or enabled state.
 export const DEFAULT_GLOBAL_SPEND_CAP_USD = 100;
 
+// Hybrid Editor and AI Animator (0131) each have their own caps (owner, 2026-11-09), set
+// relative to the team-wide global cap rather than to the editor tiers: an unset var means
+// the global cap's own default for daily and 7x it for weekly, so in practice the global
+// cap (and any per-account override or grant) is what binds. Set these in render.yaml to
+// give either role a tighter ceiling of its own.
+export const HYBRID_EDITOR_DAILY_CAP_USD = parseCapEnvUsd(
+  "HYBRID_EDITOR_DAILY_CAP_USD",
+  process.env.HYBRID_EDITOR_DAILY_CAP_USD,
+  DEFAULT_GLOBAL_SPEND_CAP_USD,
+);
+export const HYBRID_EDITOR_WEEKLY_CAP_USD = parseCapEnvUsd(
+  "HYBRID_EDITOR_WEEKLY_CAP_USD",
+  process.env.HYBRID_EDITOR_WEEKLY_CAP_USD,
+  7 * DEFAULT_GLOBAL_SPEND_CAP_USD,
+);
+export const AI_ANIMATOR_DAILY_CAP_USD = parseCapEnvUsd(
+  "AI_ANIMATOR_DAILY_CAP_USD",
+  process.env.AI_ANIMATOR_DAILY_CAP_USD,
+  DEFAULT_GLOBAL_SPEND_CAP_USD,
+);
+export const AI_ANIMATOR_WEEKLY_CAP_USD = parseCapEnvUsd(
+  "AI_ANIMATOR_WEEKLY_CAP_USD",
+  process.env.AI_ANIMATOR_WEEKLY_CAP_USD,
+  7 * DEFAULT_GLOBAL_SPEND_CAP_USD,
+);
+
 /**
  * The one place a role turns into its DEFAULT daily ceiling — used only as
  * the fallback inside resolveAccountCaps below (and directly by tests /
@@ -255,6 +281,10 @@ export function dailyCapForRole(role: ProfileRole): number {
       return ADMIN_DAILY_CAP_USD;
     case "trusted_editor":
       return TRUSTED_DAILY_CAP_USD;
+    case "hybrid_editor":
+      return HYBRID_EDITOR_DAILY_CAP_USD;
+    case "ai_animator":
+      return AI_ANIMATOR_DAILY_CAP_USD;
     case "editor":
       return DAILY_CAP_USD;
   }
@@ -267,6 +297,10 @@ export function weeklyCapForRole(role: ProfileRole): number {
       return ADMIN_WEEKLY_CAP_USD;
     case "trusted_editor":
       return TRUSTED_WEEKLY_CAP_USD;
+    case "hybrid_editor":
+      return HYBRID_EDITOR_WEEKLY_CAP_USD;
+    case "ai_animator":
+      return AI_ANIMATOR_WEEKLY_CAP_USD;
     case "editor":
       return WEEKLY_CAP_USD;
   }

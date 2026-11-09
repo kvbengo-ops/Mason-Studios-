@@ -194,8 +194,8 @@ function aClipForm(overrides: Record<string, string | File> = {}): FormData {
  * `capRefusal` is the knob: null lets the cap pass, an ActionResult refuses.
  */
 function mockWriteSurfaces(opts: {
-  /** The caller's profiles.team; default none. */
-  team?: string | null;
+  /** The caller's profiles.role; default editor. */
+  role?: string;
   capRefusal?: { error: string } | null;
   element?: { asset_id: string; user_id: string } | null;
   /**
@@ -277,7 +277,7 @@ function mockWriteSurfaces(opts: {
     requireProject: async () => ({
       project: { id: "proj-1", render_settings: {} },
       user: { id: "user-1" },
-      profile: { team: opts.team ?? null },
+      profile: { role: opts.role ?? "editor" },
     }),
     requireScene: async () => ({}),
   }));
@@ -633,13 +633,13 @@ describe("generateClip refuses without writing", () => {
     expect(spies.insert).not.toHaveBeenCalled();
   });
 
-  it("refuses a model the caller's team may not use, before consulting the cap", async () => {
-    const spies = mockWriteSurfaces({ team: "hybrid_editor" });
+  it("refuses a model the caller's role may not use, before consulting the cap", async () => {
+    const spies = mockWriteSurfaces({ role: "hybrid_editor" });
 
     const { generateClip } = await import("./ugc");
     const result = await generateClip(aClipForm({ modelId: "wan-3.0", resolution: "480P" }));
 
-    expect(result?.error).toMatch(/not available to your team/i);
+    expect(result?.error).toMatch(/not available to your role/i);
     expect(spies.assertWithinSpendCaps).not.toHaveBeenCalled();
     expect(spies.insert).not.toHaveBeenCalled();
   });
