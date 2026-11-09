@@ -1601,6 +1601,23 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
 export const DEFAULT_IMAGE_MODEL_ID = "nano-banana-2-1";
 
 /**
+ * Image models no longer offered in the picker whose past runs still exist. Read ONLY to
+ * name an old run (runs.model keeps the kie id it was billed under); never selectable.
+ */
+const RETIRED_IMAGE_MODEL_LABELS: readonly { label: string; kieIds: readonly string[] }[] = [
+  { label: "Nano Banana", kieIds: ["nano-banana", "google/nano-banana", "google/nano-banana-edit"] },
+];
+
+/** The display name for a run's `runs.model` (a kie id or a picker id), retired models included. */
+export function imageModelLabelFor(model: string): string | null {
+  const live = IMAGE_MODELS.find(
+    (m) => m.id === model || m.textToImageId === model || m.editId === model,
+  );
+  if (live) return live.label;
+  return RETIRED_IMAGE_MODEL_LABELS.find((m) => m.kieIds.includes(model))?.label ?? null;
+}
+
+/**
  * Resolves a picker value to its descriptor, falling back to the default.
  *
  * Falls back rather than throwing for the same reason parseCompilerModel does:

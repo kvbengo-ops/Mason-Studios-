@@ -22,6 +22,7 @@ import {
   kieIdForImageModel,
   getImageModel,
   DEFAULT_IMAGE_MODEL_ID,
+  imageModelLabelFor,
   applySceneCostUsd,
   computeUniversalDurationsS,
   clipCostUsd,
@@ -912,6 +913,14 @@ describe("IMAGE_MODELS reference rules", () => {
     // never "send it anyway".
     const refusing = { ...imageModel("nano-banana-2-1"), editId: null };
     expect(kieIdForImageModel(refusing, true)).toBeNull();
+  });
+
+  it("still NAMES plain Nano Banana for past runs, though it is not selectable", () => {
+    for (const id of ["google/nano-banana", "google/nano-banana-edit", "nano-banana"]) {
+      expect(imageModelLabelFor(id), id).toBe("Nano Banana");
+    }
+    expect(imageModelLabelFor("seedream-5.0-pro")).toBe("Seedream 5.0 Pro");
+    expect(imageModelLabelFor("no-such-model")).toBeNull();
   });
 
   it("does not offer plain Nano Banana, and an old saved pick falls back to Nano Banana 2.1", () => {

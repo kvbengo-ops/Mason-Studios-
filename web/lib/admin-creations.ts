@@ -14,7 +14,7 @@ import {
   type ImageAttemptStatus,
 } from "@/lib/image-attempt";
 import { KIE_MODELS } from "@/lib/kie/models";
-import { getModel, IMAGE_MODELS, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
+import { getModel, imageModelLabelFor, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
 import { signedUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 
@@ -125,8 +125,7 @@ export interface EditorDeletedData {
 }
 
 function resolveImageModelLabel(model: string): string {
-  const known = IMAGE_MODELS.find((m) => m.textToImageId === model || m.editId === model);
-  return known?.label ?? model;
+  return imageModelLabelFor(model) ?? model;
 }
 
 function snapshotModel(raw: unknown): { id: string | null; resolution: string | null } {

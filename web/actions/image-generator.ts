@@ -48,7 +48,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireProject, requireProjectReadable, requireUser } from "@/actions/guard";
-import { IMAGE_MODELS } from "@/lib/models";
+import { IMAGE_MODELS, imageModelLabelFor } from "@/lib/models";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import type { ImageHistoryCursor, ImageHistoryPage } from "@/components/image-generator-history";
 import { signedUrl } from "@/lib/storage";
@@ -262,7 +262,8 @@ async function detailsForAsset(asset: {
   const known = IMAGE_MODELS.find((m) => m.textToImageId === data.model || m.editId === data.model);
   return {
     prompt: data.prompt,
-    model: known?.label ?? data.model,
+    // modelId stays picker-only (it preselects the form); the label also names retired models.
+    model: imageModelLabelFor(data.model) ?? data.model,
     modelId: known?.id ?? null,
     url,
   };

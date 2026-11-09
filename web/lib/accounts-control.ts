@@ -19,7 +19,7 @@ import {
 import { getBytePlusBalanceUsd } from "@/lib/byteplus-balance";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
 import { KIE_MODELS } from "@/lib/kie/models";
-import { COMPILER_MODELS, getModel, IMAGE_MODELS, mergeRenderSettings } from "@/lib/models";
+import { COMPILER_MODELS, getModel, imageModelLabelFor, mergeRenderSettings } from "@/lib/models";
 import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/runway";
 import { getGlobalSpendSnapshot, type GlobalSpendCapSettings } from "@/lib/spend";
 import { extFromFilename, signedUrl } from "@/lib/storage";
@@ -200,8 +200,7 @@ export function buildDailySpendSeries(
 export function runModelLabel(model: string): string {
   return (
     KIE_MODELS.find((m) => m.id === model || m.kieModelName === model)?.label ??
-    IMAGE_MODELS.find((m) => m.id === model || m.textToImageId === model || m.editId === model)
-      ?.label ??
+    imageModelLabelFor(model) ??
     COMPILER_MODELS.find((m) => m.id === model)?.label ??
     model
   );
@@ -375,8 +374,7 @@ export async function loadAccountsControlOverview(
 }
 
 function resolveImageModelLabel(model: string): string {
-  const known = IMAGE_MODELS.find((m) => m.textToImageId === model || m.editId === model);
-  return known?.label ?? model;
+  return imageModelLabelFor(model) ?? model;
 }
 
 function snapshotModel(raw: unknown): { id: string | null; resolution: string | null } {
