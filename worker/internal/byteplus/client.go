@@ -1,10 +1,10 @@
-// Package byteplus submits Seedance 2.5 renders to BytePlus ModelArk
-// directly, instead of through kie, when BYTEPLUS_API_KEY is set.
+// Package byteplus submits Seedance 2.5 renders to BytePlus ModelArk.
 //
-// SEEDANCE 2.5 ONLY, by the owner's decision (2026-11-06) — every other model
-// stays on kie, and so does Seedance 2.5 whenever no key is configured, the
-// worker runs MODE=development, BYTEPLUS_ROUTE=0, or BytePlus is full or
-// refuses. Router (router.go) is the only thing that decides.
+// SEEDANCE 2.5 ONLY — every other model renders on kie. A Seedance 2.5 render
+// that cannot go to BytePlus (no key, BYTEPLUS_ROUTE=0, at capacity, refused)
+// FAILS with the reason; it never falls back to kie (owner's rule, 2026-11-09).
+// MODE=development is the one exception: it renders on kie's mock, unbilled.
+// Router (router.go) is the only thing that decides.
 //
 // Read from BytePlus's own docs on 2026-11-06 (create / get / list video
 // generation task, Seedance 2.5 tutorial, error codes, model pricing):
@@ -213,7 +213,7 @@ func (e *APIError) Error() string {
 func readable(code, message string) string {
 	switch {
 	case strings.HasSuffix(code, ".PrivacyInformation"):
-		return "BytePlus refused a reference that may show a real person (" + code + "). Use a different reference, or render this scene on kie."
+		return "BytePlus refused a reference that may show a real person (" + code + "). Use a different reference, or make the face with Seedream 5.0 Pro in the Image Generator. Nothing was charged."
 	case strings.Contains(code, "SensitiveContentDetected"):
 		return "BytePlus blocked this as sensitive content (" + code + "). Change the prompt or references; nothing was charged."
 	case strings.HasPrefix(code, "InvalidParameter.TaskType"):
