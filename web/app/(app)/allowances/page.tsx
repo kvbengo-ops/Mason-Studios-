@@ -503,7 +503,10 @@ export default async function AllowancesPage({
                       {request.user_email}
                     </TableCell>
                     <TableCell numeric>{formatUsd(request.requested_usd)}</TableCell>
-                    <TableCell className="max-w-xs truncate text-muted-foreground">
+                    <TableCell
+                      className="max-w-xs truncate text-muted-foreground"
+                      title={request.reason ?? undefined}
+                    >
                       {request.reason ?? "—"}
                     </TableCell>
                     <TableCell>
@@ -565,6 +568,7 @@ export default async function AllowancesPage({
                                 requestId={request.id}
                                 requesterEmail={request.user_email}
                                 requestedUsd={request.requested_usd}
+                                reason={request.reason}
                                 defaultGrantAmountUsd={defaultGrantAmountUsd(request.requested_usd)}
                                 defaultExpiresAtIso={defaultExpiresAtIso}
                                 peerMaxGrantUsd={peerMaxGrantUsd}
