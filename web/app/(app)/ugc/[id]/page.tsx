@@ -29,7 +29,6 @@ import { signedUrl, extFromFilename } from "@/lib/storage";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { geminiVoiceFor } from "@/lib/gemini-voices";
 import { videoAspectRatioFor } from "@/lib/kie/models";
-import { videoQualityFor, type VideoQuality } from "@/lib/video-quality";
 import { getModel, isAudioEnabled, mergeRenderSettings, type RenderSettings } from "@/lib/models";
 import { latestErrorsByScene } from "@/lib/render-error";
 import { UgcLiveRefresh } from "@/components/ugc-live-refresh";
@@ -286,8 +285,6 @@ export default async function UgcPage({
     voice: string | null;
     /** aspect_ratio from the override, same reason as voice. */
     aspectRatio: string | null;
-    /** quality from the override (lib/video-quality.ts), same reason as voice. */
-    quality: VideoQuality | null;
   } | null = null;
 
   {
@@ -530,9 +527,6 @@ export default async function UgcPage({
             mergeRenderSettings(project.render_settings, match.render_settings_override).model,
             (match.render_settings_override as { aspect_ratio?: unknown } | null)?.aspect_ratio,
           ) ?? null,
-        quality: videoQualityFor(
-          (match.render_settings_override as { quality?: unknown } | null)?.quality,
-        ),
       };
     }
   }

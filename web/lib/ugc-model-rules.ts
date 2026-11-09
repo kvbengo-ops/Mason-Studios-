@@ -5,8 +5,6 @@
 export const BYTEPLUS_SEEDANCE_ID = "seedance-2.5-byteplus";
 /** The only tier /ugc sells on BytePlus Seedance. */
 export const BYTEPLUS_SEEDANCE_RESOLUTION = "480p";
-/** BytePlus Seedance's default Quality when the request carries none; editors may change it. */
-export const BYTEPLUS_SEEDANCE_QUALITY = "high";
 
 const PICKER_RESOLUTIONS: Readonly<Record<string, readonly string[]>> = {
   "seedance-2.5": ["480p"],

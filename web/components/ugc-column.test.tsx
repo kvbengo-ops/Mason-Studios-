@@ -523,28 +523,20 @@ describe("Length is a control, and it reprices the button", () => {
     expect(screen.queryByRole("slider", { name: "Length in seconds" })).toBeNull();
   });
 
-  it("sends High quality by default, and the pick from the Quality menu", async () => {
-    const user = userEvent.setup();
+  it("shows fixed High quality without a picker", () => {
     // Seedance 2.0 Fast only: the pinned BytePlus Seedance is absent, so the column opens here.
-    const { container } = renderColumn(null, [OPTIONS[0]!]);
-    const field = () =>
-      (container.querySelector('input[name="quality"]') as HTMLInputElement).value;
+    renderColumn(null, [OPTIONS[0]!]);
 
-    expect(field()).toBe("high");
-    await user.click(screen.getByRole("button", { name: "Quality: High" }));
-    await user.click(screen.getByRole("menuitem", { name: /Max/ }));
-    expect(field()).toBe("max");
+    expect(screen.getByText("High", { exact: true })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Quality:/ })).toBeNull();
     // Re-encode only: the price on the button does not move (11.7 cr/s x 4s).
     expect(screen.getByRole("button", { name: /Generate · \$0\.23/ })).toBeTruthy();
   });
 
-  it("shows the Quality menu on Seedance 2.5 BytePlus too, defaulting to High", () => {
-    const { container } = renderColumn(null);
+  it("shows fixed High quality on Seedance 2.5 BytePlus", () => {
+    renderColumn(null);
 
-    expect(screen.getByRole("button", { name: "Quality: High" })).toBeTruthy();
-    expect((container.querySelector('input[name="quality"]') as HTMLInputElement).value).toBe(
-      "high",
-    );
+    expect(screen.getByText("High", { exact: true })).toBeTruthy();
   });
 
   it("changes the credits on the button when the length changes", async () => {

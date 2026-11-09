@@ -94,14 +94,10 @@ import { requireAdmin, requireProject, requireScene, requireUser } from "@/actio
 import type { Database, SceneStatus } from "@/types/db";
 import { offerable } from "@/lib/kie/offerable";
 import { videoAspectRatioFor } from "@/lib/kie/models";
-import { videoQualityFor } from "@/lib/video-quality";
+import { DEFAULT_VIDEO_QUALITY } from "@/lib/video-quality";
 import { canUseVideoModel } from "@/lib/model-access";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
-import {
-  BYTEPLUS_SEEDANCE_ID,
-  BYTEPLUS_SEEDANCE_QUALITY,
-  byteplusResolutionRefusal,
-} from "@/lib/ugc-model-rules";
+import { byteplusResolutionRefusal } from "@/lib/ugc-model-rules";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
 import {
@@ -1781,16 +1777,12 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // No price effect: kie bills per second by resolution, not by frame shape.
   const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
   // No price effect either: only our own re-encode reads it (lib/video-quality.ts).
-  // The editor's pick; a BytePlus scene with none still defaults to High.
-  const quality =
-    videoQualityFor(formData.get("quality")) ??
-    (chosen.model.id === BYTEPLUS_SEEDANCE_ID ? BYTEPLUS_SEEDANCE_QUALITY : null);
   const override = {
     model: chosen.model.id,
     resolution,
     ...(voice && { voice }),
     ...(aspectRatio && { aspect_ratio: aspectRatio }),
-    ...(quality && { quality }),
+    quality: DEFAULT_VIDEO_QUALITY,
   };
 
   const settings = mergeRenderSettings(project.render_settings, override);
@@ -2406,15 +2398,12 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     // own note on the zod strip this avoids.
     const voice = geminiVoiceFor(chosen.model.id, formData.get("geminiVoice"));
     const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
-    const quality =
-      videoQualityFor(formData.get("quality")) ??
-      (chosen.model.id === BYTEPLUS_SEEDANCE_ID ? BYTEPLUS_SEEDANCE_QUALITY : null);
     updates.render_settings_override = {
       model: chosen.model.id,
       resolution,
       ...(voice && { voice }),
       ...(aspectRatio && { aspect_ratio: aspectRatio }),
-      ...(quality && { quality }),
+      quality: DEFAULT_VIDEO_QUALITY,
     };
     // Same rule generateClip's insert follows now — see its own comment.
     // Switching Seedance -> Kling here must turn sound on, and Kling ->

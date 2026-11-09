@@ -77,7 +77,7 @@ This checklist is for an AI tester with the **Mason Studios MCP connector** (too
 | # | Where | Expect |
 |---|---|---|
 | D1 | `/ugc` model picker | both "Seedance 2.5 · Kie" (480p/720p/1080p) and Seedance 2.5 BytePlus (480p only) |
-| D2 | `/ugc` with BytePlus selected | the Quality menu shows Standard / High / Max, default High; Max is saved on the scene |
+| D2 | `/ugc` with BytePlus selected | Quality is fixed at High; no quality picker is shown |
 | D3 | `/ugc` Length button | the "Total duration" slider. It closes on release, Esc, and a click outside |
 | D4 | `/ugc` prompt box | an "n / 20,000" counter that turns red past the limit |
 | D5 | Image Generator | no Nano Banana 2; only the 9:16, 1:1 and 16:9 ratios |

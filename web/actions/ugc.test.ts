@@ -1369,7 +1369,7 @@ describe("regenerateClip applies the settings it was given", () => {
     expect(spies.update).not.toHaveBeenCalled();
   });
 
-  it("stores the editor's Quality pick on BytePlus Seedance", async () => {
+  it("always stores High quality, ignoring submitted values", async () => {
     const spies = mockSceneSurfaces({});
     const { regenerateClip } = await import("./ugc");
 
@@ -1378,7 +1378,7 @@ describe("regenerateClip applies the settings it was given", () => {
     const written = spies.update.mock.calls[0]?.[0] as {
       render_settings_override?: { quality?: string };
     };
-    expect(written.render_settings_override?.quality).toBe("standard");
+    expect(written.render_settings_override?.quality).toBe("high");
   });
 
   it("refuses a prompt over the 20,000 character cap before writing", async () => {

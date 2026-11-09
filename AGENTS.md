@@ -85,8 +85,8 @@ Captions are gone. Subtitles are added in CapCut after export.
 - **Seedance 2.5 on Kie ("· Kie") and on BytePlus are separate picks** (owner, 2026-11-09).
   Neither is ever a fallback for the other, and no scene is moved between them.
 - **BytePlus Seedance is 480p only.** `ugc-options.ts` offers no other tier and
-  `generateClip`/`regenerateClip` refuse any other resolution. Its Quality menu shows like
-  every model's; with no pick it defaults to `high`.
+  `generateClip`/`regenerateClip` refuse any other resolution. The UGC re-encode quality
+  is fixed to `high` for every model.
 - **Roles `hybrid_editor` and `ai_animator`** (0131; 0129's `team` tag is gone). Each has
   its own spend tier (`HYBRID_EDITOR_*` / `AI_ANIMATOR_*` caps, default = the global cap's
   default) and model access via `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor
