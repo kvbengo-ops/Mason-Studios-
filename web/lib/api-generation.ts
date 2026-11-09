@@ -17,6 +17,7 @@ export function apiGenerateRequestHash(input: ApiClipInput): string {
         resolution: input.resolution,
         duration_s: input.durationS,
         is_talking_head: input.isTalkingHead,
+        aspect_ratio: input.aspectRatio,
         image_refs: input.imageRefs,
         video_refs: input.videoRefs,
         audio_refs: input.audioRefs,

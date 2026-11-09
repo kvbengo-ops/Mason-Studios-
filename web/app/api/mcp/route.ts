@@ -48,7 +48,9 @@ const clipProps = {
   },
   resolution: { type: "string" },
   duration_s: { type: "integer", description: "Seconds, e.g. 4 or 10." },
-  is_talking_head: { type: "boolean" },
+  aspect_ratio: { type: "string", description: 'Optional, default "9:16".' },
+  sound: { type: "boolean", description: "Optional, default true. Seedance requires true." },
+  is_talking_head: { type: "boolean", description: "Legacy alias for sound." },
   image_refs: {
     type: "array",
     items: { type: "string" },
@@ -109,8 +111,7 @@ const TOOLS = [
         prompt: { type: "string" },
         model: {
           type: "string",
-          description:
-            'Optional, e.g. "nano-banana" (default, cheapest), "nano-banana-2", "seedream-5.0-pro".',
+          description: 'Optional, e.g. "nano-banana" (default, cheapest), "seedream-5.0-pro".',
         },
         aspect_ratio: {
           type: "string",

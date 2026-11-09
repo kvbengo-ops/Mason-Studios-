@@ -20,7 +20,7 @@ import {
   extFromFilename,
   removeStorageObjects,
 } from "@/lib/storage";
-import { MAX_REFERENCES } from "@/lib/ugc-references";
+import { referenceLimitsFor } from "@/lib/ugc-references";
 import type { AssetKind, Database, ElementCategory } from "@/types/db";
 
 export interface ResolvedApiRef {
@@ -400,13 +400,27 @@ export async function resolveApiReferences(args: {
   }
 
   // 6. Enforce model-specific reference limits and formats.
+  const limits = referenceLimitsFor(modelId);
   const totalRefs = orderedImages.length + orderedVideos.length + orderedAudios.length;
-  if (totalRefs > MAX_REFERENCES) {
+  for (const [kind, count, limit] of [
+    ["image", orderedImages.length, limits.image],
+    ["video", orderedVideos.length, limits.video],
+    ["audio", orderedAudios.length, limits.audio],
+  ] as const) {
+    if (count <= limit) continue;
     return {
       ok: false,
       status: 422,
       code: "too_many_references",
-      error: `At most ${MAX_REFERENCES} total references may be attached to a clip (received ${totalRefs}).`,
+      error: `${model.label} accepts at most ${limit} ${kind} references (received ${count}).`,
+    };
+  }
+  if (totalRefs > limits.total) {
+    return {
+      ok: false,
+      status: 422,
+      code: "too_many_references",
+      error: `${model.label} accepts at most ${limits.total} total references (received ${totalRefs}).`,
     };
   }
 
@@ -439,16 +453,6 @@ export async function resolveApiReferences(args: {
           error: `@${img.name} is a ${ext.toUpperCase()} — Kling only takes PNG or JPG frames.`,
         };
       }
-    }
-  } else if (modelId === "seedance-2-mini") {
-    if (orderedImages.length > 9 || orderedVideos.length > 3 || orderedAudios.length > 3) {
-      return {
-        ok: false,
-        status: 422,
-        code: "too_many_references",
-        error:
-          "Seedance 2.0 Mini supports at most 9 image references, 3 video references, and 3 audio references.",
-      };
     }
   } else if (modelId.startsWith("gemini-")) {
     if (orderedAudios.length > 0) {
@@ -519,6 +523,41 @@ export async function resolveApiReferences(args: {
       };
     }
     videoReferenceDurationsS.push(vid.durationS);
+  }
+  if (limits.videoSeconds !== null) {
+    const tooLong = videoReferenceDurationsS.find((seconds) => seconds > limits.videoSeconds!);
+    const totalSeconds = videoReferenceDurationsS.reduce((sum, seconds) => sum + seconds, 0);
+    if (tooLong !== undefined || totalSeconds > limits.videoSeconds) {
+      return {
+        ok: false,
+        status: 422,
+        code: "invalid_media_file",
+        error: `${model.label} accepts at most ${limits.videoSeconds} seconds per video and ${limits.videoSeconds} seconds of video references total (received ${totalSeconds.toFixed(1)} s).`,
+      };
+    }
+  }
+  if (limits.audioSeconds !== null) {
+    const durations = orderedAudios.map((ref) => ref.durationS);
+    if (durations.some((seconds) => typeof seconds !== "number" || !Number.isFinite(seconds))) {
+      return {
+        ok: false,
+        status: 422,
+        code: "invalid_media_file",
+        error: `${model.label} requires measured audio reference durations.`,
+      };
+    }
+    const totalSeconds = durations.reduce((sum, seconds) => sum + (seconds ?? 0), 0);
+    if (
+      durations.some((seconds) => (seconds ?? 0) > limits.audioSeconds!) ||
+      totalSeconds > limits.audioSeconds
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        code: "invalid_media_file",
+        error: `${model.label} accepts at most ${limits.audioSeconds} seconds per audio clip and ${limits.audioSeconds} seconds of audio references total (received ${totalSeconds.toFixed(1)} s).`,
+      };
+    }
   }
 
   // 7. Build submittedPrompt (with description substitution for non-Kling) and check maxPromptChars.

@@ -156,6 +156,69 @@ describe("resolveApiReferences", () => {
     },
   ];
 
+  it("accepts 8+1+3 BytePlus references and names per-type and time overflows", async () => {
+    const kinds = [...Array(8).fill("image"), "video", ...Array(3).fill("audio")] as (
+      "image" | "video" | "audio"
+    )[];
+    const elements: FakeElement[] = kinds.map((kind, i) => ({
+      id: `el-${i}`,
+      user_id: "user-1",
+      name: `ref_${i}`,
+      category: kind,
+      description: null,
+      ai_description: null,
+      asset_id: `asset-${i}`,
+    }));
+    const assets: FakeAsset[] = kinds.map((kind, i) => ({
+      id: `asset-${i}`,
+      kind: kind === "image" ? "ref_frame" : kind === "video" ? "video_ref" : "audio",
+      storage_key: `users/user-1/${kind}/ref-${i}.${kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3"}`,
+      duration_s: kind === "video" ? 4 : kind === "audio" ? 8 : null,
+    }));
+    const admin = makeFakeAdmin({ ownedElements: elements, assets });
+    const args = {
+      admin,
+      userId: "user-1",
+      modelId: "seedance-2.5-byteplus",
+      resolution: "480p",
+      prompt: "A wide cinematic shot",
+      imageRefs: elements.slice(0, 8).map((e) => e.id),
+      videoRefs: [elements[8]!.id],
+      audioRefs: elements.slice(9).map((e) => e.id),
+    };
+    expect((await resolveApiReferences(args)).ok).toBe(true);
+    expect(
+      await resolveApiReferences({ ...args, imageRefs: [...args.imageRefs, args.imageRefs[0]!] }),
+    ).toMatchObject({ ok: false, code: "invalid_parameters" });
+    const ninthImage = { ...elements[0]!, id: "el-12", name: "ref_12", asset_id: "asset-12" };
+    const adminWithNinth = makeFakeAdmin({
+      ownedElements: [...elements, ninthImage],
+      assets: [...assets, { ...assets[0]!, id: "asset-12" }],
+    });
+    expect(
+      await resolveApiReferences({
+        ...args,
+        admin: adminWithNinth,
+        imageRefs: [...args.imageRefs, ninthImage.id],
+      }),
+    ).toMatchObject({
+      ok: false,
+      code: "too_many_references",
+      error: expect.stringMatching(/8 image/),
+    });
+    assets[8]!.duration_s = 31;
+    expect(
+      await resolveApiReferences({
+        ...args,
+        admin: makeFakeAdmin({ ownedElements: elements, assets }),
+      }),
+    ).toMatchObject({
+      ok: false,
+      code: "invalid_media_file",
+      error: expect.stringMatching(/30 seconds per video/),
+    });
+  });
+
   it("preserves array ordinal identity when @Image 2 is mentioned before @Image 1", async () => {
     const admin = makeFakeAdmin({ ownedElements: baseElements, assets: baseAssets });
     const result = await resolveApiReferences({
