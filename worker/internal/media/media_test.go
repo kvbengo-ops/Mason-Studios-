@@ -90,7 +90,7 @@ func TestNormalize_SynthesizesSilentAudioTrack(t *testing.T) {
 	synthClip(t, src, 2, false)
 
 	r := NewRunner(1)
-	if err := r.Normalize(context.Background(), src, out, "9:16"); err != nil {
+	if err := r.Normalize(context.Background(), src, out, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
 
@@ -110,7 +110,7 @@ func TestNormalize_PreservesRealAudioTrack(t *testing.T) {
 	synthClip(t, src, 2, true)
 
 	r := NewRunner(1)
-	if err := r.Normalize(context.Background(), src, out, "9:16"); err != nil {
+	if err := r.Normalize(context.Background(), src, out, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
 
@@ -257,7 +257,7 @@ func TestNormalize_FillsAndCropsRatherThanStretching(t *testing.T) {
 	synthColorBarsClip(t, src, 1)
 
 	r := NewRunner(1)
-	if err := r.Normalize(context.Background(), src, out, "9:16"); err != nil {
+	if err := r.Normalize(context.Background(), src, out, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
 
@@ -294,7 +294,7 @@ func TestNormalize_AlreadyVertical_StillProduces1080x1920(t *testing.T) {
 	}
 
 	r := NewRunner(1)
-	if err := r.Normalize(context.Background(), src, out, "9:16"); err != nil {
+	if err := r.Normalize(context.Background(), src, out, "9:16", CRFFor("")); err != nil {
 		t.Fatalf("Normalize() error = %v", err)
 	}
 
