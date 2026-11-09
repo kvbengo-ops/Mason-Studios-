@@ -419,7 +419,6 @@ export function UgcColumn({
   // cheapest useful clip and most takes are iterations, but the operator can
   // now buy the second they actually wrote for.
   const [durationS, setDurationS] = useState<number>(selectedScene?.durationS ?? PINNED_DURATION_S);
-  const [lengthOpen, setLengthOpen] = useState(false);
   const [prompt, setPrompt] = useState(selectedScene?.prompt ?? "");
 
   /**
@@ -1881,37 +1880,47 @@ export function UgcColumn({
               </span>
             ) : null}
 
-            <div className="relative shrink-0">
-              <button
-                type="button"
+            {/* A menu, like Aspect ratio beside it: picking a length closes it,
+              and so do Esc and a click outside. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
                 disabled={readOnly}
                 aria-label={`Length: ${activeDuration} seconds`}
-                aria-expanded={lengthOpen}
-                onClick={() => setLengthOpen((open) => !open)}
-                className="flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 <ClockIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
                 {activeDuration}s
-              </button>
-              {lengthOpen ? (
-                <div className="absolute bottom-full left-0 z-50 mb-2 flex w-52 items-center gap-3 rounded-xl border bg-popover p-3 shadow-md">
-                  <input
-                    type="range"
-                    aria-label="Length in seconds"
-                    aria-valuetext={`${activeDuration} seconds`}
-                    min={0}
-                    max={durations.length - 1}
-                    value={durations.indexOf(activeDuration)}
-                    onChange={(e) =>
-                      setDurationS(durations[Number(e.target.value)] ?? activeDuration)
-                    }
-                    disabled={readOnly || durations.length === 1}
-                    className="min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                  <span className="min-w-8 text-right tabular-nums">{activeDuration}s</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-auto min-w-0 rounded-2xl p-2"
+              >
+                <DropdownMenuLabel>Length</DropdownMenuLabel>
+                <div
+                  className="grid gap-1"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.min(6, durations.length)}, 2.75rem)`,
+                  }}
+                >
+                  {durations.map((d) => (
+                    <DropdownMenuItem
+                      key={d}
+                      aria-label={`${d} seconds`}
+                      onSelect={() => setDurationS(d)}
+                      className={cn(
+                        "h-8 justify-center rounded-lg px-0 tabular-nums",
+                        d === activeDuration &&
+                          "bg-primary font-medium text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                      )}
+                    >
+                      {d}s
+                    </DropdownMenuItem>
+                  ))}
                 </div>
-              ) : null}
-            </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {aspectRatios.length > 0 ? (
               <DropdownMenu>
