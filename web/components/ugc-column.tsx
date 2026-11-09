@@ -419,6 +419,24 @@ export function UgcColumn({
   // cheapest useful clip and most takes are iterations, but the operator can
   // now buy the second they actually wrote for.
   const [durationS, setDurationS] = useState<number>(selectedScene?.durationS ?? PINNED_DURATION_S);
+  const [lengthOpen, setLengthOpen] = useState(false);
+  const lengthRef = useRef<HTMLDivElement>(null);
+  // The length popover closes on Esc or a press outside it, not only on its own button.
+  useEffect(() => {
+    if (!lengthOpen) return;
+    const onPointerDown = (e: PointerEvent): void => {
+      if (!lengthRef.current?.contains(e.target as Node)) setLengthOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setLengthOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [lengthOpen]);
   const [prompt, setPrompt] = useState(selectedScene?.prompt ?? "");
 
   /**
@@ -1880,47 +1898,28 @@ export function UgcColumn({
               </span>
             ) : null}
 
-            {/* A menu, like Aspect ratio beside it: picking a length closes it,
-              and so do Esc and a click outside. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
+            <div ref={lengthRef} className="relative shrink-0">
+              <button
+                type="button"
                 disabled={readOnly}
                 aria-label={`Length: ${activeDuration} seconds`}
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                aria-expanded={lengthOpen}
+                onClick={() => setLengthOpen((open) => !open)}
+                className="flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
                 <ClockIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
                 {activeDuration}s
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                align="start"
-                sideOffset={8}
-                className="w-auto min-w-0 rounded-2xl p-2"
-              >
-                <DropdownMenuLabel>Length</DropdownMenuLabel>
-                <div
-                  className="grid gap-1"
-                  style={{
-                    gridTemplateColumns: `repeat(${Math.min(6, durations.length)}, 2.75rem)`,
-                  }}
-                >
-                  {durations.map((d) => (
-                    <DropdownMenuItem
-                      key={d}
-                      aria-label={`${d} seconds`}
-                      onSelect={() => setDurationS(d)}
-                      className={cn(
-                        "h-8 justify-center rounded-lg px-0 tabular-nums",
-                        d === activeDuration &&
-                          "bg-primary font-medium text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                      )}
-                    >
-                      {d}s
-                    </DropdownMenuItem>
-                  ))}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </button>
+              {lengthOpen ? (
+                <LengthSlider
+                  durations={durations}
+                  value={activeDuration}
+                  disabled={readOnly}
+                  onChange={setDurationS}
+                  onDone={() => setLengthOpen(false)}
+                />
+              ) : null}
+            </div>
 
             {aspectRatios.length > 0 ? (
               <DropdownMenu>
@@ -2537,6 +2536,96 @@ function KlingFrameSlot({
         />
         <span className="w-full truncate text-center text-[10px] font-medium">@{element.name}</span>
       </button>
+    </div>
+  );
+}
+
+/**
+ * The Length popover: "Total duration", the value, and a filled track over a
+ * transparent native range input (which keeps keyboard and screen-reader
+ * support). Releasing the slider, or Enter, counts as done and closes it.
+ * Positions are by index, matching the input, so uneven lists (Kling 6/10) line up.
+ */
+function LengthSlider({
+  durations,
+  value,
+  disabled,
+  onChange,
+  onDone,
+}: {
+  durations: readonly number[];
+  value: number;
+  disabled: boolean;
+  onChange: (seconds: number) => void;
+  onDone: () => void;
+}): JSX.Element {
+  const last = durations.length - 1;
+  const at = (i: number): number => (last > 0 ? (i / last) * 100 : 100);
+  const pct = at(Math.max(0, durations.indexOf(value)));
+  const labels = [...new Set([0, Math.round(last / 2), last])];
+  // Inset so a handle or dot at either end stays visible inside the rounded track.
+  const inset = (p: number): string => `clamp(6px, ${p}%, calc(100% - 8px))`;
+
+  return (
+    <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-2xl border bg-popover p-4 shadow-lg shadow-black/10">
+      <p className="text-sm text-muted-foreground">Total duration</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}s</p>
+      <div className="relative mt-3 h-10 overflow-hidden rounded-lg bg-muted has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0 bg-foreground/15"
+          style={{ width: `${pct}%` }}
+        />
+        {labels
+          .slice(1)
+          .map((i) =>
+            at(i) > pct ? (
+              <span
+                key={i}
+                aria-hidden="true"
+                className="absolute top-1/2 size-1 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+                style={{ left: inset(at(i)) }}
+              />
+            ) : null,
+          )}
+        <span
+          aria-hidden="true"
+          className="absolute top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+          style={{ left: inset(pct) }}
+        />
+        <input
+          type="range"
+          aria-label="Length in seconds"
+          aria-valuetext={`${value} seconds`}
+          min={0}
+          max={last}
+          value={Math.max(0, durations.indexOf(value))}
+          onChange={(e) => onChange(durations[Number(e.target.value)] ?? value)}
+          onPointerUp={onDone}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onDone();
+          }}
+          disabled={disabled || last === 0}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        />
+      </div>
+      <div
+        aria-hidden="true"
+        className="relative mt-2 h-4 text-xs tabular-nums text-muted-foreground"
+      >
+        {labels.map((i) => (
+          <span
+            key={i}
+            className={cn(
+              "absolute",
+              i === 0 ? "left-0" : i === last ? "right-0" : "-translate-x-1/2",
+            )}
+            style={i !== 0 && i !== last ? { left: `${at(i)}%` } : undefined}
+          >
+            {durations[i]}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
