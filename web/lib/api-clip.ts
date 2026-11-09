@@ -16,22 +16,23 @@ import type { Resolution } from "@/lib/kie/rates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
-import { canUseVideoModel, type Team } from "@/lib/model-access";
+import { canUseVideoModel } from "@/lib/model-access";
+import type { ProfileRole } from "@/types/db";
 
 /**
- * The token owner's team may not use this model (lib/model-access.ts): a Hybrid Editor
+ * The token owner's role may not use this model (lib/model-access.ts): a Hybrid Editor
  * cannot render wan-3.0. Checked on /quote and /generate right after parsing, before any
  * idempotency lookup or spend — the same rule /ugc enforces in generateClip.
  */
-export function teamModelRefusal(
-  team: Team | null | undefined,
+export function roleModelRefusal(
+  role: ProfileRole | null | undefined,
   modelId: string,
 ): { status: 403; code: "model_not_allowed"; error: string } | null {
-  if (canUseVideoModel(team, modelId)) return null;
+  if (canUseVideoModel(role, modelId)) return null;
   return {
     status: 403,
     code: "model_not_allowed",
-    error: `${modelId} is not available to your team.`,
+    error: `${modelId} is not available to your role.`,
   };
 }
 

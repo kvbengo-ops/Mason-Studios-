@@ -3,49 +3,46 @@
 import { useState, useTransition } from "react";
 import type { JSX } from "react";
 import { unstable_rethrow } from "next/navigation";
-import { setAccountTeam } from "@/actions/account";
-import { isTeam, TEAMS, TEAM_LABELS, type Team } from "@/lib/model-access";
+import { setAccountRole } from "@/actions/account";
+import { ASSIGNABLE_ROLES, ROLE_LABELS } from "@/lib/model-access";
+import type { ProfileRole } from "@/types/db";
 
-/** Admin-only: sets which video models an account may use. Empty = no restriction. */
-export function TeamSelect({
-  userId,
-  team,
-}: {
-  userId: string;
-  team: Team | null;
-}): JSX.Element {
+/**
+ * Admin-only: sets a non-admin account's role (editor, trusted editor, Hybrid Editor,
+ * AI Animator). Admins are shown, not changed, here: promote/demote own that.
+ */
+export function RoleSelect({ userId, role }: { userId: string; role: ProfileRole }): JSX.Element {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  if (role === "admin") return <></>;
 
   function change(value: string): void {
     setError(null);
     startTransition(async () => {
       try {
-        const result = await setAccountTeam(userId, isTeam(value) ? value : null);
+        const result = await setAccountRole(userId, value);
         if (result?.error) setError(result.error);
       } catch (caught) {
         unstable_rethrow(caught);
-        setError(caught instanceof Error ? caught.message : "Failed to set the team.");
+        setError(caught instanceof Error ? caught.message : "Failed to set the role.");
       }
     });
   }
 
   return (
     <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-      Team
+      Role
       <select
-        aria-label="Team"
-        value={team ?? ""}
+        aria-label="Role"
+        value={role}
         disabled={isPending}
         onChange={(event) => change(event.target.value)}
         className="h-8 rounded-md border bg-card px-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
       >
-        <option value="" className="bg-popover text-popover-foreground">
-          No team
-        </option>
-        {TEAMS.map((value) => (
+        {ASSIGNABLE_ROLES.map((value) => (
           <option key={value} value={value} className="bg-popover text-popover-foreground">
-            {TEAM_LABELS[value]}
+            {ROLE_LABELS[value]}
           </option>
         ))}
       </select>

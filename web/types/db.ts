@@ -29,7 +29,10 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 // (0002_rls.sql), the only role branch anywhere in RLS, treats it exactly
 // like 'editor'. See that migration's header for the full audit of every
 // role branch in this codebase.
-export type ProfileRole = "admin" | "editor" | "trusted_editor";
+// 'hybrid_editor' and 'ai_animator' added by 0131_hybrid_ai_roles.sql: their own spend
+// tier (lib/spend.ts) and video-model access (lib/model-access.ts); no allowance approval,
+// no API tokens — those stay with trusted_editor and admin.
+export type ProfileRole = "admin" | "editor" | "trusted_editor" | "hybrid_editor" | "ai_animator";
 // Admin approval state, added by 0052_account_approval.sql. Orthogonal to
 // ProfileRole above: role answers "what may this account do", status answers
 // "may it do anything at all yet". Every new account is 'pending' (the
@@ -1056,9 +1059,6 @@ export type Database = {
           // profiles row anyway — handle_new_user() does, from a trigger
           // Postgres fires on auth.users.
           status: ProfileStatus;
-          // 0129: which video models this account may use (lib/model-access.ts).
-          // Null = unrestricted. Only an admin writes it.
-          team: "hybrid_editor" | "ai_animator" | null;
           // 0130: last presence heartbeat (actions/presence.ts); Accounts Control reads it.
           last_seen_at: string | null;
           username: string;
@@ -1073,7 +1073,6 @@ export type Database = {
           id: string;
           role?: ProfileRole;
           status?: ProfileStatus;
-          team?: "hybrid_editor" | "ai_animator" | null;
           last_seen_at?: string | null;
           username: string;
           weekly_cap_override_usd?: number | null;
@@ -1087,7 +1086,6 @@ export type Database = {
           id?: string;
           role?: ProfileRole;
           status?: ProfileStatus;
-          team?: "hybrid_editor" | "ai_animator" | null;
           last_seen_at?: string | null;
           username?: string;
           weekly_cap_override_usd?: number | null;
@@ -2340,7 +2338,13 @@ export type Database = {
       // is at 0048 — so this entry now matches the live schema; it simply
       // has not been regenerated via `make types`.
       outstanding_allowance_usd: {
-        Args: { editor_weekly_default: number; trusted_weekly_default: number };
+        // 0131 added the two new roles' weekly defaults.
+        Args: {
+          editor_weekly_default: number;
+          trusted_weekly_default: number;
+          hybrid_editor_weekly_default: number;
+          ai_animator_weekly_default: number;
+        };
         Returns: number;
       };
       // Team-wide iterate-vs-render split for runs created in [from_ts,

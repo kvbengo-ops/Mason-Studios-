@@ -24,6 +24,10 @@ import {
   startOfManilaDayIso,
   startOfManilaWeekIso,
   weeklyCapForRole,
+  AI_ANIMATOR_DAILY_CAP_USD,
+  AI_ANIMATOR_WEEKLY_CAP_USD,
+  HYBRID_EDITOR_DAILY_CAP_USD,
+  HYBRID_EDITOR_WEEKLY_CAP_USD,
 } from "./spend";
 
 // MODE=production for the whole file: assertWithinSpendCaps' balance-gate
@@ -105,6 +109,16 @@ describe("dailyCapForRole / weeklyCapForRole", () => {
   it("gives admins the admin daily/weekly defaults", () => {
     expect(dailyCapForRole("admin")).toBe(ADMIN_DAILY_CAP_USD);
     expect(weeklyCapForRole("admin")).toBe(ADMIN_WEEKLY_CAP_USD);
+  });
+
+  it("gives Hybrid Editors and AI Animators their own caps, defaulting to the global cap's default", () => {
+    expect(dailyCapForRole("hybrid_editor")).toBe(HYBRID_EDITOR_DAILY_CAP_USD);
+    expect(weeklyCapForRole("hybrid_editor")).toBe(HYBRID_EDITOR_WEEKLY_CAP_USD);
+    expect(dailyCapForRole("ai_animator")).toBe(AI_ANIMATOR_DAILY_CAP_USD);
+    expect(weeklyCapForRole("ai_animator")).toBe(AI_ANIMATOR_WEEKLY_CAP_USD);
+    // Unset env: the global cap's own default, 7x for the week.
+    expect(HYBRID_EDITOR_DAILY_CAP_USD).toBe(DEFAULT_GLOBAL_SPEND_CAP_USD);
+    expect(AI_ANIMATOR_WEEKLY_CAP_USD).toBe(7 * DEFAULT_GLOBAL_SPEND_CAP_USD);
   });
 
   // The proposal's own ordering: trusted_editor sits strictly between

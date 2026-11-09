@@ -286,6 +286,8 @@ export default async function AllowancesPage({
         supabase,
         spend.TRUSTED_WEEKLY_CAP_USD,
         spend.TRUSTED_WEEKLY_CAP_USD,
+        spend.HYBRID_EDITOR_WEEKLY_CAP_USD,
+        spend.AI_ANIMATOR_WEEKLY_CAP_USD,
       );
     }
   } catch (importError) {

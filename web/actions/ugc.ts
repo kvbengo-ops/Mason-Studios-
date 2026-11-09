@@ -1686,8 +1686,8 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // would drift again.
   const byteplusRefusal = byteplusResolutionRefusal(modelId, resolution);
   if (byteplusRefusal) return { error: byteplusRefusal };
-  if (!canUseVideoModel(profile.team, modelId)) {
-    return { error: `${getModel(modelId).label} is not available to your team.` };
+  if (!canUseVideoModel(profile.role, modelId)) {
+    return { error: `${getModel(modelId).label} is not available to your role.` };
   }
   const allowed = offerable(isAudioEnabled());
   const chosen = allowed.find((o) => o.model.id === modelId && o.resolution === resolution);
@@ -2359,8 +2359,8 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     // refuses here is one the picker has already shown.
     const byteplusRefusal = byteplusResolutionRefusal(modelId, resolution);
     if (byteplusRefusal) return { error: byteplusRefusal };
-    if (!canUseVideoModel(profile.team, modelId)) {
-      return { error: `${getModel(modelId).label} is not available to your team.` };
+    if (!canUseVideoModel(profile.role, modelId)) {
+      return { error: `${getModel(modelId).label} is not available to your role.` };
     }
     const allowed = offerable(isAudioEnabled());
     const chosen = allowed.find((o) => o.model.id === modelId && o.resolution === resolution);

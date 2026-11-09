@@ -34,7 +34,8 @@ import {
   videoRateFor,
 } from "@/lib/kie/rates";
 import { getModel } from "@/lib/models";
-import { canUseVideoModel, type Team } from "@/lib/model-access";
+import { canUseVideoModel } from "@/lib/model-access";
+import type { ProfileRole } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import { BYTEPLUS_SEEDANCE_ID, BYTEPLUS_SEEDANCE_RESOLUTION } from "@/lib/ugc-model-rules";
 import type { UgcOption } from "@/components/ugc-column";
@@ -53,11 +54,11 @@ const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "gemini-omni-video",
 ]);
 
-export function ugcOptions(withSound: boolean, team: Team | null = null): UgcOption[] {
+export function ugcOptions(withSound: boolean, role: ProfileRole | null = null): UgcOption[] {
   const shown = offerable(withSound).filter(
     (offer) =>
       SHOWN_MODEL_IDS.has(offer.model.id) &&
-      canUseVideoModel(team, offer.model.id) &&
+      canUseVideoModel(role, offer.model.id) &&
       (offer.model.id !== BYTEPLUS_SEEDANCE_ID ||
         offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
   );

@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0130`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0131`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;
@@ -87,10 +87,14 @@ Captions are gone. Subtitles are added in CapCut after export.
 - **BytePlus Seedance is 480p only.** `ugc-options.ts` offers no other tier and
   `generateClip`/`regenerateClip` refuse any other resolution. Its Quality menu shows like
   every model's; with no pick it defaults to `high`.
-- **`profiles.team`** (`hybrid_editor`, `ai_animator`, null) gates video models only, not
-  spend. `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor cannot use `wan-3.0`;
-  null is unrestricted. Set by an admin in Accounts Control (`setAccountTeam`); no client
-  can write it (no UPDATE policy on `profiles`).
+- **Roles `hybrid_editor` and `ai_animator`** (0131; 0129's `team` tag is gone). Each has
+  its own spend tier (`HYBRID_EDITOR_*` / `AI_ANIMATOR_*` caps, default = the global cap's
+  default) and model access via `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor
+  cannot use `wan-3.0`; an AI Animator can use every model. **No allowance approval and no
+  API tokens/MCP** — those stay with `trusted_editor` and `admin`. Set by an admin in
+  Accounts Control (`setAccountRole`); no client can write `role`. SQL functions that list
+  the editor tiers (`pass_allowance`, `transfer_recipients`, the weekly-reset and
+  limits-changed notices, `outstanding_allowance_usd`) include both.
 - **`profiles.last_seen_at`** is the presence heartbeat (`touchPresence`, every 60 s per
   visible tab); Accounts Control shows green within 2 minutes.
 - **Uploads keep PNG and JPEG as sent.** `toJpeg` converts WebP only (Kling rejects it).

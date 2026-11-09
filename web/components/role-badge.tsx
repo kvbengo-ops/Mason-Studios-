@@ -1,6 +1,7 @@
 import type { JSX } from "react";
 import { Badge } from "@/components/ui/badge";
 import type { ProfileRole } from "@/types/db";
+import { ROLE_LABELS } from "@/lib/model-access";
 
 // Three values now (0031_account_allowances.sql added 'trusted_editor'),
 // two of them consequential in different ways: `admin` grants read access
@@ -13,18 +14,16 @@ import type { ProfileRole } from "@/types/db";
 // not the same visual weight as `admin`; it reuses the quiet `outline`
 // variant `editor` already has rather than borrowing admin's solid one,
 // which would misrepresent it as a visibility escalation it isn't.
+// hybrid_editor and ai_animator (0131) are spend + model-access tiers, not visibility
+// escalations, so they take the quiet variant too.
 const ROLE_VARIANT: Record<ProfileRole, "default" | "outline"> = {
   admin: "default",
   trusted_editor: "outline",
   editor: "outline",
-};
-
-const ROLE_LABEL: Record<ProfileRole, string> = {
-  admin: "Admin",
-  trusted_editor: "Trusted editor",
-  editor: "Editor",
+  hybrid_editor: "outline",
+  ai_animator: "outline",
 };
 
 export function RoleBadge({ role }: { role: ProfileRole }): JSX.Element {
-  return <Badge variant={ROLE_VARIANT[role]}>{ROLE_LABEL[role]}</Badge>;
+  return <Badge variant={ROLE_VARIANT[role]}>{ROLE_LABELS[role]}</Badge>;
 }

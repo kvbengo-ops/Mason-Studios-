@@ -7,7 +7,7 @@ Base URL: `https://app.vbgstudio.site/api/v1`. JSON in and out, except element u
 Every request: `Authorization: Bearer ms_live_…` — a personal API token from **Profile → Manage API tokens**.
 
 - Only **trusted editors and admins** can create or use tokens (`403 role_not_allowed` otherwise).
-- The account's **team** limits video models, the same as on the website: a Hybrid Editor cannot use `wan-3.0`; an AI Animator, or an account with no team, can use every model. `/quote` and `/generate` return `403 model_not_allowed` before any spend.
+- Hybrid Editor and AI Animator accounts cannot hold tokens (`role_not_allowed`). As a second line, `/quote` and `/generate` refuse any model the account's role may not use (`403 model_not_allowed`, e.g. `wan-3.0` for a Hybrid Editor) before any spend.
 - Each token has scopes: `read`, `upload`, `generate`. The scope is checked first, before any parsing, upload or spend.
 - Spend counts against the token owner's normal USD caps, plus the token's own optional monthly cap.
 

@@ -10,13 +10,13 @@ This checklist is for an AI tester with the **Mason Studios MCP connector** (too
 
 ## Preconditions (check before testing)
 1. PR #21 is merged and deployed. `GET /api/health` reports `schemaDrift: false` (expected DB version `0130`).
-2. Migrations `0129` (team) and `0130` (last seen) are applied in prod.
+2. Migrations `0129`, `0130` (last seen) and `0131` (Hybrid Editor / AI Animator roles) are applied in prod.
 3. Four API tokens are available:
 
 | Token | Account | Scopes |
 |---|---|---|
-| `T_FULL` | trusted editor or admin, no team | read, upload, generate |
-| `T_HYBRID` | trusted editor, team = Hybrid Editor | read, upload, generate |
+| `T_FULL` | trusted editor or admin | read, upload, generate |
+| `T_HYBRID` | Hybrid Editor (token made while the account was a trusted editor) | read, upload, generate |
 | `T_READ` | trusted editor | read, upload only |
 | `T_EDITOR` | regular editor | created before tokens were limited to trusted editors and admins |
 
@@ -40,7 +40,7 @@ This checklist is for an AI tester with the **Mason Studios MCP connector** (too
 | A10 | `kling-4.0` with 3 images | refused (Kling takes 1–2 images) |
 | A11 | inspect any quote response | **no** `note` field |
 | A12 | `seedance-2.5-byteplus` 26 s, without and then with a 4 s video ref | the quote with the ref is lower (BytePlus's video-input rate is $6.40/M vs $10.70/M); `video_reference_seconds: 4` |
-| A13 | `wan-3.0` using `T_HYBRID`'s connector | `model_not_allowed`; the same call with `T_FULL` returns 200 |
+| A13 | any call using `T_HYBRID`'s connector | `403 role_not_allowed` (only trusted editors and admins hold tokens) |
 
 ## B. REST routes MCP doesn't expose: 🆓 (curl)
 
@@ -81,7 +81,7 @@ This checklist is for an AI tester with the **Mason Studios MCP connector** (too
 | D3 | `/ugc` Length button | the "Total duration" slider. It closes on release, Esc, and a click outside |
 | D4 | `/ugc` prompt box | an "n / 20,000" counter that turns red past the limit |
 | D5 | Image Generator | no Nano Banana 2; only the 9:16, 1:1 and 16:9 ratios |
-| D6 | Accounts Control | a Team column with a select; a green dot for your own account; red for an account idle more than 2 min |
+| D6 | Accounts Control | a Role select (Editor / Trusted editor / Hybrid Editor / AI Animator); a green dot for your own account; red for an account idle more than 2 min |
 | D7 | `/ugc` as a Hybrid Editor | Wan 3.0 is not in the picker |
 | D8 | `/settings/api-tokens` as a regular editor | "available to trusted editors and admins only" |
 | D9 | `/settings/api-tokens`: create a token | the token and a copyable `…/api/mcp?token=…` link with 3 setup steps |
@@ -90,7 +90,7 @@ This checklist is for an AI tester with the **Mason Studios MCP connector** (too
 ## E. Known gaps (expected to fail or need attention)
 - The `/ugc` References box still caps at a flat 10, not 8 + 1 + 3.
 - Neither BytePlus nor kie publishes a prompt limit, so a 20,000-char prompt may still be refused by the vendor (that refusal costs nothing).
-- Retry and rerender in `enqueue.ts` don't check the team.
+- Retry and rerender in `enqueue.ts` don't check the role's model access.
 - The scripted pipeline still defaults to Seedance 2.5 on Kie.
 
 ## Report format

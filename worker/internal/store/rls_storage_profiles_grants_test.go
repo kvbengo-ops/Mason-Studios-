@@ -491,11 +491,12 @@ func TestRLSProfiles(t *testing.T) {
 		})
 	})
 
-	// 0129 (team) and 0130 (last_seen_at) add columns, not policies. Neither is
-	// writable from a client: team is admin-only through setAccountTeam's
-	// service-role client, last_seen_at through touchPresence's.
+	// 0131 (the hybrid_editor and ai_animator roles) and 0130 (last_seen_at) add
+	// values and columns, not policies. Neither is writable from a client: role is
+	// admin-only through setAccountRole's service-role client, last_seen_at through
+	// touchPresence's. A client granting itself a new role must stay impossible.
 	for _, column := range []struct{ name, value string }{
-		{"team", "'ai_animator'"},
+		{"role", "'ai_animator'"},
 		{"last_seen_at", "now()"},
 	} {
 		column := column

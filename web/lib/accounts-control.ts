@@ -24,7 +24,6 @@ import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/ru
 import { getGlobalSpendSnapshot, type GlobalSpendCapSettings } from "@/lib/spend";
 import { extFromFilename, signedUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
-import type { Team } from "@/lib/model-access";
 import type { ProfileRole, ProfileStatus } from "@/types/db";
 
 const SIGNED_URL_TTL_SECONDS = 3600;
@@ -56,8 +55,6 @@ export interface AccountSpendSummary {
   username: string;
   role: ProfileRole;
   status: ProfileStatus;
-  /** profiles.team (0129): which video models this account may use. Null = unrestricted. */
-  team?: Team | null;
   /** profiles.last_seen_at (0130), the presence heartbeat. */
   lastSeenAt?: string | null;
   projectCount: number;
@@ -310,8 +307,8 @@ export async function loadAccountsControlOverview(
       .select("id, email, username, role, status, created_at, project_count, spend_usd")
       .in("role", ["admin", "editor", "trusted_editor"])
       .order("spend_usd", { ascending: false }),
-    // user_directory predates team and last_seen_at; an admin's session reads profiles directly.
-    supabase.from("profiles").select("id, team, last_seen_at"),
+    // user_directory predates last_seen_at; an admin's session reads profiles directly.
+    supabase.from("profiles").select("id, last_seen_at"),
   ]);
 
   if (directoryError) {
@@ -353,7 +350,6 @@ export async function loadAccountsControlOverview(
     userCategoryTotals,
   ).map((account) => ({
     ...account,
-    team: presenceById.get(account.id)?.team ?? null,
     lastSeenAt: presenceById.get(account.id)?.last_seen_at ?? null,
   }));
   const runwayEstimate = computeRunway(kieBalanceUsd, weekSpendUsd);

@@ -317,7 +317,7 @@ export async function CreateVideoConsole({
               // personal project and the clip appears on the wall above.
               projectId=""
               ensureProject={ensurePersonalClipProject}
-              options={ugcOptions(withSound, profile.team ?? null)}
+              options={ugcOptions(withSound, profile.role)}
               budget={{
                 dailyCapEnabled: snapshot.dailyCapEnabled,
                 dailyRemainingUsd: snapshot.dailyRemainingUsd,

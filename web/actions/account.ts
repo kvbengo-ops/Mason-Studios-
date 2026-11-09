@@ -10,7 +10,7 @@ import { requireAdmin } from "@/actions/guard";
 import { createAdminClient } from "@/lib/supabase/server";
 import type { ActionResult } from "@/lib/action-result";
 import type { ProfileRole, ProfileStatus } from "@/types/db";
-import { isTeam } from "@/lib/model-access";
+import { ASSIGNABLE_ROLES, isAssignableRole } from "@/lib/model-access";
 import {
   BULK_ALLOWANCE_SCOPE_ROLES,
   dailyCapOverrideError,
@@ -223,24 +223,30 @@ export async function setTrustedEditor(
 }
 
 /**
- * Sets (or clears, with null) an account's team from Accounts Control. The team only gates
- * which video models the account may use (lib/model-access.ts); role and caps are untouched.
- * requireAdmin first, and the write goes through the admin client because profiles has no
- * UPDATE policy at all (0002_rls.sql), which is also why no client can set its own team.
+ * Sets a non-admin account's role from Accounts Control: editor, trusted editor, Hybrid
+ * Editor or AI Animator (0131). The role decides spend caps (lib/spend.ts), video models
+ * (lib/model-access.ts) and whether the account may approve allowances or hold API tokens
+ * (trusted editor only). Admin is never set or cleared here: promoteToAdmin/demoteAdmin
+ * own that, with their own guards, so this update only matches rows that are not admin.
+ * requireAdmin first; the admin client because profiles has no UPDATE policy (0002_rls.sql).
  */
-export async function setAccountTeam(userId: string, team: string | null): Promise<ActionResult> {
+export async function setAccountRole(userId: string, role: string): Promise<ActionResult> {
   await requireAdmin();
-  if (team !== null && !isTeam(team)) return { error: "Choose a valid team." };
+  if (!isAssignableRole(role)) return { error: "Choose a valid role." };
 
   const { data, error } = await createAdminClient()
     .from("profiles")
-    .update({ team })
+    .update({ role })
     .eq("id", userId)
+    .in("role", ASSIGNABLE_ROLES as unknown as ProfileRole[])
     .select("id");
-  if (error) throw new Error(`Failed to set the team for account ${userId}: ${error.message}`);
-  if ((data ?? []).length === 0) return { error: "That account no longer exists." };
+  if (error) throw new Error(`Failed to set the role for account ${userId}: ${error.message}`);
+  if ((data ?? []).length === 0) {
+    return { error: "That account is an admin or no longer exists; its role was not changed." };
+  }
 
   revalidatePath(ACCOUNTS_CONTROL_PATH);
+  revalidatePath(USERS_PATH);
 }
 
 /** Promotes an active editor to admin, from /users. */
@@ -253,7 +259,7 @@ export async function promoteToAdmin(userId: string): Promise<ActionResult> {
     .update({ role: "admin" })
     .eq("id", userId)
     .eq("status", "active")
-    .in("role", ["editor", "trusted_editor"])
+    .in("role", ASSIGNABLE_ROLES as unknown as ProfileRole[])
     .select("id");
 
   if (error) {
