@@ -156,7 +156,9 @@ describe("resolveApiReferences", () => {
     },
   ];
 
-  it("accepts 8+1+3 BytePlus references and names per-type and time overflows", async () => {
+  it.each(["seedance-2.5-byteplus", "seedance-2.5"])(
+    "accepts 8+1+3 %s references and names per-type and time overflows",
+    async (modelId) => {
     const kinds = [...Array(8).fill("image"), "video", ...Array(3).fill("audio")] as (
       "image" | "video" | "audio"
     )[];
@@ -180,7 +182,7 @@ describe("resolveApiReferences", () => {
     const args = {
       admin,
       userId: "user-1",
-      modelId: "seedance-2.5-byteplus",
+      modelId,
       resolution: "480p",
       prompt: "A wide cinematic shot",
       imageRefs: elements.slice(0, 8).map((e) => e.id),
@@ -229,6 +231,36 @@ describe("resolveApiReferences", () => {
         })
       ).ok,
     ).toBe(true);
+    },
+  );
+
+  it("applies the 20,000 character cap AFTER @tags expand into descriptions", async () => {
+    // A short raw prompt passes parseApiClipInput; the description it expands to does not.
+    const hero: FakeElement = {
+      id: "el-hero",
+      user_id: "user-1",
+      name: "hero",
+      category: "character",
+      description: "x".repeat(20_000),
+      ai_description: null,
+      asset_id: "asset-hero",
+    };
+    const asset: FakeAsset = {
+      id: "asset-hero",
+      kind: "ref_frame",
+      storage_key: "users/user-1/image/hero.png",
+      duration_s: null,
+    };
+    const result = await resolveApiReferences({
+      admin: makeFakeAdmin({ ownedElements: [hero], assets: [asset] }),
+      userId: "user-1",
+      modelId: "seedance-2.5-byteplus",
+      resolution: "480p",
+      prompt: "A slow push-in on @hero in a studio",
+      imageRefs: ["el-hero"],
+    });
+    expect(result).toMatchObject({ ok: false, code: "prompt_too_long" });
+    expect((result as { error: string }).error).toMatch(/20,000 limit/);
   });
 
   it("preserves array ordinal identity when @Image 2 is mentioned before @Image 1", async () => {
