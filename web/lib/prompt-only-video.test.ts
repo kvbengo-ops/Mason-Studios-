@@ -9,6 +9,7 @@ describe("prompt-only video endpoints", () => {
     "seedance-2-mini",
     "kling-3.0-pro",
     "wan-3.0",
+    "gemini-omni-1.2",
   ])("allows %s without images", (id) => expect(supportsPromptOnlyVideo(id)).toBe(true));
   it.each(["hailuo-2.3-pro", "gemini-omni-video", "kling-4.0", "unknown"])(
     "keeps the reference requirement for %s",

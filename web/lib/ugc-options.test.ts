@@ -30,6 +30,10 @@ describe("ugcOptions(true) — the sound picker", () => {
       "gemini-omni-video/720p",
       "gemini-omni-video/1080p",
       "gemini-omni-video/4k",
+      "gemini-omni-1.2/360p",
+      "gemini-omni-1.2/720p",
+      "gemini-omni-1.2/1080p",
+      "gemini-omni-1.2/4k",
     ]);
   });
 
@@ -46,6 +50,7 @@ describe("ugcOptions(true) — the sound picker", () => {
       "kling-4.0-reference": null,
       "wan-3.0": null,
       "gemini-omni-video": null,
+      "gemini-omni-1.2": null,
     });
   });
 
@@ -136,6 +141,10 @@ describe("ugcOptions(false) — the silent picker", () => {
       "gemini-omni-video/720p/15.75",
       "gemini-omni-video/1080p/15.75",
       "gemini-omni-video/4k/36.75",
+      "gemini-omni-1.2/360p/4",
+      "gemini-omni-1.2/720p/9",
+      "gemini-omni-1.2/1080p/10",
+      "gemini-omni-1.2/4k/22",
     ]);
   });
 
@@ -176,6 +185,8 @@ function cheapestResolutionFor(modelId: string, _withSound: boolean): string {
       return "768P";
     case "gemini-omni-video":
       return "720p";
+    case "gemini-omni-1.2":
+      return "360p";
     default:
       throw new Error(`no known cheapest resolution for ${modelId}`);
   }

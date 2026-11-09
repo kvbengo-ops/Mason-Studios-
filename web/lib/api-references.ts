@@ -454,7 +454,7 @@ export async function resolveApiReferences(args: {
         };
       }
     }
-  } else if (modelId.startsWith("gemini-")) {
+  } else if (modelId === "gemini-omni-video") {
     if (orderedAudios.length > 0) {
       return {
         ok: false,

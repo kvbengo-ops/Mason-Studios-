@@ -56,6 +56,12 @@ describe("API clip input", () => {
       audio: 0,
       total: 2,
     });
+    expect(referenceLimitsFor("gemini-omni-1.2")).toMatchObject({
+      image: 6,
+      video: 0,
+      audio: 0,
+      total: 6,
+    });
   });
 
   it("does not expose internal pricing notes", () => {
