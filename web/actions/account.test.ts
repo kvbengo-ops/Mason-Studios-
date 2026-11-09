@@ -259,7 +259,12 @@ describe("promoteToAdmin", () => {
     expect(builder.update).toHaveBeenCalledWith({ role: "admin" });
     expect(builder.eq).toHaveBeenCalledWith("id", "user-1");
     expect(builder.eq).toHaveBeenCalledWith("status", "active");
-    expect(builder.in).toHaveBeenCalledWith("role", ["editor", "trusted_editor"]);
+    expect(builder.in).toHaveBeenCalledWith("role", [
+      "editor",
+      "trusted_editor",
+      "hybrid_editor",
+      "ai_animator",
+    ]);
   });
 
   it("returns an error and refreshes the list when the account no longer qualifies", async () => {
