@@ -34,7 +34,7 @@ import { z } from "zod";
 import { IMAGE_ASPECT_RATIOS, type ImageAspectRatio } from "./image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, type ImageResolutionId } from "./image-resolutions";
 import { SEEDREAM_PRO_ID, SEEDREAM_PRO_ASPECT_RATIOS } from "./seedream";
-import { NANO_BANANA_2_ID, NANO_BANANA_2_1_ID } from "./kie/image-input";
+import { NANO_BANANA_2_1_ID } from "./kie/image-input";
 import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
 import {
@@ -1504,31 +1504,6 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     costUsd: 0.02,
     observedSeconds: 22,
     aspectRatios: IMAGE_ASPECT_RATIOS,
-  },
-  {
-    id: "nano-banana-2",
-    label: "Nano Banana 2",
-    textToImageId: NANO_BANANA_2_ID,
-    // THE SAME ID, deliberately — editing is not a separate endpoint on this
-    // model (kie/image-input.ts, https://docs.kie.ai/market/google/nanobanana2).
-    //
-    // This read `null` until the docs were checked, on the evidence that
-    // `nano-banana-2-edit` is rejected with code=422. That probe was right and
-    // the conclusion drawn from it was wrong: kie put editing on the base id
-    // here, unlike google/nano-banana's separate -edit above. References work;
-    // they just arrive in `image_input`, which is why sending them is routed
-    // through one builder rather than assumed to be `image_urls`.
-    editId: NANO_BANANA_2_ID,
-    // From the TEXT-TO-IMAGE receipt. The reference path has no receipt of its
-    // own yet; nano-banana bills its two paths identically (4/4 credits), so
-    // this is the honest expectation rather than
-    // a measured fact — take one with REF_IMAGE_URL set to settle it.
-    costUsd: 0.04,
-    observedSeconds: 23,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
-    resolutions: ["1K", "2K", "4K"],
-    // kie.ai/nano-banana-2: 12 credits at 2K, 18 at 4K.
-    resolutionCostsUsd: { "2K": 0.06, "4K": 0.09 },
   },
   {
     id: "seedream-5.0-pro",

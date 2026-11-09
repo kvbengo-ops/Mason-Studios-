@@ -391,7 +391,7 @@ export async function uploadFromUrl(args: UploadFromUrlArgs): Promise<UploadResu
   return { storageKey };
 }
 
-/** Uploads an operator-supplied file (e.g. a real character photo); PNG/WebP are stored as JPEG (toJpeg). */
+/** Uploads an operator-supplied file (e.g. a real character photo); WebP is stored as JPEG (toJpeg); PNG and JPEG are kept as uploaded. */
 export async function uploadFile(args: UploadFileArgs): Promise<UploadResult> {
   const { kind } = args;
   const file = await toJpeg(args.file);

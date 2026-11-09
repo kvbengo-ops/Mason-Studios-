@@ -197,7 +197,7 @@ export default async function UgcPage({
   // offered. Both sides now read the one fact that decides it — whether this
   // render carries sound — so they cannot answer it differently.
   const withSound = isAudioEnabled();
-  const options: UgcOption[] = ugcOptions(withSound);
+  const options: UgcOption[] = ugcOptions(withSound, profile.team ?? null);
 
   // Four seconds is the default because it is what the workflow this route
   // serves actually uses: short takes make a retry cheap, and a retry is the

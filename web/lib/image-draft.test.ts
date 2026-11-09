@@ -14,12 +14,12 @@
 import { describe, expect, it } from "vitest";
 import { parseImageDraft, serializeImageDraft, type ImageDraft } from "./image-draft";
 
-const MODELS = ["nano-banana", "nano-banana-2", "seedream-5.0-pro"];
+const MODELS = ["nano-banana", "seedream-5.0-pro"];
 const isSelectable = (id: string): boolean => MODELS.includes(id);
 
 const DRAFT: ImageDraft = {
   prompt: "a red ceramic mug on white",
-  modelId: "nano-banana-2",
+  modelId: "seedream-5.0-pro",
   aspectRatio: "1:1",
   imageCount: 4,
 };
@@ -69,8 +69,13 @@ describe("parseImageDraft", () => {
     expect(restored.modelId).toBeUndefined();
   });
 
-  it("drops an aspect ratio that is not a real one", () => {
-    const stored = JSON.stringify({ aspectRatio: "7:3" });
+  it("drops Nano Banana 2, which the picker no longer offers", () => {
+    const stored = JSON.stringify({ modelId: "nano-banana-2" });
+    expect(parseImageDraft(stored, isSelectable).modelId).toBeUndefined();
+  });
+
+  it.each(["7:3", "4:5", "21:9"])("drops an aspect ratio the picker does not offer: %s", (aspectRatio) => {
+    const stored = JSON.stringify({ aspectRatio });
     expect(parseImageDraft(stored, isSelectable).aspectRatio).toBeUndefined();
   });
 

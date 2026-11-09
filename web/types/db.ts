@@ -1056,6 +1056,11 @@ export type Database = {
           // profiles row anyway — handle_new_user() does, from a trigger
           // Postgres fires on auth.users.
           status: ProfileStatus;
+          // 0129: which video models this account may use (lib/model-access.ts).
+          // Null = unrestricted. Only an admin writes it.
+          team: "hybrid_editor" | "ai_animator" | null;
+          // 0130: last presence heartbeat (actions/presence.ts); Accounts Control reads it.
+          last_seen_at: string | null;
           username: string;
           weekly_cap_override_usd: number | null;
         };
@@ -1068,6 +1073,8 @@ export type Database = {
           id: string;
           role?: ProfileRole;
           status?: ProfileStatus;
+          team?: "hybrid_editor" | "ai_animator" | null;
+          last_seen_at?: string | null;
           username: string;
           weekly_cap_override_usd?: number | null;
         };
@@ -1080,6 +1087,8 @@ export type Database = {
           id?: string;
           role?: ProfileRole;
           status?: ProfileStatus;
+          team?: "hybrid_editor" | "ai_animator" | null;
+          last_seen_at?: string | null;
           username?: string;
           weekly_cap_override_usd?: number | null;
         };

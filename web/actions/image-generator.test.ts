@@ -168,12 +168,11 @@ function generateForm(fields: Record<string, string>): FormData {
 const RATIO_REFUSAL = "Choose a supported aspect ratio before generating.";
 
 describe("generatePersonalImage refuses an aspect ratio the chosen model cannot take", () => {
-  it("refuses a real ratio that this model does not offer", async () => {
+  it("refuses a real ratio that the app no longer offers", async () => {
     const { generatePersonalImage } = await import("./image-generator");
 
-    // 4:5 passes isImageAspectRatio and is fine on Nano Banana. Only the
-    // per-model half of the guard can catch it here, which makes this the one
-    // case that proves the second condition is still doing something.
+    // Every model offers the same three ratios now (9:16, 1:1, 16:9), so 4:5 is
+    // refused on all of them, Nano Banana included.
     expect(
       await generatePersonalImage(
         generateForm({ imageModel: "seedream-5.0-pro", aspectRatio: "4:5" }),
@@ -191,7 +190,7 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
     ).toEqual({ error: RATIO_REFUSAL });
   });
 
-  it("accepts the same ratio on a model that does offer it", async () => {
+  it("accepts a ratio the app offers", async () => {
     const { generatePersonalImage } = await import("./image-generator");
 
     // The negative control. Without it every test above would still pass if
@@ -206,7 +205,7 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const outcome = await generatePersonalImage(
-        generateForm({ imageModel: "nano-banana", aspectRatio: "4:5" }),
+        generateForm({ imageModel: "nano-banana", aspectRatio: "16:9" }),
       ).catch((error: unknown) => error);
 
       // Deliberately NOT an assertion about which error: what is being pinned

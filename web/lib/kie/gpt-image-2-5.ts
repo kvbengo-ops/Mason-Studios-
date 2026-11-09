@@ -25,16 +25,11 @@ const ALL_IDS: readonly string[] = Object.values(GPT_IMAGE_2_5_IDS).flatMap((v) 
 ]);
 const EDIT_IDS: readonly string[] = Object.values(GPT_IMAGE_2_5_IDS).map((v) => v.edit);
 
-/** kie's documented ratios that this app also offers — no 4:5 or 5:4. */
+/** The three ratios the app offers (see lib/image-aspect-ratios.ts). */
 export const GPT_IMAGE_2_5_ASPECT_RATIOS: readonly ImageAspectRatio[] = [
   "9:16",
   "1:1",
-  "3:4",
-  "2:3",
   "16:9",
-  "4:3",
-  "3:2",
-  "21:9",
 ];
 
 export function isGptImage25Id(model: string): boolean {

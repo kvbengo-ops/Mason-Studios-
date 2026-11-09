@@ -47,6 +47,7 @@ import {
 } from "@/lib/enqueue-guard";
 import { guardResult, type ActionResult } from "@/lib/action-result";
 import { latestErrorsByScene, type RenderErrorInfo } from "@/lib/render-error";
+import { BYTEPLUS_SEEDANCE_SETTINGS, RETIRED_KIE_SEEDANCE_ID } from "@/lib/ugc-model-rules";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
 
@@ -180,6 +181,27 @@ function unavailableModelResult(settings: RenderSettings): ActionResult | null {
     return { error: "Gemini Omni Video is unavailable until a paid receipt exists." };
   }
   return null;
+}
+
+/**
+ * /ugc only: when `override` (merged over the project's settings) lands on retired Kie
+ * Seedance 2.5, the override to store instead: BytePlus at 480p, other keys kept. Null
+ * otherwise. Other project kinds are left alone: the scripted pipeline's default model is
+ * still Seedance 2.5.
+ */
+function movedOffRetiredModel(
+  project: { kind: string; render_settings: unknown },
+  override: unknown,
+): Record<string, string> | null {
+  if (project.kind !== "clip") return null;
+  if (mergeRenderSettings(project.render_settings, override).model !== RETIRED_KIE_SEEDANCE_ID) {
+    return null;
+  }
+  const base =
+    typeof override === "object" && override !== null && !Array.isArray(override)
+      ? (override as Record<string, string>)
+      : {};
+  return { ...base, ...BYTEPLUS_SEEDANCE_SETTINGS };
 }
 
 async function loadOrderedScenes(projectId: string): Promise<SceneRow[]> {
@@ -923,7 +945,9 @@ export async function retryScene(
 
   const overrideResult = resolveOverride(modelId, project.render_settings);
   if ("error" in overrideResult) return overrideResult;
-  const { override } = overrideResult;
+  const override =
+    movedOffRetiredModel(project, overrideResult.override ?? scene.render_settings_override) ??
+    overrideResult.override;
 
   // The settings this retry will ACTUALLY render on: the new override when
   // one was picked, otherwise whatever this scene already carries. Never the
@@ -1057,15 +1081,26 @@ export async function retryAllFailed(projectId: string, modelId?: string): Promi
   const { project, user, profile } = await requireProject(projectId);
 
   const scenes = await loadOrderedScenes(projectId);
-  const failed = scenes.filter((scene) => scene.status === "failed");
-  if (failed.length === 0) {
+  const failedRows = scenes.filter((scene) => scene.status === "failed");
+  if (failedRows.length === 0) {
     // Nothing to do.
     return { error: `Project ${projectId} has no failed scenes to retry.` };
   }
 
   const overrideResult = resolveOverride(modelId, project.render_settings);
   if ("error" in overrideResult) return overrideResult;
-  const { override } = overrideResult;
+  const override =
+    (overrideResult.override && movedOffRetiredModel(project, overrideResult.override)) ??
+    overrideResult.override;
+  // Without a requested model each scene keeps its own, but one on retired Kie Seedance 2.5 is
+  // priced and stored on BytePlus (stored once the caps pass, below).
+  const movedBySceneId = new Map<string, Record<string, string>>();
+  const failed = failedRows.map((scene) => {
+    const moved = override ? null : movedOffRetiredModel(project, scene.render_settings_override);
+    if (!moved) return scene;
+    movedBySceneId.set(scene.id, moved);
+    return { ...scene, render_settings_override: moved };
+  });
 
   // A plain bulk retry preserves each scene's sticky override, so check
   // every effective setting before either pricing or writing. A newly
@@ -1106,6 +1141,16 @@ export async function retryAllFailed(projectId: string, modelId?: string): Promi
   if (capResult) return capResult;
 
   const admin = createAdminClient();
+
+  for (const [movedSceneId, moved] of movedBySceneId) {
+    const { error: moveError } = await admin
+      .from("scenes")
+      .update({ render_settings_override: moved })
+      .eq("id", movedSceneId);
+    if (moveError) {
+      throw new Error(`Failed to retry failed scenes for project ${projectId}: ${moveError.message}`);
+    }
+  }
 
   // No final-asset cleanup here either — see "THE FINAL CUT IS NOT DELETED
   // ANY MORE" above.
@@ -1237,7 +1282,11 @@ export async function rerenderScene(
   // off the project: a scene that was previously retried onto a different
   // model still renders on that model, so this is the model the price and
   // the duration guard below both have to use.
-  const settings = mergeRenderSettings(project.render_settings, scene.render_settings_override);
+  const movedOverride = movedOffRetiredModel(project, scene.render_settings_override);
+  const settings = mergeRenderSettings(
+    project.render_settings,
+    movedOverride ?? scene.render_settings_override,
+  );
   const unavailableResult = unavailableModelResult(settings);
   if (unavailableResult) return unavailableResult;
   const audioEnabled = isAudioEnabled();
@@ -1277,6 +1326,15 @@ export async function rerenderScene(
   // above. It was built from the clip about to be superseded, which is
   // exactly what its recipe records; getCutStatus reports it stale rather
   // than this deleting it.
+
+  // Stored after the cap check and before the scene is queued: the worker claims on 'queued'.
+  if (movedOverride) {
+    const { error: moveError } = await admin
+      .from("scenes")
+      .update({ render_settings_override: movedOverride })
+      .eq("id", sceneId);
+    if (moveError) throw new Error(`Failed to re-render scene ${sceneId}: ${moveError.message}`);
+  }
 
   if (versionMode === "update") {
     await reuseSceneVersion(admin, scene, settings);

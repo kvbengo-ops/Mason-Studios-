@@ -95,6 +95,14 @@ import type { Database, SceneStatus } from "@/types/db";
 import { offerable } from "@/lib/kie/offerable";
 import { videoAspectRatioFor } from "@/lib/kie/models";
 import { videoQualityFor } from "@/lib/video-quality";
+import { canUseVideoModel } from "@/lib/model-access";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
+import {
+  BYTEPLUS_SEEDANCE_ID,
+  BYTEPLUS_SEEDANCE_QUALITY,
+  byteplusResolutionRefusal,
+  retargetRetiredModel,
+} from "@/lib/ugc-model-rules";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
 import {
@@ -952,14 +960,13 @@ async function geminiSceneReferenceRefusal(
  * not the one anybody can see. That render's box held 2,310 characters and
  * the tags expanded it to 4,740.
  *
- * Undefined maxPromptChars means no known limit, and every Seedance model is
- * in that case — several have gone out past 4,000 characters and none has
- * ever been refused for length. The guard must stay inert for them.
+ * Undefined maxPromptChars means no vendor limit is known (every Seedance
+ * model), so only our own MAX_PROMPT_CHARS applies. The lower of the two wins.
  */
 function promptTooLongForModel(modelId: string, submittedPrompt: string): { error: string } | null {
   const model = getModel(modelId);
-  const max = model.maxPromptChars;
-  if (max === undefined || submittedPrompt.length <= max) return null;
+  const max = Math.min(model.maxPromptChars ?? Infinity, MAX_PROMPT_CHARS);
+  if (submittedPrompt.length <= max) return null;
   const over = submittedPrompt.length - max;
   // KLING NEVER SUBSTITUTES (see generateClip's own submittedPrompt), so
   // "every @tag is replaced by its full description" is false for it — the
@@ -1512,7 +1519,11 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // not know, same as everywhere else in this file, so an invalid modelId
   // here simply takes the non-Kling branch and is refused properly below
   // once `chosen` is resolved against offerable().
-  const modelId = String(formData.get("modelId") ?? "");
+  // Retired Kie Seedance 2.5 is moved to BytePlus at 480p before anything reads the pair.
+  const { modelId, resolution } = retargetRetiredModel(
+    String(formData.get("modelId") ?? ""),
+    String(formData.get("resolution") ?? ""),
+  );
   // nativeAudio, not a string compare — same model-table flag the column
   // itself asks (ugc-column.tsx's `isKling`).
   const isKlingSubmission = getModel(modelId).nativeAudio;
@@ -1654,8 +1665,6 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
     return { error: "Pick a clip length." };
   }
 
-  const resolution = String(formData.get("resolution") ?? "");
-
   // The pair must be one this route may SELL, not merely one it can quote.
   // offerable() refuses anything lib/models.ts cannot price from a rate of
   // its own, because that is the table the spend cap enforces against — see
@@ -1679,6 +1688,11 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // ugc/[id]/page.tsx fixed this side and not this one. Reading the same env
   // on both sides is what actually keeps them in step; matching literals
   // would drift again.
+  const byteplusRefusal = byteplusResolutionRefusal(modelId, resolution);
+  if (byteplusRefusal) return { error: byteplusRefusal };
+  if (!canUseVideoModel(profile.team, modelId)) {
+    return { error: `${getModel(modelId).label} is not available to your team.` };
+  }
   const allowed = offerable(isAudioEnabled());
   const chosen = allowed.find((o) => o.model.id === modelId && o.resolution === resolution);
   if (!chosen) {
@@ -1752,7 +1766,10 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // No price effect: kie bills per second by resolution, not by frame shape.
   const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
   // No price effect either: only our own re-encode reads it (lib/video-quality.ts).
-  const quality = videoQualityFor(formData.get("quality"));
+  const quality =
+    chosen.model.id === BYTEPLUS_SEEDANCE_ID
+      ? BYTEPLUS_SEEDANCE_QUALITY
+      : videoQualityFor(formData.get("quality"));
   const override = {
     model: chosen.model.id,
     resolution,
@@ -2231,7 +2248,7 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   // scene's owner — the same identity generateClip's insert uses as
   // resolveElementTags' userId — not a new check reached for here; nothing
   // widens by naming it.
-  const { user, project, scene } = await requireScene(sceneId);
+  const { user, project, scene, profile } = await requireScene(sceneId);
 
   // Same marker/box reasoning as generateClip above — only enforced when the
   // column actually rendered a box (a caller that skips the column entirely,
@@ -2302,8 +2319,11 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   // settings this block just stored, which is the only check that describes
   // the render that will actually run — and a cap refusal from rerenderScene
   // still leaves this write in place; that gap is not addressed here.
-  const modelId = String(formData.get("modelId") ?? "");
-  const resolution = String(formData.get("resolution") ?? "");
+  // Retired Kie Seedance 2.5 moves to BytePlus at 480p, same as generateClip.
+  const { modelId, resolution } = retargetRetiredModel(
+    String(formData.get("modelId") ?? ""),
+    String(formData.get("resolution") ?? ""),
+  );
   const durationRaw = formData.get("durationS");
   const durationS = durationRaw === null ? null : Number(durationRaw);
 
@@ -2344,6 +2364,11 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     // isAudioEnabled(), for the reason spelled out in generateClip above:
     // this is the same gate on the settings-change path, and a pair it
     // refuses here is one the picker has already shown.
+    const byteplusRefusal = byteplusResolutionRefusal(modelId, resolution);
+    if (byteplusRefusal) return { error: byteplusRefusal };
+    if (!canUseVideoModel(profile.team, modelId)) {
+      return { error: `${getModel(modelId).label} is not available to your team.` };
+    }
     const allowed = offerable(isAudioEnabled());
     const chosen = allowed.find((o) => o.model.id === modelId && o.resolution === resolution);
     if (!chosen) {
@@ -2368,7 +2393,10 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     // own note on the zod strip this avoids.
     const voice = geminiVoiceFor(chosen.model.id, formData.get("geminiVoice"));
     const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
-    const quality = videoQualityFor(formData.get("quality"));
+    const quality =
+      chosen.model.id === BYTEPLUS_SEEDANCE_ID
+        ? BYTEPLUS_SEEDANCE_QUALITY
+        : videoQualityFor(formData.get("quality"));
     updates.render_settings_override = {
       model: chosen.model.id,
       resolution,
@@ -2557,6 +2585,8 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   // so a Kling scene left alone would otherwise pick up a substitution the
   // very next time an element's description was edited.
   const submittedPrompt = isKlingNow ? prompt : await resolveElementTags(admin, user.id, prompt);
+  const tooLong = promptTooLongForModel(effectiveRegenerateSettings.model, submittedPrompt);
+  if (tooLong) return tooLong;
   // Same rule generateClip's insert follows for this column: null means
   // "identical to what was authored," so a scene whose @tags were edited or
   // deleted out stops carrying a stale substitution instead of keeping one
