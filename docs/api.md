@@ -70,7 +70,7 @@ Staged upload: `POST /elements/upload-url` → `PUT` the file to `upload_url` �
 | `is_talking_head` | no | Legacy alias for `sound`; if both are sent they must agree |
 | `image_refs`, `video_refs`, `audio_refs` | no | Element ids, in `@Image 1…`, `@Video 1…`, `@Audio 1…` order |
 
-Seedance 2.5 BytePlus accepts up to **8 images, 1 video and 3 audio clips**, 12 total. Video references must each be at most 30 seconds and total at most 30 seconds; audio has the same time limits. Kling takes 1–2 PNG/JPG images only and no `@tags`. Other models accept at most 10 references total, subject to their own media rules. Per-type or total overflow returns `422 too_many_references` with the offending limit.
+Seedance 2.5, on both Kie and BytePlus, accepts up to **8 images, 1 video and 3 audio clips**, 12 total. Video references must each be at most 30 seconds and total at most 30 seconds; audio has the same time limits. The same 12 apply in the `/ugc` References box (10 on every other model). The 20,000-character prompt cap applies to the text actually sent, so `@tag` descriptions count toward it; a prompt that only exceeds it after expansion gets `422 prompt_too_long`. Kling takes 1–2 PNG/JPG images only and no `@tags`. Other models accept at most 10 references total, subject to their own media rules. Per-type or total overflow returns `422 too_many_references` with the offending limit.
 
 `/generate` also needs an `Idempotency-Key` header (1–128 characters). The same key with the same body returns the same job (`deduplicated: true`); the same key with a different body returns `409 idempotency_conflict`. Committed keys never expire. A job stuck preparing for more than 5 minutes is cleared, freeing its key.
 

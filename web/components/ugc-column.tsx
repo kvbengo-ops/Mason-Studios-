@@ -53,7 +53,7 @@ import { unknownPromptTags, unknownTagsWarning } from "@/lib/unknown-tags";
 import { buildUgcPromptPreview } from "@/lib/ugc-prompt-preview";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { isAcceptedReferenceAudio, isAcceptedReferenceVideo } from "@/lib/file-type";
-import { MAX_REFERENCES, referenceLimitsFor } from "@/lib/ugc-references";
+import { maxReferencesFor } from "@/lib/ugc-references";
 
 // How many reference chips show before the rest fold behind "+N more": about
 // two rows at the column's width, so a full box of ten never pushes the prompt
@@ -364,6 +364,8 @@ export function UgcColumn({
   // index past the end would blank the whole settings row.
   const optionIdx = modelIdx < options.length ? modelIdx : defaultIdx;
   const option = options[optionIdx];
+  // The References box holds 12 on Seedance 2.5 and 10 elsewhere (lib/ugc-references.ts).
+  const maxReferences = maxReferencesFor(option?.modelId ?? "");
   const modelOptions = options.filter(
     (o, i) => options.findIndex((candidate) => candidate.modelId === o.modelId) === i,
   );
@@ -662,8 +664,6 @@ export function UgcColumn({
     window.addEventListener(VIDEO_ITERATE_EVENT, onIterate);
     return () => window.removeEventListener(VIDEO_ITERATE_EVENT, onIterate);
   }, [options]);
-
-  const maxReferences = Math.min(MAX_REFERENCES, referenceLimitsFor(option?.modelId ?? "").total);
 
   function addTagsToBox(names: readonly string[]): void {
     setSelectedTags((prev) => {

@@ -21,6 +21,7 @@ import {
   removeStorageObjects,
 } from "@/lib/storage";
 import { referenceLimitsFor } from "@/lib/ugc-references";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import type { AssetKind, Database, ElementCategory } from "@/types/db";
 
 export interface ResolvedApiRef {
@@ -587,13 +588,17 @@ export async function resolveApiReferences(args: {
       audioDescByName.size > 0 ? declareAudioTags(withImages, audioDescByName) : withImages;
   }
 
-  if (model.maxPromptChars !== undefined && submittedPrompt.length > model.maxPromptChars) {
-    const over = submittedPrompt.length - model.maxPromptChars;
+  // The lower of the vendor's cap and our 20,000, measured AFTER @tags are replaced by their
+  // descriptions: that is the text actually sent, and the raw-prompt check in parseApiClipInput
+  // cannot see what expansion adds.
+  const promptCap = Math.min(model.maxPromptChars ?? Infinity, MAX_PROMPT_CHARS);
+  if (submittedPrompt.length > promptCap) {
+    const over = submittedPrompt.length - promptCap;
     return {
       ok: false,
       status: 422,
       code: "prompt_too_long",
-      error: `This prompt reaches ${model.label} ${over.toLocaleString()} characters over its ${model.maxPromptChars.toLocaleString()} limit.`,
+      error: `This prompt reaches ${model.label} ${over.toLocaleString()} characters over its ${promptCap.toLocaleString()} limit.`,
     };
   }
 

@@ -3978,10 +3978,24 @@ describe("generateClip enforces the References box only when the marker is prese
     vi.clearAllMocks();
   });
 
-  it("refuses more than ten submitted references before writing", async () => {
+  it("refuses more than twelve submitted references on Seedance 2.5 before writing", async () => {
     const { insert } = mockWriteSurfaces({});
     const { generateClip } = await import("./ugc");
     const form = aClipForm();
+    form.set("referencesBox", "1");
+    for (let i = 0; i < 13; i++) form.append("referenceTag", `ref${i}`);
+
+    expect(((await generateClip(form)) as { error: string }).error).toMatch(
+      /at most 12 references/,
+    );
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("still stops at ten references on every other model", async () => {
+    const { insert } = mockWriteSurfaces({});
+    const { generateClip } = await import("./ugc");
+    const form = aClipForm();
+    form.set("modelId", "wan-3.0");
     form.set("referencesBox", "1");
     for (let i = 0; i < 11; i++) form.append("referenceTag", `ref${i}`);
 
