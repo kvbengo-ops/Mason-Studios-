@@ -24,6 +24,7 @@ import { PageSizeControl } from "@/components/page-size-control";
 import { PaginationControls } from "@/components/pagination-controls";
 import { SortableTableHead } from "@/components/sortable-table-head";
 import { DecideAllowanceRequestDialog } from "@/components/decide-allowance-request-dialog";
+import { AllowanceRequestRow } from "@/components/allowance-request-row";
 import { AllowanceStatusBadge } from "@/components/allowance-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -500,7 +501,20 @@ export default async function AllowancesPage({
               </TableHeader>
               <TableBody>
                 {requests.map((request) => (
-                  <TableRow key={request.id}>
+                  <AllowanceRequestRow
+                    key={request.id}
+                    requestId={request.id}
+                    userId={request.user_id}
+                    username={request.user_username}
+                    email={request.user_email}
+                    requestedUsd={request.requested_usd}
+                    reason={request.reason}
+                    status={request.status}
+                    createdAt={request.created_at}
+                    decidedByEmail={request.decided_by_email}
+                    decidedAt={request.decided_at}
+                    decisionNote={request.decision_note}
+                  >
                     <TableCell className="font-medium text-foreground">
                       {request.user_email}
                     </TableCell>
@@ -583,7 +597,7 @@ export default async function AllowancesPage({
                           })()
                         : null}
                     </TableCell>
-                  </TableRow>
+                  </AllowanceRequestRow>
                 ))}
               </TableBody>
             </Table>
