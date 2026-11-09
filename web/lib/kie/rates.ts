@@ -28,11 +28,12 @@ const GEMINI_OMNI_PUBLISHED = "2026-09-14";
 /** Gemini Omni Video has job prices, not a linear per-second rate. */
 export const GEMINI_OMNI_VIDEO_CREDITS = {
   noVideo: {
+    "360p": { 4: 63, 6: 84, 8: 105, 10: 126 },
     "720p": { 4: 63, 6: 84, 8: 105, 10: 126 },
     "1080p": { 4: 63, 6: 84, 8: 105, 10: 126 },
     "4k": { 4: 147, 6: 168, 8: 189, 10: 210 },
   },
-  withVideo: { "720p": 168, "1080p": 168, "4k": 252 },
+  withVideo: { "360p": 168, "720p": 168, "1080p": 168, "4k": 252 },
 } as const;
 
 export function geminiOmniCredits(
@@ -348,6 +349,12 @@ export const KIE_RATES: Readonly<Record<string, KieRates>> = {
     // geminiOmniCredits above: its published schedule has a fixed
     // intercept, so a credits-per-second figure would be false.
     silent: {
+      "360p": {
+        creditsPerSecond: 15.75,
+        provenance: "published",
+        pricedAt: GEMINI_OMNI_PUBLISHED,
+        note: "Exact per-duration Gemini Omni Video price; see GEMINI_OMNI_VIDEO_CREDITS.",
+      },
       "720p": {
         creditsPerSecond: 15.75,
         // Receipt 2026-09-14: 4s no-video 720p, kie task ae15bf89e90d9c11f5b1a65e8e3a4d52,
@@ -372,6 +379,12 @@ export const KIE_RATES: Readonly<Record<string, KieRates>> = {
     video: {
       // Marker only: Gemini's video-input price is fixed per job and is
       // resolved from GEMINI_OMNI_VIDEO_CREDITS, never multiplied.
+      "360p": {
+        creditsPerSecond: 42,
+        provenance: "published",
+        pricedAt: GEMINI_OMNI_PUBLISHED,
+        note: "Fixed 168-credit source-video job price; requires a separate receipt.",
+      },
       "720p": {
         creditsPerSecond: 42,
         provenance: "published",

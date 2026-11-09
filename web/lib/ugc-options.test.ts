@@ -17,23 +17,15 @@ describe("ugcOptions(true) — the sound picker", () => {
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
       "seedance-2.5/480p",
-      "seedance-2.5/720p",
-      "seedance-2.5/1080p",
       "seedance-2.5-byteplus/480p",
       "kling-4.0/720p",
-      "kling-4.0/1080p",
       "kling-4.0-reference/720p",
-      "kling-4.0-reference/1080p",
       "wan-3.0/480P",
       "wan-3.0/720P",
-      "wan-3.0/1080P",
+      "gemini-omni-video/360p",
       "gemini-omni-video/720p",
-      "gemini-omni-video/1080p",
-      "gemini-omni-video/4k",
       "gemini-omni-1.2/360p",
       "gemini-omni-1.2/720p",
-      "gemini-omni-1.2/1080p",
-      "gemini-omni-1.2/4k",
     ]);
   });
 
@@ -131,20 +123,13 @@ describe("ugcOptions(false) — the silent picker", () => {
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
       "seedance-2.5/480p/28",
-      "seedance-2.5/720p/63",
-      "seedance-2.5/1080p/158",
       "seedance-2.5-byteplus/480p/20.56005",
       "kling-4.0/720p/28.5",
-      "kling-4.0/1080p/42.5",
       "kling-4.0-reference/720p/28.5",
-      "kling-4.0-reference/1080p/42.5",
+      "gemini-omni-video/360p/15.75",
       "gemini-omni-video/720p/15.75",
-      "gemini-omni-video/1080p/15.75",
-      "gemini-omni-video/4k/36.75",
       "gemini-omni-1.2/360p/4",
       "gemini-omni-1.2/720p/9",
-      "gemini-omni-1.2/1080p/10",
-      "gemini-omni-1.2/4k/22",
     ]);
   });
 
@@ -184,7 +169,7 @@ function cheapestResolutionFor(modelId: string, _withSound: boolean): string {
     case "hailuo-2.3-pro":
       return "768P";
     case "gemini-omni-video":
-      return "720p";
+      return "360p";
     case "gemini-omni-1.2":
       return "360p";
     default:

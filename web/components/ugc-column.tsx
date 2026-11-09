@@ -54,6 +54,7 @@ import { buildUgcPromptPreview } from "@/lib/ugc-prompt-preview";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { isAcceptedReferenceAudio, isAcceptedReferenceVideo } from "@/lib/file-type";
 import { maxReferencesFor } from "@/lib/ugc-references";
+import { ugcPickerResolutions } from "@/lib/ugc-model-rules";
 
 // How many reference chips show before the rest fold behind "+N more": about
 // two rows at the column's width, so a full box of ten never pushes the prompt
@@ -819,7 +820,10 @@ export function UgcColumn({
   }
 
   const tierOptions = options.filter((o) => o.modelId === option.modelId);
-  const resolutions = kieModel(option.modelId)?.resolutions ?? tierOptions.map((o) => o.resolution);
+  const resolutions = ugcPickerResolutions(
+    option.modelId,
+    kieModel(option.modelId)?.resolutions ?? tierOptions.map((o) => o.resolution),
+  );
   // Whose published price the confirm dialog's "not a receipt" note names.
   const rateSource = option.modelId === SEEDANCE_2_5_BYTEPLUS.id ? "BytePlus" : "kie";
 

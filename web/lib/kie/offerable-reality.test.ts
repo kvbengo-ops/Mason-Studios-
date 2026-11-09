@@ -88,6 +88,8 @@ describe("published prices are sold on /ugc", () => {
         "gemini-omni-1.2 720p (sound=true)",
         "gemini-omni-video 1080p (sound=false)",
         "gemini-omni-video 1080p (sound=true)",
+        "gemini-omni-video 360p (sound=false)",
+        "gemini-omni-video 360p (sound=true)",
         "gemini-omni-video 4k (sound=false)",
         "gemini-omni-video 4k (sound=true)",
         "kling-4.0 1080p (sound=false)",
@@ -179,6 +181,8 @@ describe("published prices are sold on /ugc", () => {
         // Published rates, sold on kie's documentation since 2026-10-30.
         "gemini-omni-video 1080p sound=false",
         "gemini-omni-video 1080p sound=true",
+        "gemini-omni-video 360p sound=false",
+        "gemini-omni-video 360p sound=true",
         "gemini-omni-video 4k sound=false",
         "gemini-omni-video 4k sound=true",
         "kling-4.0 1080p sound=false",

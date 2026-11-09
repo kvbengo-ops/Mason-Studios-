@@ -37,7 +37,11 @@ import { getModel } from "@/lib/models";
 import { canUseVideoModel } from "@/lib/model-access";
 import type { ProfileRole } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
-import { BYTEPLUS_SEEDANCE_ID, BYTEPLUS_SEEDANCE_RESOLUTION } from "@/lib/ugc-model-rules";
+import {
+  BYTEPLUS_SEEDANCE_ID,
+  BYTEPLUS_SEEDANCE_RESOLUTION,
+  ugcPickerResolutionAllowed,
+} from "@/lib/ugc-model-rules";
 import type { UgcOption } from "@/components/ugc-column";
 
 // The only models the picker shows (owner's call, 2026-11-07). Display only:
@@ -59,6 +63,7 @@ export function ugcOptions(withSound: boolean, role: ProfileRole | null = null):
   const shown = offerable(withSound).filter(
     (offer) =>
       SHOWN_MODEL_IDS.has(offer.model.id) &&
+      ugcPickerResolutionAllowed(offer.model.id, offer.resolution) &&
       canUseVideoModel(role, offer.model.id) &&
       (offer.model.id !== BYTEPLUS_SEEDANCE_ID ||
         offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),

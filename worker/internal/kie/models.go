@@ -162,12 +162,14 @@ const CreditsPerUSD = 200
 // output second. Keep this separate from Rates: making its fixed/intercepted
 // prices look linear would change the quote as duration changes.
 var geminiOmniNoVideoCredits = map[string]map[int]float64{
+	"360p":  {4: 63, 6: 84, 8: 105, 10: 126},
 	"720p":  {4: 63, 6: 84, 8: 105, 10: 126},
 	"1080p": {4: 63, 6: 84, 8: 105, 10: 126},
 	"4k":    {4: 147, 6: 168, 8: 189, 10: 210},
 }
 
 var geminiOmniVideoCredits = map[string]float64{
+	"360p":  168,
 	"720p":  168,
 	"1080p": 168,
 	"4k":    252,
@@ -202,12 +204,14 @@ var Rates = map[string]ModelRates{
 		// documented exact job-price tables above; these synthetic values are
 		// deliberately never multiplied into a Gemini quote.
 		Silent: map[string]RatePoint{
+			"360p": {CreditsPerSecond: 15.75, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			// 720p receipt 2026-09-14: kie task ae15bf89e90d9c11f5b1a65e8e3a4d52 billed 63 for 4s.
 			"720p":  {CreditsPerSecond: 15.75, Provenance: ProvenanceReceipt, PricedAt: geminiOmniPublished},
 			"1080p": {CreditsPerSecond: 15.75, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"4k":    {CreditsPerSecond: 36.75, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 		},
 		Video: map[string]RatePoint{
+			"360p":  {CreditsPerSecond: 42, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"720p":  {CreditsPerSecond: 42, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"1080p": {CreditsPerSecond: 42, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"4k":    {CreditsPerSecond: 63, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
@@ -708,7 +712,7 @@ var geminiOmniVideo = Descriptor{
 	Label:                  "Gemini Omni Video",
 	KieModelID:             "gemini-omni-video",
 	DefaultResolution:      "720p",
-	AllowedResolutions:     []string{"720p", "1080p", "4k"},
+	AllowedResolutions:     []string{"360p", "720p", "1080p", "4k"},
 	AllowedDurationsS:      []int{4, 6, 8, 10},
 	AllowedFPS:             []int{24},
 	DefaultFPS:             24,

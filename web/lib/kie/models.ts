@@ -133,7 +133,7 @@ export const GEMINI_OMNI_VIDEO: KieModel = {
   id: "gemini-omni-video",
   kieModelName: "gemini-omni-video",
   label: "Gemini Omni Video",
-  resolutions: ["720p", "1080p", "4k"],
+  resolutions: ["360p", "720p", "1080p", "4k"],
   defaultResolution: "720p",
   durationsS: [4, 6, 8, 10],
   longestRenderedS: 0,

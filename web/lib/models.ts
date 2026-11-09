@@ -573,7 +573,7 @@ export const HAILUO_2_3_PRO: VideoModelDescriptor = {
 export const GEMINI_OMNI_VIDEO: VideoModelDescriptor = {
   id: "gemini-omni-video",
   label: "Gemini Omni Video",
-  allowedResolutions: ["720p", "1080p", "4k"],
+  allowedResolutions: ["360p", "720p", "1080p", "4k"],
   defaultResolution: "720p",
   allowedDurationsS: [4, 6, 8, 10],
   allowedFps: [24],
