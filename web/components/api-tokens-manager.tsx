@@ -17,6 +17,35 @@ import {
 } from "@/components/ui/table";
 import { formatUsd } from "@/lib/format-usd";
 
+function CopyRow({
+  value,
+  copied,
+  onCopied,
+}: {
+  value: string;
+  copied: boolean;
+  onCopied: () => void;
+}): JSX.Element {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <code className="min-w-0 rounded bg-background px-2 py-1 font-mono text-xs break-all text-foreground">
+        {value}
+      </code>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={async () => {
+          await navigator.clipboard.writeText(value);
+          onCopied();
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </div>
+  );
+}
+
 export function ApiTokensManager({
   initialTokens,
 }: {
@@ -27,7 +56,7 @@ export function ApiTokensManager({
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"token" | "mcp" | null>(null);
   // Read the clock in a callback, not during render (react-hooks/purity) — same
   // shape as scene-workbench.tsx's useElapsedLabel. Until it lands, nothing
   // shows as expired; the server still refuses an expired token either way.
@@ -40,7 +69,7 @@ export function ApiTokensManager({
   async function handleCreate(formData: FormData): Promise<void> {
     setError(null);
     setNewlyCreatedToken(null);
-    setCopied(false);
+    setCopied(null);
     setCreating(true);
     try {
       const res = await createApiToken(formData);
@@ -148,22 +177,33 @@ export function ApiTokensManager({
               <p className="text-xs font-medium text-foreground">
                 Copy your personal API token now — it will never be shown again:
               </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <code className="rounded bg-background px-2 py-1 font-mono text-xs text-foreground">
-                  {newlyCreatedToken}
-                </code>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(newlyCreatedToken);
-                    setCopied(true);
-                  }}
-                >
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
+              <CopyRow
+                value={newlyCreatedToken}
+                copied={copied === "token"}
+                onCopied={() => setCopied("token")}
+              />
+
+              <p className="mt-4 text-xs font-medium text-foreground">
+                Or connect it to Claude in one paste — this link already contains the token:
+              </p>
+              <CopyRow
+                value={`${window.location.origin}/api/mcp?token=${newlyCreatedToken}`}
+                copied={copied === "mcp"}
+                onCopied={() => setCopied("mcp")}
+              />
+              <ol className="mt-3 list-decimal space-y-1 pl-5 text-xs text-muted-foreground">
+                <li>
+                  In Claude (claude.ai, Desktop or mobile), open Settings → Connectors → Add custom
+                  connector.
+                </li>
+                <li>
+                  Paste the link above as the URL and save. Mason&rsquo;s tools appear in chat.
+                </li>
+                <li>
+                  Anyone with this link can spend as you. Keep it private, and revoke the token
+                  below if it leaks.
+                </li>
+              </ol>
             </div>
           ) : null}
 
