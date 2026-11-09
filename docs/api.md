@@ -78,7 +78,8 @@ Seedance 2.5 BytePlus accepts up to **8 images, 1 video and 3 audio clips**, 12 
 
 | `model_id` | Name | Resolutions | `duration_s` | Prompt limit |
 |---|---|---|---|---|
-| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus | 480p, High quality | 4–30 | 20,000 site cap; vendor cap unpublished |
+| `seedance-2.5` | Seedance 2.5 · Kie | 480p, 720p, 1080p | 4–30 | 20,000 site cap; vendor cap unpublished |
+| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus | 480p only | 4–30 | 20,000 site cap; vendor cap unpublished |
 | `kling-4.0` | Kling 4.0 | 720p, 1080p | 3–30 | 8,000 |
 | `kling-4.0-reference` | Kling 4.0 Reference | 720p, 1080p | 3–30 | 8,000 |
 | `wan-3.0` | Wan 3.0 | 480p, 720p, 1080p | 4–30 | Vendor cap unpublished |
@@ -86,7 +87,7 @@ Seedance 2.5 BytePlus accepts up to **8 images, 1 video and 3 audio clips**, 12 
 
 A refused resolution or duration gets `422`, and the error lists what the model accepts. `/quote` is the final word on whether a combination can be sold right now (`422 unavailable_rate` if not).
 
-`seedance-2.5` is retired for new jobs (`422 model_retired`); use `seedance-2.5-byteplus`. BytePlus dispatch is limited by `BYTEPLUS_MAX_INFLIGHT` (default 3), and does not fall back to Kie.
+`seedance-2.5` (Kie) and `seedance-2.5-byteplus` are separate models: you pick one, and neither stands in for the other. Use BytePlus for faces made with Seedream 5.0 Pro. BytePlus dispatch is limited by `BYTEPLUS_MAX_INFLIGHT` (default 3), and does not fall back to Kie.
 
 Image model IDs for `POST /images`: `nano-banana` (default), `nano-banana-2-1`, `seedream-5.0-pro`, `gpt-image-2.5-flare`, and `gpt-image-2.5-sunburst`.
 
@@ -113,4 +114,4 @@ Active element and generated asset files have no automatic expiry in Mason Stora
 
 ## Errors
 
-Every error is `{ "error": "<message>", "code": "<code>" }` with the HTTP status. Common codes: `missing_token`, `invalid_token`, `token_revoked`, `token_expired`, `account_inactive`, `role_not_allowed`, `model_not_allowed`, `insufficient_scope`, `rate_limited`, `unknown_field`, `invalid_parameters`, `unknown_model`, `model_retired`, `unsupported_resolution`, `unsupported_aspect_ratio`, `unsupported_sound`, `unsupported_duration`, `unavailable_rate`, `too_many_references`, `prompt_too_long`, `file_too_large`, `invalid_media_file`, `invalid_audio_duration`, `invalid_description`, `duplicate_element`, `idempotency_conflict`. A read+upload token gets `403 insufficient_scope` on `/generate` and `/images` before their bodies are parsed. `/quote` needs only `read` and may return validation errors for that token.
+Every error is `{ "error": "<message>", "code": "<code>" }` with the HTTP status. Common codes: `missing_token`, `invalid_token`, `token_revoked`, `token_expired`, `account_inactive`, `role_not_allowed`, `model_not_allowed`, `insufficient_scope`, `rate_limited`, `unknown_field`, `invalid_parameters`, `unknown_model`, `unsupported_resolution`, `unsupported_aspect_ratio`, `unsupported_sound`, `unsupported_duration`, `unavailable_rate`, `too_many_references`, `prompt_too_long`, `file_too_large`, `invalid_media_file`, `invalid_audio_duration`, `invalid_description`, `duplicate_element`, `idempotency_conflict`. A read+upload token gets `403 insufficient_scope` on `/generate` and `/images` before their bodies are parsed. `/quote` needs only `read` and may return validation errors for that token.

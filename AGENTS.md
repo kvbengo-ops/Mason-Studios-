@@ -82,14 +82,11 @@ Captions are gone. Subtitles are added in CapCut after export.
 
 ## `/ugc` is a picker now, not a pin
 
-- **Seedance 2.5 on Kie is retired for new renders** (2026-11-09). The picker does not list
-  it, and `retargetRetiredModel` / `movedOffRetiredModel` move a `/ugc` scene on it to
-  `seedance-2.5-byteplus` at 480p. The descriptors stay: old clips resolve through them. The
-  scripted pipeline's default model is still `seedance-2.5` (`DEFAULT_MODEL_ID`), so only
-  `kind = 'clip'` projects are rewritten.
-- **BytePlus Seedance is 480p and quality `high`, fixed.** `ugc-options.ts` offers no other
-  tier, the Quality menu is hidden, and `generateClip`/`regenerateClip` force the pair and
-  refuse any other resolution.
+- **Seedance 2.5 on Kie ("· Kie") and on BytePlus are separate picks** (owner, 2026-11-09).
+  Neither is ever a fallback for the other, and no scene is moved between them.
+- **BytePlus Seedance is 480p only.** `ugc-options.ts` offers no other tier and
+  `generateClip`/`regenerateClip` refuse any other resolution. Its Quality menu shows like
+  every model's; with no pick it defaults to `high`.
 - **`profiles.team`** (`hybrid_editor`, `ai_animator`, null) gates video models only, not
   spend. `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor cannot use `wan-3.0`;
   null is unrestricted. Set by an admin in Accounts Control (`setAccountTeam`); no client

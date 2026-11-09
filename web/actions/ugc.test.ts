@@ -160,8 +160,7 @@ describe("createClipProject", () => {
 // ---------------------------------------------------------------------------
 
 /** An offered model/resolution pair, read from the same table the route uses. */
-// Seedance 2.5 on BytePlus at 480p: the one pair /ugc sells that is not Kling. The first
-// offerable pair is Kie's retired seedance-2.5, which generateClip now moves to this one.
+// Seedance 2.5 on BytePlus at 480p, the default new-scene pair.
 function firstOffer() {
   const first = offerable(false).find(
     (o) => o.model.id === "seedance-2.5-byteplus" && o.resolution === "480p",
@@ -606,7 +605,7 @@ describe("generateClip refuses without writing", () => {
     expect(result).toEqual({ error: "Daily cap reached." });
   });
 
-  it("moves a submission for retired Kie seedance-2.5 to BytePlus 480p, quality high", async () => {
+  it("keeps a Kie seedance-2.5 submission on Kie — never moved to BytePlus", async () => {
     const spies = mockWriteSurfaces({});
 
     const { generateClip } = await import("./ugc");
@@ -618,7 +617,7 @@ describe("generateClip refuses without writing", () => {
     expect(sceneCall, "no scene row was inserted at all").toBeTruthy();
     expect(
       (sceneCall![0] as { render_settings_override?: unknown }).render_settings_override,
-    ).toEqual({ model: "seedance-2.5-byteplus", resolution: "480p", quality: "high" });
+    ).toMatchObject({ model: "seedance-2.5", resolution: "1080p" });
   });
 
   it("refuses BytePlus Seedance at any resolution but 480p, before consulting the cap", async () => {
@@ -1330,7 +1329,7 @@ describe("regenerateClip applies the settings it was given", () => {
       duration_s?: number;
     };
     const first = firstOffer();
-    // BytePlus Seedance always stores quality "high".
+    // No quality posted: BytePlus Seedance defaults to "high".
     expect(written.render_settings_override).toEqual({
       model: first.model.id,
       resolution: first.resolution,
@@ -1340,7 +1339,7 @@ describe("regenerateClip applies the settings it was given", () => {
     expect(spies.rerenderScene).toHaveBeenCalled();
   });
 
-  it("moves a scene on retired Kie seedance-2.5 to BytePlus 480p, quality high", async () => {
+  it("keeps a scene on Kie seedance-2.5 — never moved to BytePlus", async () => {
     const spies = mockSceneSurfaces({});
     const { regenerateClip } = await import("./ugc");
 
@@ -1350,12 +1349,11 @@ describe("regenerateClip applies the settings it was given", () => {
 
     expect(result?.error).toBeUndefined();
     const written = spies.update.mock.calls[0]?.[0] as {
-      render_settings_override?: { model: string; resolution: string; quality: string };
+      render_settings_override?: { model: string; resolution: string };
     };
-    expect(written.render_settings_override).toEqual({
-      model: "seedance-2.5-byteplus",
-      resolution: "480p",
-      quality: "high",
+    expect(written.render_settings_override).toMatchObject({
+      model: "seedance-2.5",
+      resolution: "1080p",
     });
   });
 
@@ -1371,7 +1369,7 @@ describe("regenerateClip applies the settings it was given", () => {
     expect(spies.update).not.toHaveBeenCalled();
   });
 
-  it("forces quality high on BytePlus Seedance whatever was posted", async () => {
+  it("stores the editor's Quality pick on BytePlus Seedance", async () => {
     const spies = mockSceneSurfaces({});
     const { regenerateClip } = await import("./ugc");
 
@@ -1380,7 +1378,7 @@ describe("regenerateClip applies the settings it was given", () => {
     const written = spies.update.mock.calls[0]?.[0] as {
       render_settings_override?: { quality?: string };
     };
-    expect(written.render_settings_override?.quality).toBe("high");
+    expect(written.render_settings_override?.quality).toBe("standard");
   });
 
   it("refuses a prompt over the 20,000 character cap before writing", async () => {
