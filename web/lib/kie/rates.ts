@@ -392,6 +392,21 @@ export const KIE_RATES: Readonly<Record<string, KieRates>> = {
       },
     },
   },
+  "gemini-omni-1.2": {
+    // Kie publishes the same per-output-second price for text and image inputs.
+    silent: {
+      "360p": { creditsPerSecond: 4, provenance: "published", pricedAt: "2026-11-10" },
+      "720p": { creditsPerSecond: 9, provenance: "published", pricedAt: "2026-11-10" },
+      "1080p": { creditsPerSecond: 10, provenance: "published", pricedAt: "2026-11-10" },
+      "4k": { creditsPerSecond: 22, provenance: "published", pricedAt: "2026-11-10" },
+    },
+    sound: {
+      "360p": { creditsPerSecond: 4, provenance: "published", pricedAt: "2026-11-10" },
+      "720p": { creditsPerSecond: 9, provenance: "published", pricedAt: "2026-11-10" },
+      "1080p": { creditsPerSecond: 10, provenance: "published", pricedAt: "2026-11-10" },
+      "4k": { creditsPerSecond: 22, provenance: "published", pricedAt: "2026-11-10" },
+    },
+  },
   "kling-3.0-pro": {
     silent: {
       // 3s render, sound=false, 54 credits.

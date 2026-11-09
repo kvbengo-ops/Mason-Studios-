@@ -34,7 +34,11 @@ import { z } from "zod";
 import { IMAGE_ASPECT_RATIOS, type ImageAspectRatio } from "./image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, type ImageResolutionId } from "./image-resolutions";
 import { SEEDREAM_PRO_ID, SEEDREAM_PRO_ASPECT_RATIOS } from "./seedream";
-import { NANO_BANANA_2_1_ID } from "./kie/image-input";
+import {
+  NANO_BANANA_2_1_ID,
+  GPT_IMAGE_2_6_ECONOMY_EDIT,
+  GPT_IMAGE_2_6_ECONOMY_TEXT,
+} from "./kie/image-input";
 import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
 import {
@@ -579,6 +583,20 @@ export const GEMINI_OMNI_VIDEO: VideoModelDescriptor = {
   nativeAudio: false,
 };
 
+export const GEMINI_OMNI_1_2: VideoModelDescriptor = {
+  id: "gemini-omni-1.2",
+  label: "Gemini Omni 1.2 Flash",
+  allowedResolutions: ["360p", "720p", "1080p", "4k"],
+  defaultResolution: "720p",
+  allowedDurationsS: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  allowedFps: [24],
+  defaultFps: 24,
+  maxDurationSByFps: {},
+  maxDurationSByResolution: {},
+  nativeAudio: false,
+  maxPromptChars: 20_000,
+};
+
 /**
  * Seedance 2.0 — ByteDance's 2.0 proper, cheaper than 2.5 at every tier.
  *
@@ -785,7 +803,9 @@ export function computeUniversalDurationsS(): number[] {
 export function getModel(id: string | null | undefined): VideoModelDescriptor {
   return id === GEMINI_OMNI_VIDEO.id
     ? GEMINI_OMNI_VIDEO
-    : (VIDEO_MODELS.find((model) => model.id === id) ?? SEEDANCE_2_5);
+    : id === GEMINI_OMNI_1_2.id
+      ? GEMINI_OMNI_1_2
+      : (VIDEO_MODELS.find((model) => model.id === id) ?? SEEDANCE_2_5);
 }
 
 /**
@@ -1260,7 +1280,9 @@ export const RenderSettingsOverrideSchema = z.strictObject({
     const model =
       value === GEMINI_OMNI_VIDEO.id
         ? GEMINI_OMNI_VIDEO
-        : VIDEO_MODELS.find((candidate) => candidate.id === value);
+        : value === GEMINI_OMNI_1_2.id
+          ? GEMINI_OMNI_1_2
+          : VIDEO_MODELS.find((candidate) => candidate.id === value);
     if (!model) {
       ctx.addIssue({
         code: "custom",
@@ -1416,12 +1438,12 @@ export function billingResolution(model: VideoModelDescriptor, resolution: strin
 // --- Image models the Image Generator may offer ----------------------------
 
 /**
- * One selectable image model, priced from a RECEIPT.
+ * One selectable image model, priced from a receipt or a published fixed rate.
  *
- * Every costUsd below is kie's own creditsConsumed from a real paid call at
+ * Most costUsd values below are kie's own creditsConsumed from a real paid call at
  * kie's published $0.005/credit, measured with scripts/measure-image-model.ts
- * (receipt dates are recorded per model) — not a figure off kie's page. AGENTS.md's rule: adding a model
- * does not make it usable, measuring it does. The number here goes straight
+ * (receipt dates are recorded per model). Published fixed rates are also sold
+ * under the owner's 2026-10-30 decision. The number here goes straight
  * into the reservation, the spend cap and /spend, so a guess would be wrong in
  * three places at once.
  */
@@ -1444,7 +1466,7 @@ export interface ImageModelDescriptor {
   editId: string | null;
   /** Why references are unavailable when an existing endpoint cannot be offered. */
   referenceDisabledReason?: string;
-  /** A missing receipt keeps the model visible but unavailable. Never a published estimate. */
+  /** Null keeps an unpriced model visible but unavailable. */
   costUsd: number | null;
   aspectRatios: readonly ImageAspectRatio[];
   /**
@@ -1569,6 +1591,17 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     resolutions: ["1K", "2K", "4K"],
     // kie.ai/gpt-image-2-5 (Flare and Sunburst share it): 10 credits at 2K, 16 at 4K.
     resolutionCostsUsd: { "2K": 0.05, "4K": 0.08 },
+  },
+  {
+    id: "gpt-image-2.6-economy",
+    label: "ChatGPT 2.6 Economy",
+    textToImageId: GPT_IMAGE_2_6_ECONOMY_TEXT,
+    editId: GPT_IMAGE_2_6_ECONOMY_EDIT,
+    // Kie's published flat 1K price, 2026-11-10; no paid timing receipt yet.
+    costUsd: 0.025,
+    observedSeconds: null,
+    aspectRatios: IMAGE_ASPECT_RATIOS,
+    resolutions: ["1K"],
   },
 ];
 

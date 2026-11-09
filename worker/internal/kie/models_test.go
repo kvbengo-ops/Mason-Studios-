@@ -39,6 +39,7 @@ func TestDescriptorKieModelID_Pinned(t *testing.T) {
 		{"seedance-2.5", "bytedance/seedance-2-5"},
 		{"kling-3.0-pro", "kling-3.0/video"},
 		{"hailuo-2.3-pro", "hailuo/2-3-image-to-video-pro"},
+		{"gemini-omni-1.2", "google/gemini-omni-flash-1-2"},
 	}
 	for _, c := range cases {
 		d, ok := DescriptorByID(c.id)
@@ -48,6 +49,26 @@ func TestDescriptorKieModelID_Pinned(t *testing.T) {
 		if d.KieModelID != c.want {
 			t.Errorf("DescriptorByID(%q).KieModelID = %q, want %q", c.id, d.KieModelID, c.want)
 		}
+	}
+}
+
+func TestGeminiOmni12InputAndPrice(t *testing.T) {
+	input := geminiOmni12Input(SubmitRequest{
+		Prompt: "A cat walking", DurationSeconds: 4, Resolution: "360p",
+		AspectRatio: "9:16", ImageURLs: []string{"https://example.com/cat.png"},
+	})
+	if input["duration"] != 4 || input["resolution"] != "360p" || input["aspect_ratio"] != "9:16" {
+		t.Fatalf("wrong Gemini Omni 1.2 input: %#v", input)
+	}
+	if images, ok := input["image_urls"].([]string); !ok || len(images) != 1 {
+		t.Fatalf("Gemini Omni 1.2 lost its image reference: %#v", input)
+	}
+	if _, ok := input["video_list"]; ok {
+		t.Fatalf("Gemini Omni 1.2 unexpectedly sent a video: %#v", input)
+	}
+	m := Model{ID: "gemini-omni-1.2", Resolution: "360p"}
+	if usd, ok := EstimateCost(m, 4); !ok || usd != 0.08 {
+		t.Fatalf("Gemini Omni 1.2 4s 360p estimate = %v, %v; want $0.08", usd, ok)
 	}
 }
 

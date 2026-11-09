@@ -141,6 +141,7 @@ const (
 	kiePublishedSource       = "Read from kie.ai's model page on 2026-09-04. This figure is the 'no video' column: as of worker/internal/kie/models.go's seedanceInput (0094_video_scene_reference.sql, 2026-09-09), this product DOES send reference_video_urls when a scene carries a video reference, and kie prices THAT render as Price x (input + output) instead of Price x output. This per-second number applies only to a render with no video reference attached -- nobody has a receipt yet for what the input+output figure actually is."
 	publishedDate            = "2026-08-31"
 	geminiOmniPublished      = "2026-09-14"
+	geminiOmni12Published    = "2026-11-10"
 	newModelsPublished       = "2026-10-25"
 	seedance25PageRead       = "2026-10-30"
 	seedance25Page           = "Read from kie.ai/seedance-2-5 on 2026-10-30 (owner's decision to trust kie's docs): 480P 28 / 720P 63 / 1080P 158 cr/s with no video input, 17 / 38 / 95 with one. Audio is on by default there and carries no separate price; the 480p receipts and the 720p receipt match this table exactly."
@@ -210,6 +211,20 @@ var Rates = map[string]ModelRates{
 			"720p":  {CreditsPerSecond: 42, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"1080p": {CreditsPerSecond: 42, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
 			"4k":    {CreditsPerSecond: 63, Provenance: ProvenancePublished, PricedAt: geminiOmniPublished},
+		},
+	},
+	"gemini-omni-1.2": {
+		Silent: map[string]RatePoint{
+			"360p":  {CreditsPerSecond: 4, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"720p":  {CreditsPerSecond: 9, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"1080p": {CreditsPerSecond: 10, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"4k":    {CreditsPerSecond: 22, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+		},
+		Sound: map[string]RatePoint{
+			"360p":  {CreditsPerSecond: 4, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"720p":  {CreditsPerSecond: 9, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"1080p": {CreditsPerSecond: 10, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
+			"4k":    {CreditsPerSecond: 22, Provenance: ProvenancePublished, PricedAt: geminiOmni12Published},
 		},
 	},
 	"kling-3.0-pro": {
@@ -707,6 +722,26 @@ var geminiOmniVideo = Descriptor{
 	BuildInput:             geminiOmniInput,
 }
 
+var geminiOmni12 = Descriptor{
+	ID:                     "gemini-omni-1.2",
+	Label:                  "Gemini Omni 1.2 Flash",
+	KieModelID:             "google/gemini-omni-flash-1-2",
+	DefaultResolution:      "720p",
+	AllowedResolutions:     []string{"360p", "720p", "1080p", "4k"},
+	AllowedDurationsS:      []int{3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+	AllowedFPS:             []int{24},
+	DefaultFPS:             24,
+	MaxDurationSByFPS:      map[int]int{},
+	AspectRatio:            "9:16",
+	AllowedAspectRatios:    []string{"9:16", "16:9"},
+	SupportsGenerateAudio:  false,
+	SupportsFPSInput:       false,
+	DurationSendAsString:   false,
+	NativeAudio:            false,
+	SupportsRoleReferences: false,
+	BuildInput:             geminiOmni12Input,
+}
+
 // seedance25 is the general-purpose default. No longer the only model
 // priced at more than one resolution (Kling now has two priced tiers, and
 // seedance2/seedance2Fast below list several each) — but it has been
@@ -930,7 +965,7 @@ var wan3 = Descriptor{
 // (docs read 2026-10-27); media.Normalize crops to the matching frame.
 var VideoAspectRatios = []string{"9:16", "16:9", "1:1"}
 
-var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo}
+var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo, geminiOmni12}
 
 // DefaultModelID is the model a project gets when render_settings says
 // nothing: the general-purpose, non-native-audio default, same role
@@ -1511,6 +1546,21 @@ func geminiOmniInput(req SubmitRequest) map[string]any {
 		input["video_list"] = []map[string]any{{
 			"url": req.VideoURLs[0], "start": 0, "ends": *req.VideoDurationSeconds[0],
 		}}
+	}
+	return input
+}
+
+func geminiOmni12Input(req SubmitRequest) map[string]any {
+	input := map[string]any{
+		"prompt":       req.Prompt,
+		"duration":     int(req.DurationSeconds),
+		"aspect_ratio": req.AspectRatio,
+		"resolution":   req.Resolution,
+	}
+	if len(req.ImageURLs) > 0 {
+		input["image_urls"] = req.ImageURLs
+	} else if req.ImageURL != "" {
+		input["image_urls"] = []string{req.ImageURL}
 	}
 	return input
 }

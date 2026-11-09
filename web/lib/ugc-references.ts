@@ -16,6 +16,9 @@ const SEEDANCE_25_LIMITS = {
 };
 
 export function referenceLimitsFor(modelId: string) {
+  if (modelId === "gemini-omni-1.2") {
+    return { image: 6, video: 0, audio: 0, total: 6, videoSeconds: 0, audioSeconds: 0 };
+  }
   if (modelId === "seedance-2.5-byteplus" || modelId === "seedance-2.5") {
     return SEEDANCE_25_LIMITS;
   }

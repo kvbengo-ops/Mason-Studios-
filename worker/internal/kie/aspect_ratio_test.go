@@ -28,6 +28,7 @@ func TestAspectRatio_ReachesTheRequestOnlyWhereAllowed(t *testing.T) {
 		{`{"model":"seedance-2.5"}`, "9:16"},
 		{`{"model":"seedance-2.5","aspect_ratio":"21:9"}`, "9:16"},
 		{`{"model":"gemini-omni-video","aspect_ratio":"16:9"}`, "9:16"},
+		{`{"model":"gemini-omni-1.2","aspect_ratio":"16:9"}`, "16:9"},
 		{`{"model":"hailuo-2.3-pro","aspect_ratio":"16:9"}`, ""},
 	}
 	for _, c := range cases {

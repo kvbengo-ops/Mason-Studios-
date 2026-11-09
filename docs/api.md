@@ -84,12 +84,13 @@ Seedance 2.5, on both Kie and BytePlus, accepts up to **8 images, 1 video and 3 
 | `kling-4.0-reference` | Kling 4.0 Reference | 720p, 1080p | 3–30 | 8,000 |
 | `wan-3.0` | Wan 3.0 | 480p, 720p, 1080p | 4–30 | Vendor cap unpublished |
 | `gemini-omni-video` | Gemini Omni Video | 720p, 1080p, 4k | 4, 6, 8, 10 | Vendor cap unpublished |
+| `gemini-omni-1.2` | Gemini Omni 1.2 Flash | 360p, 720p, 1080p, 4k | 3–15 | 20,000 |
 
 A refused resolution or duration gets `422`, and the error lists what the model accepts. `/quote` is the final word on whether a combination can be sold right now (`422 unavailable_rate` if not).
 
 `seedance-2.5` (Kie) and `seedance-2.5-byteplus` are separate models: you pick one, and neither stands in for the other. Use BytePlus for faces made with Seedream 5.0 Pro. BytePlus dispatch is limited by `BYTEPLUS_MAX_INFLIGHT` (default 3), and does not fall back to Kie.
 
-Image model IDs for `POST /images`: `nano-banana` (default), `nano-banana-2-1`, `seedream-5.0-pro`, `gpt-image-2.5-flare`, and `gpt-image-2.5-sunburst`.
+Image model IDs for `POST /images`: `nano-banana` (default), `nano-banana-2-1`, `seedream-5.0-pro`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, and `gpt-image-2.6-economy` (1K only).
 
 `GET /allowance` reports `daily_remaining_usd`, `weekly_remaining_usd`, the corresponding caps, and whether the per-user daily cap is enabled. These are current headroom under spend ceilings, not a stored balance.
 

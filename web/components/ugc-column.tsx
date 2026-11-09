@@ -697,7 +697,9 @@ export function UgcColumn({
   const tooManyReferences = boxTags.length + Number(primaryOutsideBox) > maxReferences;
   // Kling 4.0 Reference too: the worker sends it images only (kling4RefInput).
   const geminiAudioReference =
-    (option?.modelId === "gemini-omni-video" || option?.modelId === "kling-4.0-reference") &&
+    (option?.modelId === "gemini-omni-video" ||
+      option?.modelId === "gemini-omni-1.2" ||
+      option?.modelId === "kling-4.0-reference") &&
     ((reference?.kind === "upload" && isAcceptedReferenceAudio(reference.file)) ||
       [...prompt.matchAll(new RegExp(TAG_PATTERN))].some((match) => {
         const name = match[1];
@@ -1052,7 +1054,7 @@ export function UgcColumn({
       : clipOnlyCredits;
   const regenerateUsd = regenerateCredits / 200;
   const geminiSourceVideoUnavailable =
-    option.modelId === "gemini-omni-video" &&
+    (option.modelId === "gemini-omni-video" || option.modelId === "gemini-omni-1.2") &&
     (selectedScene?.videoInputSecondsS?.length ?? 0) > 0 &&
     option.fixedVideoCredits == null;
 
@@ -1503,7 +1505,9 @@ export function UgcColumn({
                   open={boxPickerOpen}
                   onOpenChange={setBoxPickerOpen}
                   onUseElement={(el) => addTagsToBox([el.name])}
-                  imagesOnly={option.modelId === "kling-4.0-reference"}
+                  imagesOnly={
+                    option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2"
+                  }
                   boxTags={boxTags}
                   boxLimit={maxReferences}
                 />
@@ -1875,7 +1879,9 @@ export function UgcColumn({
                 // call, 2026-09-12: three fresh uploads landing in the box
                 // unasked read as the box filling itself.
                 onUseElement={(el) => addTagsToBox([el.name])}
-                imagesOnly={option.modelId === "kling-4.0-reference"}
+                imagesOnly={
+                  option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2"
+                }
                 boxTags={boxTags}
                 boxLimit={maxReferences}
               />
@@ -2148,6 +2154,11 @@ export function UgcColumn({
                 Gemini Omni Video generates its own audio; it cannot use your audio references.
               </p>
             </>
+          ) : null}
+          {option.modelId === "gemini-omni-1.2" ? (
+            <p className="text-xs text-muted-foreground">
+              Gemini Omni 1.2 generates its own audio and accepts image references only.
+            </p>
           ) : null}
         </div>
 

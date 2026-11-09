@@ -794,6 +794,7 @@ type GeminiReferenceInput = {
 function geminiReferenceContractRefusal(
   references: readonly GeminiReferenceInput[],
   resolution: string,
+  modelId = "gemini-omni-video",
 ): string | null {
   let images = 0;
   let videos = 0;
@@ -813,6 +814,11 @@ function geminiReferenceContractRefusal(
     } else if (IMAGE_ASSET_KINDS.has(reference.kind)) {
       images++;
     }
+  }
+  if (modelId === "gemini-omni-1.2") {
+    if (audios || videos) return "Gemini Omni 1.2 accepts image references only.";
+    if (images > 6) return "Gemini Omni 1.2 accepts at most 6 image references.";
+    return null;
   }
   if (audios > 0)
     return "Gemini Omni Video cannot use audio URL references yet; it requires Kie audio IDs.";
@@ -836,6 +842,8 @@ async function geminiReferenceRefusal(
   primaryElementId: string,
   resolution: string,
   primaryDurationS?: number | null,
+  modelId = "gemini-omni-video",
+  hasPrimary = true,
 ): Promise<string | null> {
   const tags = [...new Set(tagsInOrder(prompt))];
   const { data: elements } = await admin
@@ -864,17 +872,21 @@ async function geminiReferenceRefusal(
 
   const primaryAsset = primary ? assetById.get(primary.asset_id) : undefined;
   const references: GeminiReferenceInput[] = [
-    {
-      kind: primaryAsset?.kind ?? primaryAssetKind(primaryKind),
-      durationS:
-        primaryAsset?.duration_s ?? (primaryKind === "video" ? primaryDurationS : undefined),
-    },
+    ...(hasPrimary
+      ? [
+          {
+            kind: primaryAsset?.kind ?? primaryAssetKind(primaryKind),
+            durationS:
+              primaryAsset?.duration_s ?? (primaryKind === "video" ? primaryDurationS : undefined),
+          },
+        ]
+      : []),
     ...tagged.flatMap((element) => {
       const asset = assetById.get(element.asset_id);
       return asset ? [{ kind: asset.kind, durationS: asset.duration_s }] : [];
     }),
   ];
-  return geminiReferenceContractRefusal(references, resolution);
+  return geminiReferenceContractRefusal(references, resolution, modelId);
 }
 
 /** Validate the references already retained by a scene before Regenerate. */
@@ -883,6 +895,7 @@ async function geminiSceneReferenceRefusal(
   sceneId: string,
   legacyRefFrameAssetId: string | null,
   resolution: string,
+  modelId = "gemini-omni-video",
 ): Promise<string | null> {
   const { data: references, error: referencesError } = await admin
     .from("scene_references")
@@ -896,7 +909,10 @@ async function geminiSceneReferenceRefusal(
   if (rows.length === 0 && legacyRefFrameAssetId) {
     rows = [{ asset_id: legacyRefFrameAssetId, kind: "image" }];
   }
-  if (rows.length === 0) return "Gemini Omni Video still needs at least one image reference.";
+  if (rows.length === 0)
+    return modelId === "gemini-omni-1.2"
+      ? null
+      : "Gemini Omni Video still needs at least one image reference.";
   const assetIds = [...new Set(rows.map((reference) => reference.asset_id))];
   const { data: assets, error: assetsError } = await admin
     .from("assets")
@@ -919,7 +935,7 @@ async function geminiSceneReferenceRefusal(
       },
     ];
   });
-  return geminiReferenceContractRefusal(inputs, resolution);
+  return geminiReferenceContractRefusal(inputs, resolution, modelId);
 }
 
 /**
@@ -1705,7 +1721,7 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // Gemini's image/video quota and its audio-id mismatch are rejected before
   // the cap check and before this action creates any rows. Existing models
   // intentionally skip this branch and retain their current handling.
-  if (chosen.model.id === "gemini-omni-video") {
+  if (chosen.model.id === "gemini-omni-video" || chosen.model.id === "gemini-omni-1.2") {
     const uploadedPrimaryKind =
       hasUpload && image instanceof File
         ? isAcceptedReferenceAudio(image)
@@ -1722,6 +1738,8 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
       elementId,
       resolution,
       primaryVideoDurationS,
+      chosen.model.id,
+      hasUpload || !!elementId,
     );
     if (referenceRefusal) return { error: referenceRefusal };
   }
@@ -2542,12 +2560,16 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   ) {
     return { error: "This model needs a reference image. Pick a frame or switch models." };
   }
-  if (effectiveRegenerateSettings.model === "gemini-omni-video") {
+  if (
+    effectiveRegenerateSettings.model === "gemini-omni-video" ||
+    effectiveRegenerateSettings.model === "gemini-omni-1.2"
+  ) {
     const referenceRefusal = await geminiSceneReferenceRefusal(
       admin,
       scene.id,
       scene.ref_frame_asset_id,
       effectiveRegenerateSettings.resolution,
+      effectiveRegenerateSettings.model,
     );
     if (referenceRefusal) return { error: referenceRefusal };
   }

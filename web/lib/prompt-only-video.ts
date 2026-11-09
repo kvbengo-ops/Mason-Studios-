@@ -9,5 +9,6 @@ export function supportsPromptOnlyVideo(modelId: string): boolean {
     "kling-3.0-pro",
     "kling-4.0-reference",
     "wan-3.0",
+    "gemini-omni-1.2",
   ].includes(modelId);
 }
