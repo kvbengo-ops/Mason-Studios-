@@ -335,7 +335,7 @@ services:
       # BytePlus QUEUES rather than refusing, so the worker fails the
       # overflow with "try again" (never kie).
       - key: BYTEPLUS_MAX_INFLIGHT
-        value: "3"
+        value: "10"
       - key: APP_BASE_URL
         sync: false # this service's own public URL — kie's webhook callback target; worker.internal/config.Load fails startup without it
       - key: RENDER_CONCURRENCY
