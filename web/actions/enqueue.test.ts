@@ -919,48 +919,4 @@ describe("rerenderScene", () => {
       expect.objectContaining({ clip_asset_id: null }),
     );
   });
-
-  it("moves a /ugc scene on retired Kie seedance-2.5 to BytePlus 480p before queueing it", async () => {
-    vi.mocked(requireScene).mockResolvedValue({
-      scene: {
-        ...doneScene,
-        render_settings_override: { model: "seedance-2.5", resolution: "720p", aspect_ratio: "9:16" },
-      },
-      project: { ...project, kind: "clip" },
-      user: { id: "user-1" },
-      profile: { role: "editor" },
-    } as never);
-    vi.mocked(assertWithinSpendCaps).mockResolvedValue(undefined);
-    const admin = fakeAdminClient();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    await rerenderScene("scene-1");
-
-    expect(admin.builders.scenes.update).toHaveBeenCalledWith({
-      render_settings_override: {
-        model: "seedance-2.5-byteplus",
-        resolution: "480p",
-        quality: "high",
-        aspect_ratio: "9:16",
-      },
-    });
-  });
-
-  it("leaves the scripted pipeline's default seedance-2.5 alone", async () => {
-    vi.mocked(requireScene).mockResolvedValue({
-      scene: doneScene,
-      project: { ...project, kind: "scripted" },
-      user: { id: "user-1" },
-      profile: { role: "editor" },
-    } as never);
-    vi.mocked(assertWithinSpendCaps).mockResolvedValue(undefined);
-    const admin = fakeAdminClient();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    await rerenderScene("scene-1");
-
-    expect(admin.builders.scenes.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({ render_settings_override: expect.anything() }),
-    );
-  });
 });

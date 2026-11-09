@@ -16,6 +16,9 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
+      "seedance-2.5/480p",
+      "seedance-2.5/720p",
+      "seedance-2.5/1080p",
       "seedance-2.5-byteplus/480p",
       "kling-4.0/720p",
       "kling-4.0/1080p",
@@ -37,6 +40,7 @@ describe("ugcOptions(true) — the sound picker", () => {
     );
     const bySecond = Object.fromEntries(firsts.map((o) => [o.modelId, o.videoCreditsPerSecond]));
     expect(bySecond).toEqual({
+      "seedance-2.5": 17,
       "seedance-2.5-byteplus": 12.2976,
       "kling-4.0": null,
       "kling-4.0-reference": null,
@@ -46,8 +50,7 @@ describe("ugcOptions(true) — the sound picker", () => {
   });
 
   it("never shows a hidden model, even one offerable() still prices", () => {
-    // seedance-2.5 is Kie's retired Seedance: old scenes resolve through it, the picker never lists it.
-    for (const id of ["seedance-2.5", "seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
+    for (const id of ["seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
       expect(
         options.some((o) => o.modelId === id),
         id,
@@ -55,8 +58,8 @@ describe("ugcOptions(true) — the sound picker", () => {
     }
   });
 
-  it("opens on BytePlus Seedance, at 480p only", () => {
-    expect(options[0]?.modelId).toBe("seedance-2.5-byteplus");
+  it("labels Kie Seedance as Kie, and offers BytePlus Seedance at 480p only", () => {
+    expect(options[0]?.label).toBe("Seedance 2.5 · Kie");
     expect(
       options.filter((o) => o.modelId === "seedance-2.5-byteplus").map((o) => o.resolution),
     ).toEqual(["480p"]);
@@ -122,6 +125,9 @@ describe("ugcOptions(false) — the silent picker", () => {
 
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
+      "seedance-2.5/480p/28",
+      "seedance-2.5/720p/63",
+      "seedance-2.5/1080p/158",
       "seedance-2.5-byteplus/480p/20.56005",
       "kling-4.0/720p/28.5",
       "kling-4.0/1080p/42.5",

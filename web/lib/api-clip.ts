@@ -136,14 +136,6 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
   }
 
   const model = KIE_MODELS.find((candidate) => candidate.id === modelId);
-  if (modelId === "seedance-2.5") {
-    return {
-      ok: false,
-      status: 422,
-      code: "model_retired",
-      error: "seedance-2.5 is retired; use seedance-2.5-byteplus.",
-    };
-  }
   if (!model) {
     return { ok: false, status: 422, code: "unknown_model", error: `Unknown model "${modelId}".` };
   }

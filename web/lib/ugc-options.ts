@@ -42,9 +42,10 @@ import type { UgcOption } from "@/components/ugc-column";
 // The only models the picker shows (owner's call, 2026-11-07). Display only:
 // offerable() still prices and validates the rest, so old scenes stay readable.
 // kling-4.0-reference is Kling 4.0's References mode, not a separate model.
-// Seedance 2.5 on Kie is retired (2026-11-09): it is not listed, though old scenes
-// still resolve through it. Seedance 2.5 on BytePlus is offered at 480p only.
+// Seedance 2.5 on Kie is its own choice (never a BytePlus fallback). Seedance 2.5 on
+// BytePlus is offered at 480p only.
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
+  "seedance-2.5",
   "seedance-2.5-byteplus",
   "kling-4.0",
   "kling-4.0-reference",
@@ -57,13 +58,14 @@ export function ugcOptions(withSound: boolean, team: Team | null = null): UgcOpt
     (offer) =>
       SHOWN_MODEL_IDS.has(offer.model.id) &&
       canUseVideoModel(team, offer.model.id) &&
-      (offer.model.id !== BYTEPLUS_SEEDANCE_ID || offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
+      (offer.model.id !== BYTEPLUS_SEEDANCE_ID ||
+        offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
   );
   return shown.map((offer) => {
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;
     return {
       modelId: offer.model.id,
-      label: offer.model.label,
+      label: offer.model.id === "seedance-2.5" ? `${offer.model.label} · Kie` : offer.model.label,
       resolution: offer.resolution,
       durationsS: offer.model.durationsS,
       creditsPerSecond: rate.creditsPerSecond,
