@@ -276,7 +276,7 @@ export function classifyRenderError(raw: string | null | undefined): RenderError
       category: "rejected",
       retryable: false,
       message: /PrivacyInformation/i.test(text)
-        ? "BytePlus refused a reference that may show a real person. Use a different reference, or choose Seedance 2.5 · Kie for this scene. Nothing was charged."
+        ? "BytePlus refused a reference that may show a real person. Use a different reference, or make the face with Seedream 5.0 Pro in the Image Generator — its faces are accepted. Nothing was charged."
         : "BytePlus blocked this as sensitive content. Change the prompt or references. Nothing was charged.",
     };
   }

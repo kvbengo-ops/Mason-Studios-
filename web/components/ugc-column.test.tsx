@@ -538,10 +538,10 @@ describe("Length is a control, and it reprices the button", () => {
     expect(screen.getByRole("button", { name: /Generate · \$0\.23/ })).toBeTruthy();
   });
 
-  it("hides the Quality menu on Seedance 2.5 BytePlus and always sends high", () => {
+  it("shows the Quality menu on Seedance 2.5 BytePlus too, defaulting to High", () => {
     const { container } = renderColumn(null);
 
-    expect(screen.queryByRole("button", { name: /^Quality:/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Quality: High" })).toBeTruthy();
     expect((container.querySelector('input[name="quality"]') as HTMLInputElement).value).toBe(
       "high",
     );

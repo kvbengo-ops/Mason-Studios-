@@ -101,7 +101,6 @@ import {
   BYTEPLUS_SEEDANCE_ID,
   BYTEPLUS_SEEDANCE_QUALITY,
   byteplusResolutionRefusal,
-  retargetRetiredModel,
 } from "@/lib/ugc-model-rules";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
@@ -1519,11 +1518,8 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // not know, same as everywhere else in this file, so an invalid modelId
   // here simply takes the non-Kling branch and is refused properly below
   // once `chosen` is resolved against offerable().
-  // Retired Kie Seedance 2.5 is moved to BytePlus at 480p before anything reads the pair.
-  const { modelId, resolution } = retargetRetiredModel(
-    String(formData.get("modelId") ?? ""),
-    String(formData.get("resolution") ?? ""),
-  );
+  const modelId = String(formData.get("modelId") ?? "");
+  const resolution = String(formData.get("resolution") ?? "");
   // nativeAudio, not a string compare — same model-table flag the column
   // itself asks (ugc-column.tsx's `isKling`).
   const isKlingSubmission = getModel(modelId).nativeAudio;
@@ -1766,10 +1762,10 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // No price effect: kie bills per second by resolution, not by frame shape.
   const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
   // No price effect either: only our own re-encode reads it (lib/video-quality.ts).
+  // The editor's pick; a BytePlus scene with none still defaults to High.
   const quality =
-    chosen.model.id === BYTEPLUS_SEEDANCE_ID
-      ? BYTEPLUS_SEEDANCE_QUALITY
-      : videoQualityFor(formData.get("quality"));
+    videoQualityFor(formData.get("quality")) ??
+    (chosen.model.id === BYTEPLUS_SEEDANCE_ID ? BYTEPLUS_SEEDANCE_QUALITY : null);
   const override = {
     model: chosen.model.id,
     resolution,
@@ -2319,11 +2315,8 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
   // settings this block just stored, which is the only check that describes
   // the render that will actually run — and a cap refusal from rerenderScene
   // still leaves this write in place; that gap is not addressed here.
-  // Retired Kie Seedance 2.5 moves to BytePlus at 480p, same as generateClip.
-  const { modelId, resolution } = retargetRetiredModel(
-    String(formData.get("modelId") ?? ""),
-    String(formData.get("resolution") ?? ""),
-  );
+  const modelId = String(formData.get("modelId") ?? "");
+  const resolution = String(formData.get("resolution") ?? "");
   const durationRaw = formData.get("durationS");
   const durationS = durationRaw === null ? null : Number(durationRaw);
 
@@ -2394,9 +2387,8 @@ export async function regenerateClip(formData: FormData): Promise<ActionResult> 
     const voice = geminiVoiceFor(chosen.model.id, formData.get("geminiVoice"));
     const aspectRatio = videoAspectRatioFor(chosen.model.id, formData.get("aspectRatio"));
     const quality =
-      chosen.model.id === BYTEPLUS_SEEDANCE_ID
-        ? BYTEPLUS_SEEDANCE_QUALITY
-        : videoQualityFor(formData.get("quality"));
+      videoQualityFor(formData.get("quality")) ??
+      (chosen.model.id === BYTEPLUS_SEEDANCE_ID ? BYTEPLUS_SEEDANCE_QUALITY : null);
     updates.render_settings_override = {
       model: chosen.model.id,
       resolution,

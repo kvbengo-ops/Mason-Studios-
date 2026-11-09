@@ -156,12 +156,14 @@ describe("classifyRenderError", () => {
   it("maps BytePlus's real-person refusal to rejected, with its own advice", () => {
     // The worker's exact wrap (dispatch.go -> router.go -> client.go readable()).
     const info = classifyRenderError(
-      "submit render: byteplus: submit bytedance/seedance-2-5: byteplus: BytePlus refused a reference that may show a real person (InputImageSensitiveContentDetected.PrivacyInformation). Use a different reference, or render this scene on kie. (HTTP 400)",
+      "submit render: byteplus: submit bytedance/seedance-2-5: byteplus: BytePlus refused a reference that may show a real person (InputImageSensitiveContentDetected.PrivacyInformation). Use a different reference, or make the face with Seedream 5.0 Pro in the Image Generator. Nothing was charged. (HTTP 400)",
     );
     expect(info.category).toBe("rejected");
     expect(info.retryable).toBe(false);
     expect(info.message).toContain("real person");
     expect(info.message).not.toContain("[redacted]");
+    // Seedance 2.5 on Kie is retired and BytePlus never falls back to it: never suggest it.
+    expect(info.message).not.toMatch(/kie/i);
   });
 
   it("maps a generic retryable marker (timeout)", () => {

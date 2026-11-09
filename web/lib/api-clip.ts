@@ -16,6 +16,24 @@ import type { Resolution } from "@/lib/kie/rates";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
+import { canUseVideoModel, type Team } from "@/lib/model-access";
+
+/**
+ * The token owner's team may not use this model (lib/model-access.ts): a Hybrid Editor
+ * cannot render wan-3.0. Checked on /quote and /generate right after parsing, before any
+ * idempotency lookup or spend — the same rule /ugc enforces in generateClip.
+ */
+export function teamModelRefusal(
+  team: Team | null | undefined,
+  modelId: string,
+): { status: 403; code: "model_not_allowed"; error: string } | null {
+  if (canUseVideoModel(team, modelId)) return null;
+  return {
+    status: 403,
+    code: "model_not_allowed",
+    error: `${modelId} is not available to your team.`,
+  };
+}
 
 export interface ApiClipInput {
   prompt: string;
@@ -118,14 +136,6 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
   }
 
   const model = KIE_MODELS.find((candidate) => candidate.id === modelId);
-  if (modelId === "seedance-2.5") {
-    return {
-      ok: false,
-      status: 422,
-      code: "model_retired",
-      error: "seedance-2.5 is retired; use seedance-2.5-byteplus.",
-    };
-  }
   if (!model) {
     return { ok: false, status: 422, code: "unknown_model", error: `Unknown model "${modelId}".` };
   }

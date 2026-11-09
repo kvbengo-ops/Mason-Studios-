@@ -21,11 +21,11 @@ describe("API clip input", () => {
     });
   });
 
-  it("retires Kie Seedance and limits BytePlus to 480p", () => {
-    expect(parseApiClipInput({ ...base, model_id: "seedance-2.5" })).toMatchObject({
-      ok: false,
-      code: "model_retired",
-    });
+  it("accepts Kie Seedance as its own model and limits BytePlus to 480p", () => {
+    // Kie Seedance 2.5 is an ordinary choice again (owner, 2026-11-09), at its own tiers.
+    expect(
+      parseApiClipInput({ ...base, model_id: "seedance-2.5", resolution: "720p" }),
+    ).toMatchObject({ modelId: "seedance-2.5", resolution: "720p" });
     expect(parseApiClipInput({ ...base, resolution: "720p" })).toMatchObject({
       ok: false,
       code: "unsupported_resolution",
