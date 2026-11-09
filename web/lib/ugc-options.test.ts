@@ -55,8 +55,11 @@ describe("ugcOptions(true) — the sound picker", () => {
     }
   });
 
-  it("labels the restored option as Kie", () => {
-    expect(options[0]?.label).toBe("Seedance 2.5 · Kie");
+  it("opens on BytePlus Seedance, at 480p only", () => {
+    expect(options[0]?.modelId).toBe("seedance-2.5-byteplus");
+    expect(
+      options.filter((o) => o.modelId === "seedance-2.5-byteplus").map((o) => o.resolution),
+    ).toEqual(["480p"]);
   });
 
   it("never offers Hailuo — it has no sound rate at all", () => {

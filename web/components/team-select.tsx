@@ -40,9 +40,11 @@ export function TeamSelect({
         onChange={(event) => change(event.target.value)}
         className="h-8 rounded-md border bg-card px-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
       >
-        <option value="">No team</option>
+        <option value="" className="bg-popover text-popover-foreground">
+          No team
+        </option>
         {TEAMS.map((value) => (
-          <option key={value} value={value}>
+          <option key={value} value={value} className="bg-popover text-popover-foreground">
             {TEAM_LABELS[value]}
           </option>
         ))}
