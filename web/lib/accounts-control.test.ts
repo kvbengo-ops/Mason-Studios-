@@ -78,6 +78,32 @@ describe("mergeAccountSpendRanking", () => {
   });
 });
 
+describe("mergeAccountSpendRanking keeps every role", () => {
+  it("lists Hybrid Editors and AI Animators, so their runs get a name", () => {
+    const row = (
+      id: string,
+      role: AccountControlDirectoryRow["role"],
+    ): AccountControlDirectoryRow => ({
+      id,
+      email: `${id}@example.com`,
+      username: id,
+      role,
+      status: "active",
+      created_at: "2026-10-01T00:00:00Z",
+      project_count: 0,
+      spend_usd: 0,
+    });
+    const ranked = mergeAccountSpendRanking(
+      [row("hybrid-1", "hybrid_editor"), row("animator-1", "ai_animator")],
+      [],
+    );
+    expect(ranked.map((r) => r.email).sort()).toEqual([
+      "animator-1@example.com",
+      "hybrid-1@example.com",
+    ]);
+  });
+});
+
 describe("buildModelUsage", () => {
   it("labels runs by model, merges ids with one label, and ranks by run count", () => {
     const usage = buildModelUsage([

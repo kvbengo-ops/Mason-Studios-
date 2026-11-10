@@ -659,7 +659,13 @@ export async function generateImageFor(
 
   // The prompt as typed, @tags intact, for the image viewer's details panel
   // (0116). Never fatal: a missing prompt is a blank panel, not a lost image.
-  const { error: promptError } = await admin.from("runs").update({ prompt }).eq("id", runId);
+  // Seedream's vendor rides along: reserve_image_attempt writes 'kie' for every
+  // image, and settleAndStore only corrects it on success, so a failed Seedream
+  // attempt used to stay labelled kie although only BytePlus was called.
+  const { error: promptError } = await admin
+    .from("runs")
+    .update(model === SEEDREAM_PRO_ID ? { prompt, vendor: "byteplus" } : { prompt })
+    .eq("id", runId);
   if (promptError)
     console.error(`generateImageFor: prompt not recorded for run ${runId}`, promptError);
 

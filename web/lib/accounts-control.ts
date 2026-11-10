@@ -234,8 +234,9 @@ export function mergeAccountSpendRanking(
 ): AccountSpendSummary[] {
   const rangeByUserId = new Map(rangeTotals.map((row) => [row.userId, row]));
 
+  // No role filter here: the directory read already chose the roles, and a
+  // second three-role list here hid Hybrid Editors and AI Animators (0131).
   return directoryRows
-    .filter((row) => row.role === "admin" || row.role === "editor" || row.role === "trusted_editor")
     .map((row) => {
       const range = rangeByUserId.get(row.id);
       return {
