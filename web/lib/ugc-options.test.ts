@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { ugcOptions } from "./ugc-options";
 
 describe("ugcOptions(true) — the sound picker", () => {
-  const options = ugcOptions(true);
+  const options = ugcOptions(true, "trusted_editor");
 
   it("returns every sound-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
@@ -108,16 +108,27 @@ describe("ugcOptions — role access and the prompt cap", () => {
     expect(ids("editor")).toContain("wan-3.0");
   });
 
+  it("shows Seedance 2.5 BytePlus only to trusted editors and admins", () => {
+    const ids = (role: Parameters<typeof ugcOptions>[1]): string[] =>
+      ugcOptions(true, role).map((o) => o.modelId);
+    expect(ids("trusted_editor")).toContain("seedance-2.5-byteplus");
+    expect(ids("admin")).toContain("seedance-2.5-byteplus");
+    for (const role of ["editor", "hybrid_editor", "ai_animator"] as const) {
+      expect(ids(role), role).not.toContain("seedance-2.5-byteplus");
+      expect(ids(role), role).toContain("seedance-2.5");
+    }
+  });
+
   it("carries the lower of the vendor cap and the 20,000 character cap", () => {
     const byId = (id: string): number | undefined =>
-      ugcOptions(true).find((o) => o.modelId === id)?.maxPromptChars;
+      ugcOptions(true, "trusted_editor").find((o) => o.modelId === id)?.maxPromptChars;
     expect(byId("seedance-2.5-byteplus")).toBe(20_000);
     expect(byId("kling-4.0")).toBeLessThanOrEqual(20_000);
   });
 });
 
 describe("ugcOptions(false) — the silent picker", () => {
-  const options = ugcOptions(false);
+  const options = ugcOptions(false, "trusted_editor");
 
   it("returns every silent-priced pair, in model and tier order", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([

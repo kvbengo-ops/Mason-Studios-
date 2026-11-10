@@ -90,7 +90,8 @@ Captions are gone. Subtitles are added in CapCut after export.
 - **Roles `hybrid_editor` and `ai_animator`** (0131; 0129's `team` tag is gone). Each has
   its own spend tier (`HYBRID_EDITOR_*` / `AI_ANIMATOR_*` caps, default = the global cap's
   default) and model access via `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor
-  cannot use `wan-3.0`; an AI Animator can use every model. **No allowance approval and no
+  cannot use `wan-3.0`; an AI Animator can use every model. **Seedance 2.5 BytePlus
+  is trusted editors and admins only** (owner, 2026-11-10); Seedance 2.5 · Kie stays open. **No allowance approval and no
   API tokens/MCP** — those stay with `trusted_editor` and `admin`. Set by an admin in
   Accounts Control (`setAccountRole`); no client can write `role`. SQL functions that list
   the editor tiers (`pass_allowance`, `transfer_recipients`, the weekly-reset and

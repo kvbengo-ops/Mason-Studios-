@@ -194,7 +194,7 @@ function aClipForm(overrides: Record<string, string | File> = {}): FormData {
  * `capRefusal` is the knob: null lets the cap pass, an ActionResult refuses.
  */
 function mockWriteSurfaces(opts: {
-  /** The caller's profiles.role; default editor. */
+  /** The caller's profiles.role; default trusted_editor (Seedance 2.5 BytePlus is trusted-only). */
   role?: string;
   capRefusal?: { error: string } | null;
   element?: { asset_id: string; user_id: string } | null;
@@ -277,7 +277,7 @@ function mockWriteSurfaces(opts: {
     requireProject: async () => ({
       project: { id: "proj-1", render_settings: {} },
       user: { id: "user-1" },
-      profile: { role: opts.role ?? "editor" },
+      profile: { role: opts.role ?? "trusted_editor" },
     }),
     requireScene: async () => ({}),
   }));
@@ -916,11 +916,11 @@ function mockSceneSurfaces(opts: {
   };
 
   vi.doMock("@/actions/guard", () => ({
-    requireUser: async () => ({ user: { id: "user-1" }, profile: {} }),
+    requireUser: async () => ({ user: { id: "user-1" }, profile: { role: "trusted_editor" } }),
     requireProject: async () => ({}),
     requireScene: async () => ({
       user: { id: "user-1" },
-      profile: {},
+      profile: { role: "trusted_editor" },
       project: { id: "proj-1", render_settings: {} },
       scene,
     }),

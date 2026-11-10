@@ -1,3 +1,4 @@
+import { BYTEPLUS_SEEDANCE_ID } from "@/lib/ugc-model-rules";
 import type { ProfileRole } from "@/types/db";
 
 /**
@@ -28,7 +29,9 @@ export const ROLE_LABELS: Readonly<Record<ProfileRole, string>> = {
  * Which video models a role may use (owner's table, 2026-11-09): a Hybrid Editor
  * every model except Wan 3.0; an AI Animator every model, Wan 3.0 included. Every
  * other role is unrestricted by model; spend and permissions are separate rules.
+ * Seedance 2.5 on BytePlus is trusted editors (and admins) only (owner, 2026-11-10).
  */
 export function canUseVideoModel(role: ProfileRole | null | undefined, modelId: string): boolean {
+  if (modelId === BYTEPLUS_SEEDANCE_ID) return role === "trusted_editor" || role === "admin";
   return role === "hybrid_editor" ? modelId !== "wan-3.0" : true;
 }

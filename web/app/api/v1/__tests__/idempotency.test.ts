@@ -54,7 +54,7 @@ const auth = {
   tokenPrefix: "ms_live_test",
   scopes: ["read", "upload", "generate"],
   monthlyCapUsd: null,
-  profile: { id: userId } as never,
+  profile: { id: userId, role: "trusted_editor" } as never,
 } as const;
 const input: ApiClipInput = {
   prompt: "A quiet sunrise over the sea",
