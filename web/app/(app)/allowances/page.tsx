@@ -421,7 +421,7 @@ export default async function AllowancesPage({
               </p>
               <p className="text-xs text-muted-foreground">
                 What every editor and trusted editor could still spend this week if they used their
-                full allowance. Admins excluded — see 0035_outstanding_allowance.sql.
+                full allowance. Admins excluded.
               </p>
               {outstandingAllowanceUsd !== null &&
               accountFundsUsd !== null &&
