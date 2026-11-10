@@ -9,7 +9,7 @@ import {
   type ThumbnailSource,
 } from "@/lib/bin-thumbnails";
 import type { BinCardThumbnail } from "@/components/bin-card";
-import { addUtcDays, addUtcMonths, startOfUtcDay, startOfUtcMonth } from "@/lib/date-range";
+import { manilaDayKey, manilaDayKeys, manilaWindowEndIso, manilaWindowStartIso } from "@/lib/burn";
 import {
   getSpendCategoryTotals,
   getSpendCategoryTotalsByUser,
@@ -22,7 +22,12 @@ import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
 import { KIE_MODELS } from "@/lib/kie/models";
 import { COMPILER_MODELS, getModel, imageModelLabelFor, mergeRenderSettings } from "@/lib/models";
 import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/runway";
-import { getGlobalSpendSnapshot, type GlobalSpendCapSettings } from "@/lib/spend";
+import {
+  getGlobalSpendSnapshot,
+  startOfManilaDayIso,
+  startOfManilaMonthIso,
+  type GlobalSpendCapSettings,
+} from "@/lib/spend";
 import { extFromFilename, signedUrl, getImageUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileRole, ProfileStatus } from "@/types/db";
@@ -58,6 +63,10 @@ export interface AccountSpendSummary {
   status: ProfileStatus;
   /** profiles.last_seen_at (0130), the presence heartbeat. */
   lastSeenAt?: string | null;
+  /** profiles.avatar_storage_key, signed by the page for the rows it shows. */
+  avatarStorageKey?: string | null;
+  /** Billed runs in the window (runs table only; deleted projects' archive has no rows to count). */
+  rangeRunCount?: number;
   projectCount: number;
   rangeRenderUsd: number;
   rangeIterateUsd: number;
@@ -68,6 +77,16 @@ export interface AccountSpendSummary {
 export interface AccountsControlOverview {
   windowDays: AccountsControlWindowDays;
   todaySpendUsd: number;
+  /** Yesterday from Manila midnight up to this time of day: today's like-for-like comparison. */
+  yesterdaySameTimeUsd: number;
+  /** Last month over the same elapsed span as this month so far. */
+  lastMonthSameSpanUsd: number;
+  /** The `windowDays` before the current window. */
+  previousWindowUsd: number;
+  /** Every runs row (attempt) since Manila midnight, video and image, billed or not. */
+  rendersToday: number | null;
+  /** Mean cost of the billed (cost > 0) runs in the window; null when there were none. */
+  avgCostPerRenderUsd: number | null;
   teamGlobalSpendUsd: number;
   globalSpendCap: GlobalSpendCapSettings;
   weekSpendUsd: number;
@@ -142,13 +161,10 @@ const shortDayFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
-function toUtcDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /**
  * Aggregates raw `runs` rows into a contiguous daily series of length
- * `windowDays` ending on `now` (UTC), split between video rendering
+ * `windowDays` ending on `now`, one bucket per Asia/Manila calendar day (the
+ * same boundary the spend caps reset on), split between video rendering
  * (`scene_id !== null`) and image/iterating (`scene_id === null`).
  */
 export function buildDailySpendSeries(
@@ -160,16 +176,11 @@ export function buildDailySpendSeries(
   windowDays: AccountsControlWindowDays,
   now: Date = new Date(),
 ): DailySpendPoint[] {
-  const todayUtc = startOfUtcDay(now);
-  const startUtc = addUtcDays(todayUtc, -(windowDays - 1));
-
   const byDate = new Map<string, DailySpendPoint>();
-  for (let i = 0; i < windowDays; i++) {
-    const day = addUtcDays(startUtc, i);
-    const key = toUtcDateKey(day);
+  for (const key of manilaDayKeys(now, windowDays)) {
     byDate.set(key, {
       date: key,
-      label: shortDayFormatter.format(day),
+      label: shortDayFormatter.format(new Date(`${key}T00:00:00Z`)),
       renderUsd: 0,
       iterateUsd: 0,
       totalUsd: 0,
@@ -178,8 +189,7 @@ export function buildDailySpendSeries(
 
   for (const run of runs) {
     if (typeof run.cost_usd !== "number" || run.cost_usd <= 0) continue;
-    const key = run.created_at.slice(0, 10);
-    const point = byDate.get(key);
+    const point = byDate.get(manilaDayKey(new Date(run.created_at)));
     if (!point) continue;
     if (run.scene_id !== null) {
       point.renderUsd += run.cost_usd;
@@ -276,15 +286,30 @@ export async function loadAccountsControlOverview(
 ): Promise<AccountsControlOverview> {
   const supabase = await createClient();
 
-  const todayStart = startOfUtcDay(now);
-  const tomorrowStart = addUtcDays(todayStart, 1);
-  const monthStart = startOfUtcMonth(now);
-  const nextMonthStart = addUtcMonths(monthStart, 1);
-  const windowStart = addUtcDays(todayStart, -(windowDays - 1));
+  // Asia/Manila boundaries, the same ones the spend caps reset on. The upper
+  // edge of every "so far" figure is Manila midnight tomorrow (runs never
+  // land in the future).
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const todayStart = new Date(startOfManilaDayIso(now));
+  const tomorrowStart = new Date(manilaWindowEndIso(now));
+  const monthStart = new Date(startOfManilaMonthIso(now));
+  const windowStart = new Date(manilaWindowStartIso(now, windowDays));
+  // Previous periods, like for like: yesterday up to this time of day, last
+  // month over the same elapsed span, and the window before this one.
+  const yesterdayStart = new Date(todayStart.getTime() - DAY_MS);
+  const lastMonthStart = new Date(startOfManilaMonthIso(new Date(monthStart.getTime() - DAY_MS)));
+  const lastMonthSpanEnd = new Date(
+    Math.min(lastMonthStart.getTime() + (now.getTime() - monthStart.getTime()), monthStart.getTime()),
+  );
+  const previousWindowStart = new Date(manilaWindowStartIso(now, windowDays * 2));
   const runwayWindowStart = new Date(now.getTime() - RUNWAY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
   const [
     todaySpendUsd,
+    yesterdaySameTimeUsd,
+    lastMonthSameSpanUsd,
+    previousWindowUsd,
+    { count: rendersToday, error: rendersTodayError },
     globalSpendSnapshot,
     weekSpendUsd,
     monthSpendUsd,
@@ -296,9 +321,23 @@ export async function loadAccountsControlOverview(
     { data: presenceData },
   ] = await Promise.all([
     getSpendTotalUsd(supabase, todayStart.toISOString(), tomorrowStart.toISOString()),
+    getSpendTotalUsd(
+      supabase,
+      yesterdayStart.toISOString(),
+      new Date(now.getTime() - DAY_MS).toISOString(),
+    ),
+    getSpendTotalUsd(supabase, lastMonthStart.toISOString(), lastMonthSpanEnd.toISOString()),
+    // Same source as rangeCategoryTotals, so the two windows compare like for like.
+    getSpendCategoryTotals(supabase, previousWindowStart.toISOString(), windowStart.toISOString()).then(
+      (totals) => totals.totalUsd,
+    ),
+    supabase
+      .from("runs")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", todayStart.toISOString()),
     getGlobalSpendSnapshot(now),
     getSpendTotalUsd(supabase, runwayWindowStart.toISOString(), now.toISOString()),
-    getSpendTotalUsd(supabase, monthStart.toISOString(), nextMonthStart.toISOString()),
+    getSpendTotalUsd(supabase, monthStart.toISOString(), tomorrowStart.toISOString()),
     getSpendCategoryTotals(supabase, windowStart.toISOString(), tomorrowStart.toISOString()),
     getSpendCategoryTotalsByUser(supabase, windowStart.toISOString(), tomorrowStart.toISOString()),
     getKieAccountBalanceUsd(),
@@ -311,7 +350,7 @@ export async function loadAccountsControlOverview(
       .in("role", ["admin", ...BULK_ALLOWANCE_SCOPE_ROLES.all])
       .order("spend_usd", { ascending: false }),
     // user_directory predates last_seen_at; an admin's session reads profiles directly.
-    supabase.from("profiles").select("id, last_seen_at"),
+    supabase.from("profiles").select("id, last_seen_at, avatar_storage_key"),
   ]);
 
   if (directoryError) {
@@ -327,11 +366,13 @@ export async function loadAccountsControlOverview(
     scene_id: string | null;
     model: string;
     vendor: string;
+    user_id: string | null;
+    projects: { user_id: string } | null;
   }[] = [];
   for (let offset = 0; ; offset += PAGE) {
     const { data: runBatch, error: runsError } = await supabase
       .from("runs")
-      .select("created_at, cost_usd, scene_id, model, vendor")
+      .select("created_at, cost_usd, scene_id, model, vendor, user_id, projects ( user_id )")
       .gte("created_at", windowStart.toISOString())
       .lt("created_at", tomorrowStart.toISOString())
       .not("cost_usd", "is", null)
@@ -341,25 +382,43 @@ export async function loadAccountsControlOverview(
     if (runsError) {
       throw new Error(`Failed to load daily run series: ${runsError.message}`);
     }
-    const rows = runBatch ?? [];
+    const rows = (runBatch ?? []) as unknown as typeof windowRuns;
     windowRuns.push(...rows);
     if (rows.length < PAGE) break;
   }
 
   const dailySeries = buildDailySpendSeries(windowRuns, windowDays, now);
   const presenceById = new Map((presenceData ?? []).map((row) => [row.id, row]));
+  // Billed runs per owner, resolved like every spend read: coalesce(runs.user_id, project owner).
+  const runCountByUserId = new Map<string, number>();
+  const billedRuns = windowRuns.filter((run) => (run.cost_usd ?? 0) > 0);
+  for (const run of billedRuns) {
+    const owner = run.user_id ?? run.projects?.user_id;
+    if (owner) runCountByUserId.set(owner, (runCountByUserId.get(owner) ?? 0) + 1);
+  }
   const accounts = mergeAccountSpendRanking(
     (directoryData ?? []) as AccountControlDirectoryRow[],
     userCategoryTotals,
   ).map((account) => ({
     ...account,
     lastSeenAt: presenceById.get(account.id)?.last_seen_at ?? null,
+    avatarStorageKey: presenceById.get(account.id)?.avatar_storage_key ?? null,
+    rangeRunCount: runCountByUserId.get(account.id) ?? 0,
   }));
+  if (rendersTodayError) console.error(`Failed to count today's runs: ${rendersTodayError.message}`);
   const runwayEstimate = computeRunway(kieBalanceUsd, weekSpendUsd);
 
   return {
     windowDays,
     todaySpendUsd,
+    yesterdaySameTimeUsd,
+    lastMonthSameSpanUsd,
+    previousWindowUsd,
+    rendersToday: rendersTodayError ? null : (rendersToday ?? 0),
+    avgCostPerRenderUsd:
+      billedRuns.length > 0
+        ? billedRuns.reduce((sum, run) => sum + (run.cost_usd ?? 0), 0) / billedRuns.length
+        : null,
     teamGlobalSpendUsd: globalSpendSnapshot.spentUsd,
     globalSpendCap: globalSpendSnapshot.settings,
     weekSpendUsd,
@@ -450,8 +509,8 @@ export async function loadAccountsRunLog(
   now: Date = new Date(),
 ): Promise<{ rows: AccountsRunLogRow[]; total: number }> {
   const supabase = await createClient();
-  const tomorrowStart = addUtcDays(startOfUtcDay(now), 1);
-  const windowStart = addUtcDays(startOfUtcDay(now), -(windowDays - 1));
+  const tomorrowStart = new Date(manilaWindowEndIso(now));
+  const windowStart = new Date(manilaWindowStartIso(now, windowDays));
   const { data, error, count } = await supabase
     .from("runs")
     .select(
