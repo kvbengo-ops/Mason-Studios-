@@ -54,8 +54,9 @@ import { getImageUrl } from "@/lib/storage";
 import { PresenceDot } from "@/components/presence-dot";
 import { lastSeenLabel, PRESENCE_WINDOW_MS } from "@/lib/presence";
 import { BurnCell, type UserBurn } from "@/components/burn-cell";
-import { computeBurn, manilaDayKeys, manilaWeekPosition } from "@/lib/burn";
-import { getDailySpendByUser } from "@/lib/burn-data";
+import { computeBurn, manilaDayKeys, weekSpentFromDays } from "@/lib/burn";
+import { getDailySpendByUser, getTeamDailySpend } from "@/lib/burn-data";
+import { TeamBurnStrip } from "@/components/team-burn-strip";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -299,6 +300,8 @@ export default async function UsersPage({
   // head counts rather than one grouped read — PostgREST's `count: exact`
   // has no GROUP BY, and both are index-only counts on a column already
   // indexed for every other role filter on this page.
+  const burnNow = new Date();
+  const burnDates = manilaDayKeys(burnNow, 7);
   const presenceCutoff = new Date(new Date().getTime() - PRESENCE_WINDOW_MS).toISOString();
   const [
     { count: plainEditorCount },
@@ -310,6 +313,7 @@ export default async function UsersPage({
     presenceTotal,
     presenceOnline,
     onlineProfiles,
+    teamDaily,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -356,6 +360,12 @@ export default async function UsersPage({
       .order("last_seen_at", { ascending: false })
       .order("id", { ascending: true })
       .limit(6),
+    // Whole team, archived (deactivated) accounts' past spend included. Not
+    // page-bound, but one row per day. Fail-soft: the strip says unavailable.
+    getTeamDailySpend(supabase, 7, burnNow).catch((error: unknown) => {
+      console.error("Failed to load team daily spend for /users burn strip", error);
+      return null;
+    }),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -441,8 +451,6 @@ export default async function UsersPage({
   // Per-day spend for the Burn column: one bounded read for this page's ids
   // (spend_daily_by_user, 0135). Fail-soft like the grants read: the column
   // shows "—" rather than taking the page down.
-  const burnNow = new Date();
-  const burnDates = manilaDayKeys(burnNow, 7);
   let dailySpendByUserId = new Map<string, number[]>();
   let resolveAccountCaps: ResolveAccountCapsFn | null = null;
   // The largest weekly allowance any role gets, and therefore the ceiling on
@@ -623,6 +631,8 @@ export default async function UsersPage({
         users={onlineUsers}
       />
 
+      <TeamBurnStrip dates={burnDates} days={teamDaily} now={burnNow} />
+
       {/* Live search, debounced 500ms — see components/live-search.tsx for
           the full reasoning (no API route, focus/cursor survival, the
           no-JS fallback). `buildHref` resets to page 1 on every query
@@ -791,9 +801,7 @@ export default async function UsersPage({
                           days: burnDays,
                           weekSpentUsd:
                             spendWindow?.spent_this_week_usd ??
-                            burnDays
-                              .slice(-manilaWeekPosition(burnNow).dayOfWeek)
-                              .reduce((sum, usd) => sum + usd, 0),
+                            weekSpentFromDays(burnDays, burnNow),
                           weekTotalUsd: effectiveWeeklyCapUsd,
                           now: burnNow,
                         }),

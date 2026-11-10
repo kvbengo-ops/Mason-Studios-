@@ -19,25 +19,29 @@ export const PACE_LABEL: Record<BurnPace, string> = {
   red: "at or over the weekly total",
 };
 
-const BAR_W = 6;
-const BAR_GAP = 2;
-const HEIGHT = 20;
-
 /** One bar per day, oldest first. Inline SVG, scaled to the busiest day. */
 export function BurnSparkline({
   dates,
   values,
   pace,
+  colorClass,
+  barWidth = 6,
+  height = 20,
   className,
 }: {
   /** Manila day keys (`YYYY-MM-DD`), same length as `values`. */
   dates: readonly string[];
   values: readonly number[];
   pace: BurnPace;
+  /** Replaces the pace colour, for a chart that has no weekly total to be paced against. */
+  colorClass?: string;
+  barWidth?: number;
+  height?: number;
   className?: string;
 }): JSX.Element {
   const max = Math.max(...values, 0);
-  const width = values.length * (BAR_W + BAR_GAP) - BAR_GAP;
+  const gap = Math.max(2, Math.round(barWidth / 3));
+  const width = values.length * (barWidth + gap) - gap;
   const label = `Daily spend, oldest first: ${values
     .map((usd, i) => `${shortDateLabel(dates[i]!)} ${formatUsd(usd)}`)
     .join(", ")}`;
@@ -45,20 +49,20 @@ export function BurnSparkline({
     <svg
       role="img"
       aria-label={label}
-      viewBox={`0 0 ${width} ${HEIGHT}`}
+      viewBox={`0 0 ${width} ${height}`}
       width={width}
-      height={HEIGHT}
-      className={cn("shrink-0", PACE_CLASS[pace], className)}
+      height={height}
+      className={cn("shrink-0", colorClass ?? PACE_CLASS[pace], className)}
     >
       {values.map((usd, i) => {
         // A day with no spend keeps a 1px stub so the row of 7 always reads as 7.
-        const h = max > 0 && usd > 0 ? Math.max((usd / max) * HEIGHT, 2) : 1;
+        const h = max > 0 && usd > 0 ? Math.max((usd / max) * height, 2) : 1;
         return (
           <rect
             key={dates[i]}
-            x={i * (BAR_W + BAR_GAP)}
-            y={HEIGHT - h}
-            width={BAR_W}
+            x={i * (barWidth + gap)}
+            y={height - h}
+            width={barWidth}
             height={h}
             rx={1}
             fill="currentColor"

@@ -69,6 +69,11 @@ export function fillDays(
   return keys.map((key) => byDay.get(key) ?? 0);
 }
 
+/** Spend since Monday, from per-day values that end today (needs at least a week's worth, or whatever is there). */
+export function weekSpentFromDays(days: readonly number[], now: Date): number {
+  return days.slice(-manilaWeekPosition(now).dayOfWeek).reduce((sum, usd) => sum + usd, 0);
+}
+
 export interface BurnFigures {
   /** Average spend per day over the window. */
   avgPerDay: number;

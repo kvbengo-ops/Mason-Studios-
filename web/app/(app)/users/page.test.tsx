@@ -234,7 +234,11 @@ describe("UsersPage row actions", () => {
     expect(screen.getByRole("columnheader", { name: "Burn" })).toBeTruthy();
     // $70 over 7 days.
     expect(screen.getByText("$10.00/day")).toBeTruthy();
-    expect(screen.getAllByRole("img", { name: /^Daily spend/ })).toHaveLength(1);
+    // One sparkline for the row, one for the team strip under the presence strip.
+    expect(screen.getAllByRole("img", { name: /^Daily spend/ })).toHaveLength(2);
+    expect(screen.getByRole("link", { name: /this week/ }).getAttribute("href")).toBe(
+      "/accounts-control",
+    );
   });
 });
 
