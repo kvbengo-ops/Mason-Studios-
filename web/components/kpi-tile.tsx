@@ -20,6 +20,7 @@ export function KpiTile({
   icon: Icon,
   href,
   active = false,
+  compact = false,
   children,
 }: {
   label: string;
@@ -29,11 +30,14 @@ export function KpiTile({
   icon: LucideIcon;
   href?: string;
   active?: boolean;
+  /** Smaller padding and number, for a row of secondary stats. */
+  compact?: boolean;
   children?: ReactNode;
 }): JSX.Element {
   const className = cn(
     PANEL,
-    "relative flex flex-col gap-3 p-5 sm:p-6",
+    "relative flex flex-col",
+    compact ? "gap-2 p-4" : "gap-3 p-5 sm:p-6",
     alert && "border-destructive/40",
     href &&
       "transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -45,14 +49,22 @@ export function KpiTile({
         <span className="text-sm font-medium text-muted-foreground">{label}</span>
         <span
           className={cn(
-            "grid size-9 place-items-center rounded-xl",
+            "grid place-items-center rounded-xl",
+            compact ? "size-7" : "size-9",
             alert ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
           )}
         >
           <Icon aria-hidden="true" className="size-4" />
         </span>
       </div>
-      <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
+      <span
+        className={cn(
+          "font-semibold tracking-tight tabular-nums",
+          compact ? "text-2xl" : "text-3xl",
+        )}
+      >
+        {value}
+      </span>
       {children}
       <span
         className={cn(

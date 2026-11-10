@@ -8,7 +8,14 @@ export interface AreaPoint {
   /** `YYYY-MM-DD`. */
   date: string;
   valueUsd: number;
+  /** Optional breakdown shown in the tooltip and accessible name ("Video $4.00"). */
+  details?: readonly { label: string; valueUsd: number }[];
 }
+
+const detailText = (p: AreaPoint): string =>
+  p.details?.length
+    ? ` (${p.details.map((d) => `${d.label} ${formatUsd(d.valueUsd)}`).join(", ")})`
+    : "";
 
 const W = 600;
 const H = 160;
@@ -30,11 +37,14 @@ export function AreaChart({
   points,
   ariaLabel,
   className,
+  heightClass = "h-40",
 }: {
   points: readonly AreaPoint[];
   /** Prefix for the accessible name; the per-day numbers are appended. */
   ariaLabel: string;
   className?: string;
+  /** Height of the plot area. */
+  heightClass?: string;
 }): JSX.Element {
   const gradientId = `area-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const [active, setActive] = useState<number | null>(null);
@@ -46,7 +56,7 @@ export function AreaChart({
   const coords = points.map((p, i) => `${(xPct(i) / 100) * W},${(yPct(p.valueUsd) / 100) * H}`);
   const line = `M${coords.join(" L")}`;
   const area = `M0,${H} L${coords.join(" L")} L${W},${H} Z`;
-  const label = `${ariaLabel}: ${points.map((p) => `${fmtDay(p.date)} ${formatUsd(p.valueUsd)}`).join(", ")}`;
+  const label = `${ariaLabel}: ${points.map((p) => `${fmtDay(p.date)} ${formatUsd(p.valueUsd)}${detailText(p)}`).join(", ")}`;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (n === 0) return;
@@ -86,7 +96,10 @@ export function AreaChart({
         onBlur={() => setActive(null)}
         onPointerMove={onPointerMove}
         onPointerLeave={() => setActive(null)}
-        className="relative h-40 w-full rounded-md text-chart-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={cn(
+          "relative w-full rounded-md text-chart-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          heightClass,
+        )}
       >
         <svg
           role="img"
@@ -149,6 +162,11 @@ export function AreaChart({
             >
               <span className="text-muted-foreground">{fmtDay(point.date)}</span>{" "}
               <span className="font-semibold tabular-nums">{formatUsd(point.valueUsd)}</span>
+              {point.details?.map((d) => (
+                <span key={d.label} className="block tabular-nums text-muted-foreground">
+                  {d.label} {formatUsd(d.valueUsd)}
+                </span>
+              ))}
             </div>
           </>
         ) : null}

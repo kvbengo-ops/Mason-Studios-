@@ -2,10 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { JSX, ReactNode } from "react";
 import {
+  Activity,
   ArrowUpRight,
   BarChart3,
+  CircleX,
+  Receipt,
+  UserRound,
   DownloadIcon,
   History,
+  Maximize2,
   SlidersHorizontal,
   TriangleAlert,
   Users,
@@ -24,8 +29,20 @@ import { RoleBadge } from "@/components/role-badge";
 import { PresenceDot } from "@/components/presence-dot";
 import { RoleSelect } from "@/components/role-select";
 import { GlobalSpendCapControl } from "@/components/global-spend-cap-control";
-import { KpiTile, PANEL } from "@/components/kpi-tile";
+import { ChangeLine, KpiTile, PANEL } from "@/components/kpi-tile";
+import { AreaChart } from "@/components/area-chart";
+import { AvatarThumb } from "@/components/avatar-thumb";
+import { NeedsAttention } from "@/components/needs-attention";
 import { DonutChart } from "@/components/donut-chart";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -55,7 +72,12 @@ import { asAttachment } from "@/lib/download-url";
 import { formatUsd } from "@/lib/format-usd";
 import { pageRange, parsePage, totalPageCount } from "@/lib/pagination";
 import { formatRunwayDays, isRunwayShort } from "@/lib/runway";
-import { extFromFilename } from "@/lib/storage";
+import { extFromFilename, getImageUrl } from "@/lib/storage";
+import { manilaWindowStartIso } from "@/lib/burn";
+import { periodChange } from "@/lib/period-change";
+import { getDecidableRequestCount } from "@/lib/sidebar-budget";
+import { createClient } from "@/lib/supabase/server";
+import { loadFailedRunErrors, loadTeamSnapshot } from "@/lib/team-snapshot";
 import { cn } from "@/lib/utils";
 import { AccountsControlLiveRefresh } from "@/components/accounts-control-live-refresh";
 
@@ -65,6 +87,9 @@ export type AccountsControlTab = "videos" | "images" | "deleted";
 const WINDOW_OPTIONS: readonly AccountsControlWindowDays[] = [7, 14, 30];
 
 const RUNS_PAGE_SIZE = 50;
+
+/** How many models the Models used card shows before "View all". */
+const MODELS_SHOWN = 4;
 
 const VIEWS: readonly { id: AccountsControlView; label: string; icon: LucideIcon }[] = [
   { id: "spending", label: "Spending", icon: BarChart3 },
@@ -172,7 +197,7 @@ function ViewPanel({
 }: {
   id: string;
   title: string;
-  meta?: string;
+  meta?: ReactNode;
   children: ReactNode;
 }): JSX.Element {
   return (
@@ -485,7 +510,7 @@ export default async function AccountsControlPage({
     page?: string | string[];
   }>;
 }): Promise<JSX.Element> {
-  await requireAdmin();
+  const { user: viewer, profile: viewerProfile } = await requireAdmin();
   await reapExpiredBinEntries();
 
   const resolvedParams = await searchParams;
@@ -495,14 +520,32 @@ export default async function AccountsControlPage({
   const requestedUserId = parseUserParam(resolvedParams.user);
   const requestedPage = parsePage(resolvedParams.page);
 
-  // Only what the open view shows is loaded.
-  const [overview, claudeSpend, runLog] = await Promise.all([
-    loadAccountsControlOverview(windowDays),
-    view === "spending" ? getAnthropicMonthlySpend() : null,
-    view === "runs"
-      ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE))
-      : null,
-  ]);
+  // Only what the open view shows is loaded. The Needs attention reads are
+  // fail-soft (null), and a null line is skipped rather than shown as zero.
+  const spending = view === "spending";
+  const supabase = await createClient();
+  const now = new Date();
+  const [overview, claudeSpend, runLog, team, failedRunErrors, pendingAllowanceRequests] =
+    await Promise.all([
+      loadAccountsControlOverview(windowDays, now),
+      spending ? getAnthropicMonthlySpend() : null,
+      view === "runs"
+        ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now)
+        : null,
+      spending
+        ? loadTeamSnapshot(supabase, now).catch((error: unknown) => {
+            console.error("Failed to load team snapshot for /accounts-control", error);
+            return null;
+          })
+        : null,
+      spending
+        ? loadFailedRunErrors(supabase, manilaWindowStartIso(now, 1)).catch((error: unknown) => {
+            console.error("Failed to load failed runs for /accounts-control", error);
+            return null;
+          })
+        : null,
+      spending ? getDecidableRequestCount(viewer.id, viewerProfile) : null,
+    ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
   const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
   // Archived (deactivated) accounts keep naming their runs, but leave the ranking.
@@ -527,15 +570,39 @@ export default async function AccountsControlPage({
   }
 
   const maxDailyUsd = Math.max(...overview.dailySeries.map((point) => point.totalUsd), 0);
-  const maxLineUsd = Math.max(
-    ...overview.dailySeries.flatMap((point) => [point.renderUsd, point.iterateUsd]),
-    0,
-  );
-  const pctOfMaxLine = (usd: number): number => (maxLineUsd > 0 ? (usd / maxLineUsd) * 100 : 0);
   const maxAccountRangeUsd = Math.max(...rankedAccounts.map((account) => account.rangeTotalUsd), 0);
   const runwayShort = isRunwayShort(overview.runwayEstimate);
   const kieEmpty = overview.kieBalanceUsd !== null && overview.kieBalanceUsd <= 0;
   const series = overview.dailySeries;
+  // Top accounts: share of the team's window total, which keeps archived
+  // accounts' past spend even though they leave the ranking.
+  const teamWindowUsd = overview.rangeCategoryTotals.totalUsd;
+  const topAccounts = spending
+    ? [...rankedAccounts].sort((a, b) => b.rangeTotalUsd - a.rangeTotalUsd).slice(0, 8)
+    : [];
+  const topAvatarUrls = new Map(
+    await Promise.all(
+      topAccounts.map(async (account) => {
+        if (!account.avatarStorageKey) return [account.id, undefined] as const;
+        try {
+          return [account.id, await getImageUrl(account.avatarStorageKey, "thumb", 3600)] as const;
+        } catch (error) {
+          console.error(`Failed to sign avatar for Top accounts row ${account.id}`, error);
+          return [account.id, undefined] as const;
+        }
+      }),
+    ),
+  );
+  const activeAccountCount = rankedAccounts.filter((account) => account.rangeTotalUsd > 0).length;
+  // Most-used first (buildModelUsage's order), so the card's top 4 and the
+  // dialog's full list share colours.
+  const modelSlices = overview.modelUsage.map((m) => ({
+    label: m.label,
+    valueUsd: m.costUsd,
+    sub: `${m.runs} run${m.runs === 1 ? "" : "s"}`,
+  }));
+  const modelTotalUsd = overview.modelUsage.reduce((sum, m) => sum + m.costUsd, 0);
+  const modelRunCount = overview.modelUsage.reduce((sum, m) => sum + m.runs, 0);
   const user = selectedAccount?.id ?? null;
   const hrefFor = (page: number): string =>
     buildAccountsControlHref({ view, days: windowDays, user, tab, page });
@@ -586,16 +653,30 @@ export default async function AccountsControlPage({
       <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiTile
           icon={BarChart3}
-          label="Today (UTC)"
+          label="Today"
           value={formatUsd(overview.todaySpendUsd)}
-          sub="So far today"
+          sub={
+            <ChangeLine
+              change={periodChange(overview.todaySpendUsd, overview.yesterdaySameTimeUsd)}
+              vs="this time yesterday"
+            />
+          }
         />
         <KpiTile
           icon={History}
           label="This month"
           value={formatUsd(overview.monthSpendUsd)}
-          sub={`${formatUsd(overview.weekSpendUsd)} last 7 days`}
-        />
+          sub={
+            <ChangeLine
+              change={periodChange(overview.monthSpendUsd, overview.lastMonthSameSpanUsd)}
+              vs="same days last month"
+            />
+          }
+        >
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {formatUsd(overview.weekSpendUsd)} last 7 days
+          </span>
+        </KpiTile>
         <KpiTile
           icon={Wallet}
           label="Kie balance"
@@ -642,7 +723,7 @@ export default async function AccountsControlPage({
           })}
         </nav>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-muted-foreground">Reporting window · UTC</span>
+          <span className="text-xs text-muted-foreground">Reporting window · Manila time</span>
           <nav aria-label="Spending window" className={SEGMENTED}>
             {WINDOW_OPTIONS.map((days) => (
               <Link
@@ -660,37 +741,105 @@ export default async function AccountsControlPage({
       </div>
 
       {view === "spending" ? (
-        // Wide graph column, narrow side column: Daily spend | Top accounts,
-        // then Models used | Your team.
+        // Wide column, narrow side column: activity stats across both, then
+        // Daily spend | Needs attention, then Top accounts | Models used.
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <section aria-label="Activity" className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:col-span-2">
+            <KpiTile
+              compact
+              icon={Activity}
+              label="Renders today"
+              value={overview.rendersToday !== null ? String(overview.rendersToday) : "Unavailable"}
+              sub="Video and image runs since midnight"
+            />
+            <KpiTile
+              compact
+              icon={CircleX}
+              label="Failed today"
+              value={failedRunErrors ? String(failedRunErrors.length) : "Unavailable"}
+              sub={
+                failedRunErrors && failedRunErrors.length > 0 && overview.rendersToday
+                  ? `${Math.round((failedRunErrors.length / overview.rendersToday) * 100)}% of today's renders`
+                  : "None so far"
+              }
+              alert={Boolean(failedRunErrors?.length)}
+              href={buildAccountsControlHref({ view: "runs", days: windowDays, user, tab })}
+            />
+            <KpiTile
+              compact
+              icon={Receipt}
+              label="Avg cost per render"
+              value={
+                overview.avgCostPerRenderUsd !== null
+                  ? formatUsd(overview.avgCostPerRenderUsd)
+                  : "—"
+              }
+              sub={`Billed runs, last ${windowDays} days`}
+            />
+            <KpiTile
+              compact
+              icon={UserRound}
+              label="Active accounts"
+              value={String(activeAccountCount)}
+              sub={`Spent in the last ${windowDays} days`}
+            />
+          </section>
+
           <ViewPanel
             id="accounts-control-spending-heading"
             title="Daily spend"
-            meta={`${formatUsd(overview.rangeCategoryTotals.totalUsd)} in ${windowDays} days`}
+            meta={
+              <span className="inline-flex flex-wrap items-center gap-x-2">
+                {formatUsd(teamWindowUsd)} in {windowDays} days
+                <ChangeLine
+                  change={periodChange(teamWindowUsd, overview.previousWindowUsd)}
+                  vs={`previous ${windowDays} days`}
+                />
+              </span>
+            }
           >
-            <Tabs defaultValue="bars" className="gap-4">
+            <Tabs defaultValue="area" className="gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
-                    Video {formatUsd(overview.rangeCategoryTotals.renderUsd)}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
-                    Images {formatUsd(overview.rangeCategoryTotals.iterateUsd)}
-                  </span>
-                </div>
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  Video {formatUsd(overview.rangeCategoryTotals.renderUsd)} · Images{" "}
+                  {formatUsd(overview.rangeCategoryTotals.iterateUsd)}
+                </p>
                 <TabsList aria-label="Chart type">
+                  <TabsTrigger value="area" className="px-3 text-xs">
+                    Area
+                  </TabsTrigger>
                   <TabsTrigger value="bars" className="px-3 text-xs">
                     Bars
-                  </TabsTrigger>
-                  <TabsTrigger value="line" className="px-3 text-xs">
-                    Line
                   </TabsTrigger>
                 </TabsList>
               </div>
 
+              <TabsContent value="area">
+                <AreaChart
+                  heightClass="h-64 sm:h-72"
+                  ariaLabel={`Daily spend over the last ${windowDays} days`}
+                  points={series.map((point) => ({
+                    date: point.date,
+                    valueUsd: point.totalUsd,
+                    details: [
+                      { label: "Video", valueUsd: point.renderUsd },
+                      { label: "Images", valueUsd: point.iterateUsd },
+                    ],
+                  }))}
+                />
+              </TabsContent>
+
               <TabsContent value="bars">
+                <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
+                    Video
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
+                    Images
+                  </span>
+                </div>
                 <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
                   <span>Spent</span>
                   <span>Peak day · {formatUsd(maxDailyUsd)}</span>
@@ -737,114 +886,14 @@ export default async function AccountsControlPage({
                     );
                   })}
                 </div>
-              </TabsContent>
-
-              <TabsContent value="line">
-                {/* The top border is the peak day, the bottom border is zero. */}
-                <div
-                  role="img"
-                  aria-label={`Daily spend over the last ${windowDays} days`}
-                  className="relative h-64 border-y border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] sm:h-72"
-                >
-                  {maxLineUsd > 0 ? (
-                    <span className="absolute bottom-full right-0 text-[11px] tabular-nums text-muted-foreground">
-                      {formatUsd(maxLineUsd)}
-                    </span>
+                <div className="mt-3 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
+                  <span>{series[0]?.label ?? ""}</span>
+                  {series.length > 2 ? (
+                    <span>{series[Math.floor(series.length / 2)]?.label ?? ""}</span>
                   ) : null}
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 100 100"
-                    preserveAspectRatio="none"
-                    className="absolute inset-0 size-full overflow-visible"
-                  >
-                    {[
-                      { stroke: "stroke-chart-4", values: series.map((p) => p.iterateUsd) },
-                      { stroke: "stroke-chart-1", values: series.map((p) => p.renderUsd) },
-                    ]
-                      .filter(({ values }) => values.length > 0)
-                      .map(({ stroke, values }) => (
-                        <polyline
-                          key={`${stroke}-area`}
-                          // The reference's soft fill: the line closed down to the baseline.
-                          points={`${(0.5 / values.length) * 100},100 ${values
-                            .map(
-                              (usd, i) =>
-                                `${((i + 0.5) / values.length) * 100},${100 - pctOfMaxLine(usd)}`,
-                            )
-                            .join(" ")} ${((values.length - 0.5) / values.length) * 100},100`}
-                          stroke="none"
-                          className={
-                            stroke === "stroke-chart-1" ? "fill-chart-1/15" : "fill-chart-4/10"
-                          }
-                        />
-                      ))}
-                    {[
-                      { stroke: "stroke-chart-4", values: series.map((p) => p.iterateUsd) },
-                      { stroke: "stroke-chart-1", values: series.map((p) => p.renderUsd) },
-                    ].map(({ stroke, values }) => (
-                      <polyline
-                        key={stroke}
-                        points={values
-                          .map(
-                            (usd, i) =>
-                              `${((i + 0.5) / values.length) * 100},${100 - pctOfMaxLine(usd)}`,
-                          )
-                          .join(" ")}
-                        fill="none"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        vectorEffect="non-scaling-stroke"
-                        className={stroke}
-                      />
-                    ))}
-                  </svg>
-                  {/* Daily totals below make the same figures available without hovering. */}
-                  <div className="absolute inset-0 flex">
-                    {series.map((point, i) => (
-                      <div key={point.date} className="group relative h-full flex-1">
-                        <div className="pointer-events-none absolute inset-0 hidden group-hover:block">
-                          <div className="absolute inset-y-0 left-1/2 w-px bg-muted-foreground/40" />
-                          <span
-                            className="absolute left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-chart-4 ring-2 ring-card"
-                            style={{ bottom: `${pctOfMaxLine(point.iterateUsd)}%` }}
-                          />
-                          <span
-                            className="absolute left-1/2 size-2 -translate-x-1/2 translate-y-1/2 rounded-full bg-chart-1 ring-2 ring-card"
-                            style={{ bottom: `${pctOfMaxLine(point.renderUsd)}%` }}
-                          />
-                          <div
-                            className={cn(
-                              "absolute top-2 z-10 flex flex-col gap-0.5 whitespace-nowrap rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs tabular-nums text-popover-foreground shadow-sm",
-                              i < series.length / 2
-                                ? "left-[calc(50%+0.5rem)]"
-                                : "right-[calc(50%+0.5rem)]",
-                            )}
-                          >
-                            <span className="text-muted-foreground">{point.label}</span>
-                            <span className="font-medium">{formatUsd(point.totalUsd)}</span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="size-2 rounded-full bg-chart-1" />
-                              {formatUsd(point.renderUsd)} Video
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="size-2 rounded-full bg-chart-4" />
-                              {formatUsd(point.iterateUsd)} Images
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <span>{series[series.length - 1]?.label ?? ""}</span>
                 </div>
               </TabsContent>
-              <div className="flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
-                <span>{series[0]?.label ?? ""}</span>
-                {series.length > 2 ? (
-                  <span>{series[Math.floor(series.length / 2)]?.label ?? ""}</span>
-                ) : null}
-                <span>{series[series.length - 1]?.label ?? ""}</span>
-              </div>
             </Tabs>
             <details className="mt-5 border-t border-border/60 pt-4">
               <summary className="cursor-pointer rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -882,30 +931,48 @@ export default async function AccountsControlPage({
             </details>
           </ViewPanel>
 
+          <NeedsAttention
+            input={{
+              pendingAccounts: team
+                ? team.activeAccounts.filter((account) => account.status === "pending").length
+                : null,
+              pendingAllowanceRequests,
+              nearCapAccounts: team?.nearCapIds ? team.nearCapIds.size : null,
+              failedRunErrors,
+              kieBalanceUsd: overview.kieBalanceUsd,
+              bytePlusBalanceUsd: overview.bytePlusBalanceUsd,
+            }}
+          />
+
           <ViewPanel
             id="accounts-control-top-accounts-heading"
             title="Top accounts"
-            meta={`Spend · ${windowDays} days`}
+            meta={`Share of ${formatUsd(teamWindowUsd)} · ${windowDays} days`}
           >
-            {rankedAccounts.length === 0 ? (
+            {topAccounts.length === 0 ? (
               <EmptyState>No accounts found.</EmptyState>
             ) : (
               <div className="-mx-5 sm:-mx-6">
-                <Table className="table-fixed">
+                <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-5 sm:pl-6">Name</TableHead>
-                      <TableHead numeric className="w-24 pr-5 sm:pr-6">
-                        Spend
+                      <TableHead className="pl-5 sm:pl-6">Account</TableHead>
+                      <TableHead className="hidden sm:table-cell">Role</TableHead>
+                      <TableHead numeric className="hidden sm:table-cell">
+                        Runs
+                      </TableHead>
+                      <TableHead numeric>Spend</TableHead>
+                      <TableHead numeric className="pr-5 sm:pr-6">
+                        Share
                       </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {/* ponytail: top 8 here, the full list lives on the Accounts view. */}
-                    {[...rankedAccounts]
-                      .sort((a, b) => b.rangeTotalUsd - a.rangeTotalUsd)
-                      .slice(0, 8)
-                      .map((account) => (
+                    {topAccounts.map((account) => {
+                      const sharePct =
+                        teamWindowUsd > 0 ? (account.rangeTotalUsd / teamWindowUsd) * 100 : 0;
+                      return (
                         <TableRow key={account.id}>
                           <TableCell className="py-3 pl-5 sm:pl-6">
                             <Link
@@ -917,12 +984,11 @@ export default async function AccountsControlPage({
                               })}
                               className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              <span
-                                aria-hidden="true"
-                                className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-xs font-semibold uppercase text-primary"
-                              >
-                                {account.username.slice(0, 2)}
-                              </span>
+                              <AvatarThumb
+                                username={account.username}
+                                email={account.email}
+                                avatarUrl={topAvatarUrls.get(account.id)}
+                              />
                               <span className="min-w-0">
                                 <span className="block truncate text-sm font-medium">
                                   {account.username}
@@ -933,11 +999,32 @@ export default async function AccountsControlPage({
                               </span>
                             </Link>
                           </TableCell>
-                          <TableCell numeric className="py-3 pr-5 font-medium sm:pr-6">
+                          <TableCell className="hidden py-3 sm:table-cell">
+                            <RoleBadge role={account.role} />
+                          </TableCell>
+                          <TableCell numeric className="hidden py-3 sm:table-cell">
+                            {account.rangeRunCount ?? 0}
+                          </TableCell>
+                          <TableCell numeric className="py-3 font-medium">
                             {formatUsd(account.rangeTotalUsd)}
                           </TableCell>
+                          <TableCell numeric className="py-3 pr-5 sm:pr-6">
+                            <span className="inline-flex items-center justify-end gap-2">
+                              <span
+                                aria-hidden="true"
+                                className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted md:block"
+                              >
+                                <span
+                                  className="block h-full rounded-full bg-primary"
+                                  style={{ width: `${Math.min(100, sharePct)}%` }}
+                                />
+                              </span>
+                              {sharePct.toFixed(sharePct < 10 ? 1 : 0)}%
+                            </span>
+                          </TableCell>
                         </TableRow>
-                      ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -952,15 +1039,44 @@ export default async function AccountsControlPage({
             {overview.modelUsage.length === 0 ? (
               <EmptyState>No billed runs in this window.</EmptyState>
             ) : (
-              <DonutChart
-                ariaLabel="Models used"
-                slices={overview.modelUsage.map((m) => ({
-                  label: m.label,
-                  valueUsd: m.costUsd,
-                  sub: `${m.runs} run${m.runs === 1 ? "" : "s"}`,
-                }))}
-                centreSub={`${overview.modelUsage.reduce((sum, m) => sum + m.runs, 0)} runs`}
-              />
+              <div className="flex flex-col gap-5">
+                {/* The 4 most-used models against the whole window's total; the
+                    ring's unfilled part is every other model. All of them are
+                    one click away in the dialog. */}
+                <DonutChart
+                  ariaLabel={
+                    modelSlices.length > MODELS_SHOWN
+                      ? `Models used, top ${MODELS_SHOWN} of ${modelSlices.length}`
+                      : "Models used"
+                  }
+                  slices={modelSlices.slice(0, MODELS_SHOWN)}
+                  totalUsd={modelTotalUsd}
+                  centreSub={`${modelRunCount} runs`}
+                />
+                {modelSlices.length > MODELS_SHOWN ? (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="self-start">
+                        <Maximize2 aria-hidden="true" className="size-4" />
+                        View all {modelSlices.length} models
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Models used</DialogTitle>
+                        <DialogDescription>
+                          {modelRunCount} billed runs in the last {windowDays} days, by spend share.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DonutChart
+                        ariaLabel="Models used, all models"
+                        slices={modelSlices}
+                        centreSub={`${modelRunCount} runs`}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                ) : null}
+              </div>
             )}
           </ViewPanel>
 
