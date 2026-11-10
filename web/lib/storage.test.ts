@@ -111,10 +111,13 @@ describe("signedUrl", () => {
 
   it("getImageUrl falls back to the original when the copy is missing", async () => {
     const admin = fakeAdmin();
-    admin.createSignedUrl.mockImplementationOnce(async () => ({
-      data: null,
-      error: { message: "Object not found" },
-    }) as never);
+    admin.createSignedUrl.mockImplementationOnce(
+      async () =>
+        ({
+          data: null,
+          error: { message: "Object not found" },
+        }) as never,
+    );
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
 
     const key = `projects/p/ref_frame/${crypto.randomUUID()}.png`;
@@ -122,6 +125,26 @@ describe("signedUrl", () => {
 
     expect(url).toContain(`${key}?`);
     expect(admin.createSignedUrl).toHaveBeenLastCalledWith(key, 3600, undefined);
+  });
+
+  it("getImageUrl asks for a missing copy once, then goes straight to the original", async () => {
+    const admin = fakeAdmin();
+    const original = admin.createSignedUrl.getMockImplementation()!;
+    admin.createSignedUrl.mockImplementation(async (key: string, ttl: number) =>
+      key.endsWith(".thumb.webp")
+        ? ({ data: null, error: { message: "Object not found" } } as never)
+        : original(key, ttl),
+    );
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p/ref_frame/${crypto.randomUUID()}.png`;
+    await getImageUrl(key, "thumb", 600);
+    await getImageUrl(key, "thumb", 600);
+
+    const copyCalls = admin.createSignedUrl.mock.calls.filter(([k]) =>
+      String(k).endsWith(".thumb.webp"),
+    );
+    expect(copyCalls).toHaveLength(1);
   });
 
   it("getImageUrl signs a non-image key as it is", async () => {

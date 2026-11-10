@@ -679,11 +679,27 @@ export async function getImageUrl(
   expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
 ): Promise<string> {
   if (!RESIZABLE_IMAGE_KEY.test(storageKey)) return signedUrl(storageKey, expiresInSeconds);
-  // ponytail: a missing copy costs one failed sign per render until the backfill runs.
-  return signedUrl(resizedImageKey(storageKey, size), expiresInSeconds).catch(() =>
-    signedUrl(storageKey, expiresInSeconds),
-  );
+  const resizedKey = resizedImageKey(storageKey, size);
+  const missingUntil = missingResizedKeys.get(resizedKey);
+  if (missingUntil !== undefined && missingUntil > Date.now()) {
+    return signedUrl(storageKey, expiresInSeconds);
+  }
+  try {
+    return await signedUrl(resizedKey, expiresInSeconds);
+  } catch {
+    // Remembered so a page of old images doesn't pay a failed Storage call per
+    // image per render (that doubled Storage traffic on 2026-11-10). Expires so
+    // a copy written later by the backfill is picked up.
+    // ponytail: cleared wholesale at the cap; an LRU if that ever thrashes.
+    if (missingResizedKeys.size >= MAX_MISSING_RESIZED_KEYS) missingResizedKeys.clear();
+    missingResizedKeys.set(resizedKey, Date.now() + MISSING_RESIZED_KEY_TTL_MS);
+    return signedUrl(storageKey, expiresInSeconds);
+  }
 }
+
+const missingResizedKeys = new Map<string, number>();
+const MISSING_RESIZED_KEY_TTL_MS = 30 * 60 * 1000;
+const MAX_MISSING_RESIZED_KEYS = 5000;
 
 const STAGED_KEY_PATTERN =
   /^staging\/([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;

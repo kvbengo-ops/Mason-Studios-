@@ -4,6 +4,10 @@
 //   cd web
 //   bun scripts/backfill-thumbnails.ts --dry-run   # list what it would write
 //   bun scripts/backfill-thumbnails.ts             # write it
+//   bun scripts/backfill-thumbnails.ts --concurrency=1 --pause-ms=1500   # gently
+//
+// Gently is the safe default on a busy project: every image is a download and
+// two uploads, and at 4 at a time it stalled production on 2026-11-10.
 //
 // Bun loads web/.env.local by itself: NEXT_PUBLIC_SUPABASE_URL and
 // SUPABASE_SERVICE_ROLE_KEY. That file points at PRODUCTION Supabase.
@@ -24,10 +28,17 @@ const IMAGE_KEY = /\.(png|jpe?g|webp|gif)$/i;
 const RESIZED_KEY = /\.(thumb|medium)\.webp$/;
 // Transient uploads and bug-report screenshots are never shown as thumbnails.
 const SKIP_PREFIXES = ["staging/", "issue-reports/"];
-const CONCURRENCY = 4;
 const PAGE = 1000;
 
 const dryRun = process.argv.includes("--dry-run");
+const flag = (name: string, fallback: number): number => {
+  const raw = process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split("=")[1];
+  const value = raw === undefined ? fallback : Number(raw);
+  if (!Number.isInteger(value) || value < 0) throw new Error(`--${name} must be a whole number`);
+  return value;
+};
+const CONCURRENCY = Math.max(1, flag("concurrency", 1));
+const PAUSE_MS = flag("pause-ms", 1500);
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !serviceKey) {
@@ -104,6 +115,7 @@ await Promise.all(
       try {
         await backfill(item.key, item.missing);
         console.log(`[${n}/${work.length}] ${item.missing.join("+")} ${item.key}`);
+        if (PAUSE_MS > 0) await new Promise((resolve) => setTimeout(resolve, PAUSE_MS));
       } catch (err) {
         failed++;
         console.error(`[${n}/${work.length}] FAILED ${item.key}: ${(err as Error).message}`);
@@ -112,5 +124,9 @@ await Promise.all(
   }),
 );
 
-console.log(`Done: ${work.length - failed} written, ${failed} failed.`);
+console.log(
+  dryRun
+    ? `Dry run: ${work.length} would be written.`
+    : `Done: ${work.length - failed} written, ${failed} failed.`,
+);
 process.exit(failed > 0 ? 1 : 0);
