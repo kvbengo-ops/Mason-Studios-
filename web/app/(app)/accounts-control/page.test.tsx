@@ -117,6 +117,11 @@ describe("AccountsControlPage", () => {
     vi.mocked(loadAccountsControlOverview).mockResolvedValue({
       windowDays: 14,
       todaySpendUsd: 2.5,
+      yesterdaySameTimeUsd: 0,
+      lastMonthSameSpanUsd: 0,
+      previousWindowUsd: 0,
+      rendersToday: 0,
+      avgCostPerRenderUsd: null,
       teamGlobalSpendUsd: DEFAULT_GLOBAL_SPEND_CAP_USD + 5,
       globalSpendCap: { enabled: true, capUsd: DEFAULT_GLOBAL_SPEND_CAP_USD, period: "daily" },
       weekSpendUsd: 12.0,
@@ -193,7 +198,7 @@ describe("AccountsControlPage", () => {
     expect(dailySpendBar.getAttribute("aria-valuenow")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     expect(dailySpendBar.getAttribute("aria-valuemax")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     // $2.50 today, read from the Today tile: the figure can repeat elsewhere on the page.
-    expect(screen.getByText("Today (UTC)").closest("div")?.parentElement?.textContent).toContain(
+    expect(screen.getByText("Today").closest("div")?.parentElement?.textContent).toContain(
       "$2.50",
     );
     expect(loadEditorVideos).not.toHaveBeenCalled();
@@ -211,6 +216,11 @@ describe("AccountsControlPage", () => {
     vi.mocked(loadAccountsControlOverview).mockResolvedValue({
       windowDays: 14,
       todaySpendUsd: 0,
+      yesterdaySameTimeUsd: 0,
+      lastMonthSameSpanUsd: 0,
+      previousWindowUsd: 0,
+      rendersToday: 0,
+      avgCostPerRenderUsd: null,
       teamGlobalSpendUsd: 10.0,
       globalSpendCap: { enabled: true, capUsd: DEFAULT_GLOBAL_SPEND_CAP_USD, period: "daily" },
       weekSpendUsd: 5.0,
@@ -278,6 +288,11 @@ describe("AccountsControlPage", () => {
     vi.mocked(loadAccountsControlOverview).mockResolvedValue({
       windowDays: 14,
       todaySpendUsd: 0.04,
+      yesterdaySameTimeUsd: 0,
+      lastMonthSameSpanUsd: 0,
+      previousWindowUsd: 0,
+      rendersToday: 0,
+      avgCostPerRenderUsd: null,
       teamGlobalSpendUsd: 3.0,
       globalSpendCap: { enabled: true, capUsd: DEFAULT_GLOBAL_SPEND_CAP_USD, period: "daily" },
       weekSpendUsd: 0.04,

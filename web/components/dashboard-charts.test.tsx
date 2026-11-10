@@ -109,6 +109,31 @@ describe("AreaChart", () => {
   });
 });
 
+describe("AreaChart details", () => {
+  it("lists each point's breakdown in the tooltip and the accessible name", () => {
+    render(
+      <AreaChart
+        ariaLabel="Daily spend"
+        points={[
+          {
+            date: "2026-11-11",
+            valueUsd: 5,
+            details: [
+              { label: "Video", valueUsd: 4 },
+              { label: "Images", valueUsd: 1 },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(
+      screen.getByRole("img", { name: "Daily spend: Nov 11 $5.00 (Video $4.00, Images $1.00)" }),
+    ).toBeTruthy();
+    act(() => screen.getByRole("group").focus());
+    expect(screen.getByRole("status").textContent).toBe("Nov 11 $5.00Video $4.00Images $1.00");
+  });
+});
+
 describe("NeedsAttention", () => {
   const nothing = {
     pendingAccounts: 0,
