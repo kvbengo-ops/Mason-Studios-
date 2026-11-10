@@ -8,6 +8,7 @@ import {
   setAllEditorsDailyCap,
   setAllEditorsHourlyCap,
   setAllEditorsWeeklyCap,
+  getBulkSpendingLimits,
 } from "./account";
 import { requireAdmin } from "@/actions/guard";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -468,7 +469,12 @@ describe("setAllEditorsWeeklyCap", () => {
 
     // Named explicitly rather than "not admin": this writes to many rows at
     // once, so adding a future role must be a deliberate edit here.
-    expect(builder.in).toHaveBeenCalledWith("role", ["editor", "trusted_editor", "hybrid_editor", "ai_animator"]);
+    expect(builder.in).toHaveBeenCalledWith("role", [
+      "editor",
+      "trusted_editor",
+      "hybrid_editor",
+      "ai_animator",
+    ]);
     expect(builder.update).toHaveBeenCalledWith({ weekly_cap_override_usd: 25 });
     expect(result).toEqual({ updated: 2 });
   });
@@ -520,4 +526,146 @@ describe("setAllEditorsWeeklyCap", () => {
     expect(result).toEqual({ error: expect.any(String) });
     expect(createAdminClient).not.toHaveBeenCalled();
   });
+});
+
+describe("getBulkSpendingLimits", () => {
+  const profile = {
+    role: "editor" as const,
+    weekly_cap_override_usd: 47,
+    daily_cap_override_usd: 60,
+    hourly_cap_override_usd: 0,
+  };
+
+  function fakeRead(
+    pages: Array<{ data: unknown; error: { message: string } | null }>,
+    settingsError = false,
+  ): {
+    range: ReturnType<typeof vi.fn>;
+    in: ReturnType<typeof vi.fn>;
+    order: ReturnType<typeof vi.fn>;
+  } {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+    const range = vi.fn();
+    for (const page of pages) range.mockResolvedValueOnce(page);
+    const query = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      in: vi.fn(() => query),
+      order: vi.fn(() => query),
+      range,
+      single: vi.fn(async () => ({
+        data: settingsError ? null : { user_daily_cap_enabled: true },
+        error: settingsError ? { message: "unavailable" } : null,
+      })),
+    };
+    vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => query) } as never);
+    return query;
+  }
+
+  it("reads saved amounts, including zero and a daily amount above the current weekly cap", async () => {
+    const query = fakeRead([{ data: [profile], error: null }]);
+    expect(await getBulkSpendingLimits("editor")).toEqual({
+      count: 1,
+      weeklyCapUsd: 47,
+      dailyCapUsd: 60,
+      hourlyCapUsd: 0,
+      dailyCapEnabled: true,
+    });
+    expect(query.in).toHaveBeenCalledWith("role", ["editor"]);
+  });
+
+  it("reads beyond the first page before deciding whether limits are mixed", async () => {
+    const query = fakeRead([
+      { data: Array.from({ length: 500 }, () => profile), error: null },
+      {
+        data: [{ ...profile, weekly_cap_override_usd: 12, hourly_cap_override_usd: null }],
+        error: null,
+      },
+    ]);
+    expect(await getBulkSpendingLimits("all")).toEqual({
+      count: 501,
+      weeklyCapUsd: "mixed",
+      dailyCapUsd: 60,
+      hourlyCapUsd: "mixed",
+      dailyCapEnabled: true,
+    });
+    expect(query.range.mock.calls).toEqual([
+      [0, 499],
+      [500, 999],
+    ]);
+    expect(query.order).toHaveBeenCalledWith("id");
+    expect(query.in).toHaveBeenCalledWith("role", [
+      "editor",
+      "trusted_editor",
+      "hybrid_editor",
+      "ai_animator",
+    ]);
+  });
+
+  it("resolves role defaults after overrides are cleared", async () => {
+    fakeRead([
+      {
+        data: [
+          {
+            ...profile,
+            role: "trusted_editor",
+            weekly_cap_override_usd: null,
+            daily_cap_override_usd: null,
+            hourly_cap_override_usd: null,
+          },
+        ],
+        error: null,
+      },
+    ]);
+    const { resolveAccountCaps } = await import("@/lib/spend");
+    const defaults = resolveAccountCaps({
+      role: "trusted_editor",
+      weekly_cap_override_usd: null,
+      daily_cap_override_usd: null,
+    });
+    expect(await getBulkSpendingLimits("trusted_editor")).toEqual({
+      count: 1,
+      weeklyCapUsd: defaults.weeklyCapUsd,
+      dailyCapUsd: defaults.dailyCapUsd,
+      hourlyCapUsd: null,
+      dailyCapEnabled: true,
+    });
+  });
+
+  it("returns empty amounts for an empty scope", async () => {
+    fakeRead([{ data: [], error: null }]);
+    expect(await getBulkSpendingLimits("all")).toEqual({
+      count: 0,
+      weeklyCapUsd: null,
+      dailyCapUsd: null,
+      hourlyCapUsd: null,
+      dailyCapEnabled: true,
+    });
+  });
+
+  it("does not turn a read failure into made-up defaults", async () => {
+    fakeRead([{ data: null, error: { message: "unavailable" } }]);
+    await expect(getBulkSpendingLimits("all")).rejects.toThrow(
+      "Could not load saved spending limits",
+    );
+    fakeRead([], true);
+    await expect(getBulkSpendingLimits("all")).rejects.toThrow(
+      "Could not load the daily cap setting",
+    );
+  });
+
+  it("requires admin access before reading settings", async () => {
+    vi.mocked(requireAdmin).mockRejectedValue(new Error("Forbidden"));
+    await expect(getBulkSpendingLimits("all")).rejects.toThrow("Forbidden");
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it.each(["admin", "toString"])(
+    "rejects the forged scope %s before accessing the database",
+    async (scope) => {
+      vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+      await expect(getBulkSpendingLimits(scope as never)).rejects.toThrow("Choose which accounts");
+      expect(createAdminClient).not.toHaveBeenCalled();
+    },
+  );
 });

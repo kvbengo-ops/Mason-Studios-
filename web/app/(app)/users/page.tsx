@@ -275,7 +275,6 @@ export default async function UsersPage({
     { count: hybridEditorCount },
     { count: aiAnimatorCount },
     { count: followingDefaultCount },
-    { count: hourlyCappedCount },
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "editor"),
     supabase
@@ -295,13 +294,6 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all]),
-    // Whether the Spending limits panel's hourly switch starts on: hourly has
-    // no installation setting, an account is capped exactly when it has one.
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all])
-      .not("hourly_cap_override_usd", "is", null),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -514,13 +506,11 @@ export default async function UsersPage({
             <AllEditorsAllowanceDialog
               maxWeeklyCapUsd={maxWeeklyCapUsd}
               maxDailyCapUsd={maxDailyCapUsd ?? 0}
-              dailyCapEnabled={dailyCapEnabled}
               editorCount={plainEditorCount ?? 0}
               trustedEditorCount={trustedEditorCount ?? 0}
               hybridEditorCount={hybridEditorCount ?? 0}
               aiAnimatorCount={aiAnimatorCount ?? 0}
               followingDefaultCount={followingDefaultCount ?? 0}
-              hourlyCapInUse={(hourlyCappedCount ?? 0) > 0}
             />
           ) : (
             <DailyCapSwitch

@@ -94,6 +94,13 @@ export function WeeklyAllowanceDialog({
   const isControlled = open !== undefined;
   const dialogOpen = isControlled ? open : uncontrolledOpen;
   const setOpen = (next: boolean): void => {
+    if (next) {
+      setCredits(String(effectiveWeeklyCapUsd));
+      setDailyCredits(String(effectiveDailyCapUsd));
+      setHourlyCredits(effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd));
+      setChanged({ weekly: false, daily: false, hourly: false });
+      setErrorMessage(null);
+    }
     if (isControlled) onOpenChange?.(next);
     else setUncontrolledOpen(next);
   };
@@ -102,6 +109,7 @@ export function WeeklyAllowanceDialog({
   const [hourlyCredits, setHourlyCredits] = useState(
     effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd),
   );
+  const [changed, setChanged] = useState({ weekly: false, daily: false, hourly: false });
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -114,15 +122,12 @@ export function WeeklyAllowanceDialog({
    * deliberately does not. Folding them into a single setAccountCaps would
    * mean one action with two different zero semantics inside it.
    *
-   * Both are written on every Save, including unchanged ones. Re-sending an
-   * unchanged weekly zero can only revoke grants issued SINCE that zero was
-   * set — an account that is already paused and has since been granted more
-   * is a contradiction an admin re-saving the pause is entitled to resolve.
+   * Untouched fields stay unchanged. Explicitly re-entering zero still revokes grants.
    */
   function submit(
-    weeklyCapUsd: number | null,
-    dailyCapUsd: number | null,
-    hourlyCapUsd: number | null,
+    weeklyCapUsd: number | null | undefined,
+    dailyCapUsd: number | null | undefined,
+    hourlyCapUsd: number | null | undefined,
     clearOverrides = false,
   ): void {
     setErrorMessage(null);
@@ -131,34 +136,31 @@ export function WeeklyAllowanceDialog({
         // Weekly first: it is the one that can revoke grants, and if it
         // fails there is nothing to unwind. The reverse order could write a
         // daily guard against a weekly figure that never landed.
-        const weekly = await setWeeklyCapOverride(userId, weeklyCapUsd);
-        if (weekly?.error) {
-          setErrorMessage(weekly.error);
-          return;
+        if (weeklyCapUsd !== undefined) {
+          const weekly = await setWeeklyCapOverride(userId, weeklyCapUsd);
+          if (weekly?.error) throw new Error(weekly.error);
         }
-        if (dailyCapEnabled || clearOverrides) {
+        if ((dailyCapEnabled || clearOverrides) && dailyCapUsd !== undefined) {
           const daily = await setDailyCapOverride(userId, dailyCapUsd);
-          if (daily?.error) {
-            setErrorMessage(daily.error);
-            return;
-          }
+          if (daily?.error) throw new Error(daily.error);
         }
-        const hourly = await setHourlyCapOverride(userId, hourlyCapUsd);
-        if (hourly?.error) {
-          setErrorMessage(hourly.error);
-          return;
+        if (hourlyCapUsd !== undefined) {
+          const hourly = await setHourlyCapOverride(userId, hourlyCapUsd);
+          if (hourly?.error) throw new Error(hourly.error);
         }
         setOpen(false);
       } catch (error) {
         unstable_rethrow(error);
-        setErrorMessage(error instanceof Error ? error.message : "Failed to set that allowance.");
+        setErrorMessage(
+          `${error instanceof Error ? error.message : "Failed to save limits."} Some changes may have saved. Close and reopen to review current limits before retrying.`,
+        );
       }
     });
   }
 
   function handleSave(): void {
     const entered = Number(credits);
-    if (!Number.isFinite(entered) || entered < 0) {
+    if (changed.weekly && (credits.trim() === "" || !Number.isFinite(entered) || entered < 0)) {
       setErrorMessage("Enter zero or a positive dollar amount.");
       return;
     }
@@ -166,15 +168,15 @@ export function WeeklyAllowanceDialog({
     // same functions the Server Actions re-run, so the dialog can never
     // accept something the server then refuses.
     const weeklyCapUsd = entered;
-    const error = weeklyCapOverrideError(weeklyCapUsd, maxWeeklyCapUsd);
+    const error = changed.weekly ? weeklyCapOverrideError(weeklyCapUsd, maxWeeklyCapUsd) : null;
     if (error) {
       setErrorMessage(error);
       return;
     }
-    let dailyCapUsd: number | null = null;
-    if (dailyCapEnabled) {
+    let dailyCapUsd: number | undefined;
+    if (dailyCapEnabled && changed.daily) {
       const enteredDaily = Number(dailyCredits);
-      if (!Number.isFinite(enteredDaily) || enteredDaily < 0) {
+      if (dailyCredits.trim() === "" || !Number.isFinite(enteredDaily) || enteredDaily < 0) {
         setErrorMessage("Enter zero or a positive daily guard.");
         return;
       }
@@ -186,11 +188,19 @@ export function WeeklyAllowanceDialog({
       }
     }
     const enteredHourly = hourlyCredits.trim() === "" ? null : Number(hourlyCredits);
-    if (enteredHourly !== null && (!Number.isFinite(enteredHourly) || enteredHourly < 0)) {
+    if (
+      changed.hourly &&
+      enteredHourly !== null &&
+      (!Number.isFinite(enteredHourly) || enteredHourly < 0)
+    ) {
       setErrorMessage("Enter zero or a positive hourly cap, or leave it blank for no cap.");
       return;
     }
-    submit(weeklyCapUsd, dailyCapUsd, enteredHourly === null ? null : enteredHourly);
+    submit(
+      changed.weekly ? weeklyCapUsd : undefined,
+      dailyCapUsd,
+      changed.hourly ? enteredHourly : undefined,
+    );
   }
 
   return (
@@ -208,8 +218,8 @@ export function WeeklyAllowanceDialog({
           <DialogDescription>
             This replaces their role&apos;s default allowance every week, until it is cleared. It is
             not a one-off top-up — for that, approve an allowance request instead, which expires on
-            its own. Set it to 0 to stop this account spending: that also revokes any active grant,
-            since a grant would otherwise sit on top of the zero and keep renders running.
+            its own. Set it to 0 to remove the base allowance and revoke approved grants. Allowance
+            received from colleagues remains available.
           </DialogDescription>
         </DialogHeader>
 
@@ -221,7 +231,10 @@ export function WeeklyAllowanceDialog({
             min={0}
             step={0.01}
             value={credits}
-            onChange={(event) => setCredits(event.target.value)}
+            onChange={(event) => {
+              setCredits(event.target.value);
+              setChanged((current) => ({ ...current, weekly: true }));
+            }}
             disabled={isPending}
           />
           <p className="text-xs text-muted-foreground">
@@ -248,7 +261,10 @@ export function WeeklyAllowanceDialog({
                 min={0}
                 step={0.01}
                 value={dailyCredits}
-                onChange={(event) => setDailyCredits(event.target.value)}
+                onChange={(event) => {
+                  setDailyCredits(event.target.value);
+                  setChanged((current) => ({ ...current, daily: true }));
+                }}
                 disabled={isPending}
               />
               <p className="text-xs text-muted-foreground">
@@ -270,7 +286,10 @@ export function WeeklyAllowanceDialog({
             min={0}
             step={0.01}
             value={hourlyCredits}
-            onChange={(event) => setHourlyCredits(event.target.value)}
+            onChange={(event) => {
+              setHourlyCredits(event.target.value);
+              setChanged((current) => ({ ...current, hourly: true }));
+            }}
             disabled={isPending}
             placeholder="No hourly cap"
           />

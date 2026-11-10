@@ -324,6 +324,14 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
 
 export type BulkAllowanceScope = "editor" | "trusted_editor" | "hybrid_editor" | "ai_animator" | "all";
 
+export interface BulkSpendingLimits {
+  count: number;
+  weeklyCapUsd: number | null | "mixed";
+  dailyCapUsd: number | null | "mixed";
+  hourlyCapUsd: number | null | "mixed";
+  dailyCapEnabled: boolean;
+}
+
 /**
  * Which roles each scope writes to.
  *

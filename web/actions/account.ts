@@ -16,9 +16,10 @@ import {
   dailyCapOverrideError,
   weeklyCapOverrideError,
   type BulkAllowanceScope,
+  type BulkSpendingLimits,
 } from "@/lib/allowance";
 import { revokeActiveGrantsFor } from "@/lib/allowance-grants";
-import { ADMIN_DAILY_CAP_USD, ADMIN_WEEKLY_CAP_USD } from "@/lib/spend";
+import { ADMIN_DAILY_CAP_USD, ADMIN_WEEKLY_CAP_USD, resolveAccountCaps } from "@/lib/spend";
 import type { GlobalSpendCapPeriod } from "@/lib/spend";
 
 const USERS_PATH = "/users";
@@ -389,10 +390,10 @@ export async function setWeeklyCapOverride(
   if (weeklyCapUsd === 0) {
     await revokeActiveGrantsFor(admin, [userId], user.id, new Date().toISOString());
     revalidatePath(ALLOWANCES_PATH);
-    revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
   }
 
   revalidatePath(USERS_PATH);
+  revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
 }
 
 /**
@@ -514,6 +515,56 @@ export async function setHourlyCapOverride(
  */
 export type BulkAllowanceResult = { error: string } | { updated: number };
 
+/** Read the whole selected scope, independently of the Users table's search and pagination. */
+export async function getBulkSpendingLimits(
+  scope: BulkAllowanceScope,
+): Promise<BulkSpendingLimits> {
+  await requireAdmin();
+  const roles = BULK_ALLOWANCE_SCOPE_ROLES[scope];
+  if (!Array.isArray(roles)) throw new Error("Choose which accounts these limits apply to.");
+
+  const admin = createAdminClient();
+  const { data: settings, error: settingsError } = await admin
+    .from("app_settings")
+    .select("user_daily_cap_enabled")
+    .eq("id", true)
+    .single();
+  if (settingsError || !settings) throw new Error("Could not load the daily cap setting.");
+
+  const weekly = new Set<number | null>();
+  const daily = new Set<number | null>();
+  const hourly = new Set<number | null>();
+  let count = 0;
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
+      .from("profiles")
+      .select("role, weekly_cap_override_usd, daily_cap_override_usd, hourly_cap_override_usd")
+      .in("role", roles)
+      .order("id")
+      .range(from, from + pageSize - 1);
+    if (error || !data) throw new Error("Could not load saved spending limits.");
+    for (const profile of data) {
+      const caps = resolveAccountCaps(profile);
+      weekly.add(caps.weeklyCapUsd);
+      // Preserve the configured daily amount even when the weekly cap currently binds first.
+      daily.add(profile.daily_cap_override_usd ?? caps.dailyCapUsd);
+      hourly.add(profile.hourly_cap_override_usd);
+    }
+    count += data.length;
+    if (data.length < pageSize) break;
+  }
+  const common = (values: Set<number | null>): number | null | "mixed" =>
+    values.size > 1 ? "mixed" : (values.values().next().value ?? null);
+  return {
+    count,
+    weeklyCapUsd: common(weekly),
+    dailyCapUsd: common(daily),
+    hourlyCapUsd: common(hourly),
+    dailyCapEnabled: settings.user_daily_cap_enabled,
+  };
+}
+
 export async function setAllEditorsWeeklyCap(
   weeklyCapUsd: number | null,
   // Defaults to every editor tier — the behaviour before scopes existed, so
@@ -528,7 +579,7 @@ export async function setAllEditorsWeeklyCap(
   // profile including admins. Checked rather than trusted: this is a Server
   // Action, reachable without the dialog that normally constrains it.
   const roles = BULK_ALLOWANCE_SCOPE_ROLES[scope];
-  if (!roles) {
+  if (!Array.isArray(roles)) {
     return { error: "Choose which accounts this allowance applies to." };
   }
 
@@ -562,10 +613,10 @@ export async function setAllEditorsWeeklyCap(
   if (weeklyCapUsd === 0) {
     await revokeActiveGrantsFor(admin, updatedIds, user.id, new Date().toISOString());
     revalidatePath(ALLOWANCES_PATH);
-    revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
   }
 
   revalidatePath(USERS_PATH);
+  revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
   // Zero is not an error here: a team with no editor-tier accounts is a
   // legitimate state, and reporting the count lets the admin see that the
   // click landed on the number of people they expected.
@@ -690,7 +741,7 @@ export async function setAllEditorsDailyCap(
   await requireAdmin();
 
   const roles = BULK_ALLOWANCE_SCOPE_ROLES[scope];
-  if (!roles) {
+  if (!Array.isArray(roles)) {
     return { error: "Choose which accounts this daily guard applies to." };
   }
 
@@ -728,7 +779,7 @@ export async function setAllEditorsHourlyCap(
   await requireAdmin();
 
   const roles = BULK_ALLOWANCE_SCOPE_ROLES[scope];
-  if (!roles) {
+  if (!Array.isArray(roles)) {
     return { error: "Choose which accounts this hourly cap applies to." };
   }
   if (hourlyCapUsd !== null && (!Number.isFinite(hourlyCapUsd) || hourlyCapUsd < 0)) {

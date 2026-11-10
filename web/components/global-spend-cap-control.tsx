@@ -43,7 +43,7 @@ export function GlobalSpendCapControl({
   function save(): void {
     setMessage(null);
     const amount = Number(credits);
-    if (!Number.isFinite(amount) || amount < 0) {
+    if (credits.trim() === "" || !Number.isFinite(amount) || amount < 0) {
       setMessage("Enter zero or a positive dollar limit.");
       return;
     }
@@ -81,7 +81,15 @@ export function GlobalSpendCapControl({
         <h2 className="font-sans text-sm font-medium text-muted-foreground">Team cap used</h2>
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            if (!open) {
+              setEnabled(settings.enabled);
+              setPeriod(settings.period);
+              setCredits(String(settings.capUsd));
+              setMessage(null);
+            }
+            setOpen((o) => !o);
+          }}
           aria-expanded={open}
           aria-controls="global-cap-form"
           aria-label={open ? "Close team spending limit" : "Edit team spending limit"}

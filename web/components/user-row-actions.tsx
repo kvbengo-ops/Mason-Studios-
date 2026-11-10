@@ -173,7 +173,7 @@ export function UserRowActions({
 
       {/* Rendered OUTSIDE the menu, controlled by this component: a Dialog
           nested inside DropdownMenuContent unmounts with the menu. */}
-      {allowance ? (
+      {allowance && allowanceOpen ? (
         <WeeklyAllowanceDialog
           userId={userId}
           email={email}
