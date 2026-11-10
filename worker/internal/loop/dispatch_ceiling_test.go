@@ -21,7 +21,7 @@ type claimRecorder struct {
 	byteplusCaps []int
 }
 
-func (c *claimRecorder) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]store.Scene, error) {
+func (c *claimRecorder) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap, perTick int) ([]store.Scene, error) {
 	c.ceilings = append(c.ceilings, ceiling)
 	c.byteplusCaps = append(c.byteplusCaps, byteplusCap)
 	return nil, nil

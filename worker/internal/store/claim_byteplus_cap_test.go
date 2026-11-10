@@ -77,7 +77,7 @@ func TestClaimKeepsOverCapBytePlusQueuedAndStillFillsKie(t *testing.T) {
 	base := inflight(ctx, t, s)
 	limit := base + 2
 
-	claimed, err := s.ClaimQueuedScenes(ctx, 1000, limit)
+	claimed, err := s.ClaimQueuedScenes(ctx, 1000, limit, 0)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestClaimKeepsOverCapBytePlusQueuedAndStillFillsKie(t *testing.T) {
 	if n := inflight(ctx, t, s); n != limit {
 		t.Errorf("BytePlusInflight = %d after claiming two, want %d", n, limit)
 	}
-	again, err := s.ClaimQueuedScenes(ctx, 1000, limit)
+	again, err := s.ClaimQueuedScenes(ctx, 1000, limit, 0)
 	if err != nil {
 		t.Fatalf("second claim: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestClaimKeepsOverCapBytePlusQueuedAndStillFillsKie(t *testing.T) {
 	if _, err := s.pool.Exec(ctx, `UPDATE scenes SET status = 'failed' WHERE id = $1`, bp[0]); err != nil {
 		t.Fatalf("finish %s: %v", bp[0], err)
 	}
-	third, err := s.ClaimQueuedScenes(ctx, 1000, limit)
+	third, err := s.ClaimQueuedScenes(ctx, 1000, limit, 0)
 	if err != nil {
 		t.Fatalf("third claim: %v", err)
 	}
@@ -137,7 +137,7 @@ func TestBytePlusInflightCountsSubmittedAndClaimedButNotKie(t *testing.T) {
 
 	bp, kieIDs := seedBytePlusAndKieQueue(ctx, t, s)
 	base := inflight(ctx, t, s)
-	if _, err := s.ClaimQueuedScenes(ctx, 1000, 0); err != nil {
+	if _, err := s.ClaimQueuedScenes(ctx, 1000, 0, 0); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if n := inflight(ctx, t, s); n != base+4 {
@@ -171,7 +171,7 @@ func TestAClaimedButUnsubmittedBytePlusSceneGoesStale(t *testing.T) {
 	t.Cleanup(s.Close)
 
 	bp, _ := seedBytePlusAndKieQueue(ctx, t, s)
-	if _, err := s.ClaimQueuedScenes(ctx, 1000, 0); err != nil {
+	if _, err := s.ClaimQueuedScenes(ctx, 1000, 0, 0); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
 	if _, err := s.pool.Exec(ctx,
@@ -281,7 +281,7 @@ WHERE application_name = $1 AND wait_event_type = 'Lock'`, app).Scan(&n); err !=
 		err    error
 	}
 	claim := func(w *Store, out chan<- result) {
-		sc, err := w.ClaimQueuedScenes(ctx, 1000, limit)
+		sc, err := w.ClaimQueuedScenes(ctx, 1000, limit, 0)
 		out <- result{sc, err}
 	}
 	aDone, bDone := make(chan result, 1), make(chan result, 1)
@@ -344,7 +344,7 @@ WHERE id = ANY($2)`, kie.BytePlusSeedance25ID, all); err != nil {
 		t.Fatalf("mark BytePlus scenes: %v", err)
 	}
 
-	claimed, err := s.ClaimQueuedScenes(ctx, 1000, inflight(ctx, t, s)+2)
+	claimed, err := s.ClaimQueuedScenes(ctx, 1000, inflight(ctx, t, s)+2, 0)
 	if err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestClaimCeilingTighterThanTheBytePlusCap(t *testing.T) {
 
 	// One free slot under the ceiling, five under the BytePlus cap: the
 	// ceiling wins and the single slot goes to the oldest scene.
-	first, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+1, inflight(ctx, t, s)+5)
+	first, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+1, inflight(ctx, t, s)+5, 0)
 	if err != nil {
 		t.Fatalf("first claim: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestClaimCeilingTighterThanTheBytePlusCap(t *testing.T) {
 
 	// Both bind: two free slots, one BytePlus slot. bp[2] and bp[3] are over
 	// the BytePlus cap, so the second slot falls to the oldest kie scene.
-	second, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+2, inflight(ctx, t, s)+1)
+	second, err := s.ClaimQueuedScenes(ctx, renderingCount(ctx, t, s)+2, inflight(ctx, t, s)+1, 0)
 	if err != nil {
 		t.Fatalf("second claim: %v", err)
 	}

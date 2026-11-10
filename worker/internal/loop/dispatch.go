@@ -95,7 +95,7 @@ func Dispatch(ctx context.Context, deps Deps) error {
 		return nil
 	}
 
-	scenes, err := deps.Store.ClaimQueuedScenes(ctx, deps.Config.RenderConcurrency, deps.BytePlusClaimCap)
+	scenes, err := deps.Store.ClaimQueuedScenes(ctx, deps.Config.RenderConcurrency, deps.BytePlusClaimCap, deps.Config.KieMaxSubmitsPerTick)
 	if err != nil {
 		return fmt.Errorf("dispatch: claim queued scenes: %w", err)
 	}
@@ -438,16 +438,23 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		// was billed, so the scene goes back in the queue rather than
 		// failing. The claim's own cap makes this rare (see
 		// store.ClaimQueuedScenes); still never kie.
-		if errors.Is(err, byteplus.ErrAtCapacity) {
+		//
+		// kie.ErrRateLimited takes the same road: kie refused the createTask
+		// before queuing it, so nothing was billed and the next tick retries.
+		// Reconcile's 45s line is why this is a requeue, not an in-process wait.
+		atCapacity := errors.Is(err, byteplus.ErrAtCapacity)
+		if atCapacity || errors.Is(err, kie.ErrRateLimited) {
 			// Bounded: the claim's cap should keep this from firing at all, so a
 			// scene that keeps landing here means the in-flight count looks
 			// permanently full (stuck rows, a miscount). Requeuing it forever
 			// would hide that behind a silent 30s loop; failing it says so.
 			n := deps.CapacityRequeues.note(scene.ID)
 			if n > maxCapacityRequeues {
-				failScene(ctx, deps, logger, scene, fmt.Errorf(
-					"submit render: BytePlus stayed at capacity through %d tries in a row, so its in-flight count may be stuck: %w",
-					maxCapacityRequeues, err))
+				reason := fmt.Sprintf("kie kept rate-limiting this submission through %d tries in a row", maxCapacityRequeues)
+				if atCapacity {
+					reason = fmt.Sprintf("BytePlus stayed at capacity through %d tries in a row, so its in-flight count may be stuck", maxCapacityRequeues)
+				}
+				failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %s: %w", reason, err))
 				return
 			}
 			recCtx, cancel := recoveryCtx(ctx)
@@ -456,7 +463,11 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 				failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w (and could not return it to the queue: %v)", err, rerr))
 				return
 			}
-			logger.Warn("dispatch: BytePlus at capacity past the claim's cap, scene returned to the queue",
+			msg := "dispatch: kie rate-limited the submission, scene returned to the queue"
+			if atCapacity {
+				msg = "dispatch: BytePlus at capacity past the claim's cap, scene returned to the queue"
+			}
+			logger.Warn(msg,
 				slog.String("error", err.Error()), slog.Int("requeues", n), slog.Int("max_requeues", maxCapacityRequeues))
 			return
 		}

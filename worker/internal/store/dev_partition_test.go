@@ -182,7 +182,7 @@ func TestDevPartition_ClaimQueuedScenes(t *testing.T) {
 
 	// A large limit on purpose: this must fail because of the predicate, not
 	// because the row happened to fall outside a small page.
-	devClaimed, err := devStore.ClaimQueuedScenes(ctx, 100, 0)
+	devClaimed, err := devStore.ClaimQueuedScenes(ctx, 100, 0, 0)
 	if err != nil {
 		t.Fatalf("dev ClaimQueuedScenes: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestDevPartition_ClaimQueuedScenes(t *testing.T) {
 		t.Error("a MODE=development worker did not claim its own scene; the partition is filtering too much, not too little")
 	}
 
-	prodClaimed, err := prodStore.ClaimQueuedScenes(ctx, 100, 0)
+	prodClaimed, err := prodStore.ClaimQueuedScenes(ctx, 100, 0, 0)
 	if err != nil {
 		t.Fatalf("prod ClaimQueuedScenes: %v", err)
 	}
@@ -299,7 +299,7 @@ func TestDevPartition_ClaimCeilingIgnoresProductionRenders(t *testing.T) {
 
 	seedQueuedSceneWithDev(ctx, t, devStore, true)
 
-	claimed, err := devStore.ClaimQueuedScenes(ctx, devRendering+1, 0)
+	claimed, err := devStore.ClaimQueuedScenes(ctx, devRendering+1, 0, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes: %v", err)
 	}

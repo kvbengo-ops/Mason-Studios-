@@ -678,35 +678,79 @@ func TestClient_4xx_NotRetried(t *testing.T) {
 	}
 }
 
-// TestClient_429_Retried: an explicit 429 is safe to retry because the
-// vendor refused the request before starting work.
-func TestClient_429_Retried(t *testing.T) {
+// TestClient_429OnPOST_ErrRateLimitedAfterOneAttempt: kie refused the
+// createTask before queuing it, so nothing is billed, but retrying in-process
+// would hold a claimed scene toward reconcile's 45s line. Dispatch requeues.
+func TestClient_429OnPOST_ErrRateLimitedAfterOneAttempt(t *testing.T) {
 	var attempts int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
-		if attempts < 3 {
-			w.WriteHeader(http.StatusTooManyRequests)
-			return
-		}
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	_, err := c.Submit(context.Background(), SubmitRequest{
+		KieModelID: "bytedance/seedance-2-5",
+		Prompt:     "x",
+		ImageURL:   "https://example.com/frame.png",
+	})
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("Submit() error = %v, want it to wrap ErrRateLimited", err)
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (a createTask 429 must not be retried in-process)", attempts)
+	}
+}
+
+// kie reports a rate limit in the envelope, HTTP 200 and all.
+func TestClient_Submit_BodyCode429_ErrRateLimited(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":429,"msg":"too many requests","data":{"taskId":"must-not-be-used"}}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	taskID, err := c.Submit(context.Background(), SubmitRequest{
+		KieModelID: "bytedance/seedance-2-5",
+		Prompt:     "x",
+		ImageURL:   "https://example.com/frame.png",
+	})
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("Submit() error = %v, want it to wrap ErrRateLimited", err)
+	}
+	if taskID != "" {
+		t.Errorf("Submit() taskID = %q, want empty", taskID)
+	}
+}
+
+// Two submits leave at least submitGap apart, and a cancelled ctx stops the wait.
+func TestClient_Submit_SpacedBySubmitGap(t *testing.T) {
+	var stamps []time.Time
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stamps = append(stamps, time.Now())
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"code": 200, "data": map[string]string{"taskId": "task-1"}})
 	}))
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	id, err := c.Submit(context.Background(), SubmitRequest{
-		KieModelID: "bytedance/seedance-2-5",
-		Prompt:     "x",
-		ImageURL:   "https://example.com/frame.png",
-	})
-	if err != nil {
-		t.Fatalf("Submit() error = %v", err)
+	c.submitGap = 150 * time.Millisecond
+	req := SubmitRequest{KieModelID: "bytedance/seedance-2-5", Prompt: "x", ImageURL: "https://example.com/frame.png"}
+	for i := 0; i < 2; i++ {
+		if _, err := c.Submit(context.Background(), req); err != nil {
+			t.Fatalf("Submit() %d: %v", i, err)
+		}
 	}
-	if id != "task-1" {
-		t.Errorf("Submit() = %q, want %q", id, "task-1")
+	if gap := stamps[1].Sub(stamps[0]); gap < c.submitGap {
+		t.Errorf("submits %v apart, want at least %v", gap, c.submitGap)
 	}
-	if attempts != 3 {
-		t.Errorf("attempts = %d, want 3", attempts)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.Submit(ctx, req); !errors.Is(err, context.Canceled) {
+		t.Errorf("Submit(cancelled ctx) error = %v, want context.Canceled", err)
 	}
 }
 

@@ -61,7 +61,7 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 		t.Fatalf("count rendering: %v", err)
 	}
 
-	claimed, err := s.ClaimQueuedScenes(ctx, rendering+2, 0)
+	claimed, err := s.ClaimQueuedScenes(ctx, rendering+2, 0, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes: %v", err)
 	}
@@ -71,11 +71,61 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 
 	// Now full. A second dispatch tick — or a second instance — gets nothing,
 	// even though three scenes are still queued.
-	again, err := s.ClaimQueuedScenes(ctx, rendering+2, 0)
+	again, err := s.ClaimQueuedScenes(ctx, rendering+2, 0, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes (second): %v", err)
 	}
 	if len(again) != 0 {
 		t.Errorf("second ClaimQueuedScenes at the ceiling claimed %d scenes, want 0", len(again))
+	}
+}
+
+// KIE_MAX_SUBMITS_PER_TICK: perTick caps one claim, and the ceiling still wins
+// when it is the smaller. Same shape and gating as the test above.
+func TestClaimPerTickCap(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set; skipping database-backed test")
+	}
+
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	projectID, _ := seedRenderingScene(ctx, t, s)
+	for idx := 1; idx <= 50; idx++ {
+		if _, err := s.pool.Exec(ctx, `
+INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, projectID, idx); err != nil {
+			t.Fatalf("seed queued scene %d: %v", idx, err)
+		}
+	}
+	rendering := func() int {
+		var n int
+		if err := s.pool.QueryRow(ctx,
+			`SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&n); err != nil {
+			t.Fatalf("count rendering: %v", err)
+		}
+		return n
+	}
+
+	// 50 queued, room for far more than 30: the per-tick cap decides.
+	claimed, err := s.ClaimQueuedScenes(ctx, rendering()+100, 0, 30)
+	if err != nil {
+		t.Fatalf("ClaimQueuedScenes: %v", err)
+	}
+	if len(claimed) != 30 {
+		t.Fatalf("perTick=30 claimed %d scenes, want exactly 30", len(claimed))
+	}
+
+	// 20 still queued; only 3 free slots under the ceiling, perTick 30: the ceiling decides.
+	claimed, err = s.ClaimQueuedScenes(ctx, rendering()+3, 0, 30)
+	if err != nil {
+		t.Fatalf("ClaimQueuedScenes (ceiling): %v", err)
+	}
+	if len(claimed) != 3 {
+		t.Fatalf("ceiling with 3 free slots claimed %d scenes, want 3 — perTick must not widen the ceiling", len(claimed))
 	}
 }

@@ -18,7 +18,7 @@ import (
 // asked to write, instead of needing a live Postgres to observe anything
 // at all. *store.Store satisfies it below.
 type Store interface {
-	ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]store.Scene, error)
+	ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap, perTick int) ([]store.Scene, error)
 	MarkRendering(ctx context.Context, sceneID, kieTaskID string) error
 	ReleaseUnsubmittedClaim(ctx context.Context, sceneID string) error
 	MarkDone(ctx context.Context, sceneID string, asset store.Asset, run store.Run) error

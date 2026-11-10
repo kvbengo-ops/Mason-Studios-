@@ -68,6 +68,11 @@ type Config struct {
 	// RenderConcurrency caps how many scenes may be in status='rendering'
 	// at once. Defaults to 10.
 	RenderConcurrency int
+	// KieMaxSubmitsPerTick caps how many scenes ONE dispatch tick claims.
+	// Defaults to 30: kie submits are spaced (kie.submitGap), and a claimed
+	// scene must reach kie before reconcile's staleAfter (45s), so a tick may
+	// only hold what it can submit in that time.
+	KieMaxSubmitsPerTick int
 	// FFmpegConcurrency caps concurrent ffmpeg processes. Defaults to 2.
 	//
 	// THIS IS THE ONLY THING BOUNDING THE WORKER'S MEMORY, and 2 is not a
@@ -335,6 +340,12 @@ func load(env map[string]string) (*Config, error) {
 		errs = append(errs, err)
 	} else {
 		cfg.RenderConcurrency = v
+	}
+
+	if v, err := positiveIntVar(env, "KIE_MAX_SUBMITS_PER_TICK", 30); err != nil {
+		errs = append(errs, err)
+	} else {
+		cfg.KieMaxSubmitsPerTick = v
 	}
 
 	if v, err := positiveIntVar(env, "FFMPEG_CONCURRENCY", 2); err != nil {

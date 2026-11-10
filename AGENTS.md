@@ -195,8 +195,10 @@ same `taskId` twice — one asset, not two. Changed SQL? Apply it and read a row
 
 ## Not proven yet
 
-- **kie's concurrent-submission limit is unknown** — `RENDER_CONCURRENCY=10` assumes
-  one, untested against a real burst.
+- **kie's concurrent-render limit is unknown**, but its submit rate (20 new requests per
+  10 s, a rejected one never queues) is bounded: the worker claims at most
+  `KIE_MAX_SUBMITS_PER_TICK` (30) scenes per tick, spaces `createTask` 700 ms apart, and
+  requeues a 429 (`kie.ErrRateLimited`) instead of failing it. Untested against a real burst.
 - **No silent seedance rate exists at any tier** — every receipt has audio on, so "no
   surcharge" is an inference kie's docs contradict.
 - **Perf under load** — `PERF_LOGGING_ENABLED=1` ships `perf_render:` lines unread.
