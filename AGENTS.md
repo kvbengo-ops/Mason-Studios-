@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0132`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0134`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;

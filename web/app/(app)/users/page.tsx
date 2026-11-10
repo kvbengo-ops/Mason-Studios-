@@ -353,6 +353,7 @@ export default async function UsersPage({
       weekly_cap_override_usd: number | null;
       hourly_cap_override_usd: number | null;
       global_cap_exempt: boolean;
+      daily_cap_enabled: boolean | null;
     }
   >();
   const spendWindowByUserId = new Map<
@@ -399,7 +400,7 @@ export default async function UsersPage({
       supabase
         .from("profiles")
         .select(
-          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd, global_cap_exempt",
+          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd, global_cap_exempt, daily_cap_enabled",
         )
         .in("id", userIds),
       supabase
@@ -671,10 +672,14 @@ export default async function UsersPage({
                   // pending label, label, and which of the two it is). Named
                   // once here so the row cannot end up offering "Make
                   // trusted" while sending "untrust".
+                  // This account's own switch (0134) over the installation default.
+                  const rowDailyCapEnabled = override?.daily_cap_enabled ?? dailyCapEnabled;
                   const allowance =
                     caps && maxWeeklyCapUsd !== null && maxDailyCapUsd !== null
                       ? {
                           effectiveWeeklyCapUsd: caps.weeklyCapUsd,
+                          activeGrantsUsd: activeGrants.totalUsd,
+                          hasDailyCapSwitch: override?.daily_cap_enabled != null,
                           hasOverride: override?.weekly_cap_override_usd != null,
                           maxWeeklyCapUsd,
                           effectiveDailyCapUsd: caps.dailyCapUsd,
@@ -683,7 +688,7 @@ export default async function UsersPage({
                           effectiveHourlyCapUsd: override?.hourly_cap_override_usd ?? null,
                           hasHourlyOverride: override?.hourly_cap_override_usd != null,
                           globalCapExempt: override?.global_cap_exempt === true,
-                          dailyCapEnabled,
+                          dailyCapEnabled: rowDailyCapEnabled,
                         }
                       : null;
 
@@ -745,7 +750,7 @@ export default async function UsersPage({
                       <TableCell numeric>{formatUsd(user.spend_usd)}</TableCell>
                       <TableCell numeric className="text-muted-foreground">
                         {caps && spendWindow
-                          ? dailyCapEnabled
+                          ? rowDailyCapEnabled
                             ? `${formatUsd(spendWindow.spent_today_usd)} / ${formatUsd(caps.dailyCapUsd)}`
                             : formatUsd(spendWindow.spent_today_usd)
                           : "—"}

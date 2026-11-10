@@ -484,6 +484,34 @@ export async function setHourlyCapOverride(
 }
 
 /**
+ * Turns the daily burst guard on or off for one account (0134), or hands it back
+ * to the installation setting with null. Admin only. The amount is
+ * setDailyCapOverride's business.
+ */
+export async function setDailyCapEnabled(
+  userId: string,
+  enabled: boolean | null,
+): Promise<ActionResult> {
+  await requireAdmin();
+  if (enabled !== null && typeof enabled !== "boolean") {
+    return { error: "Choose whether the daily allowance applies." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .update({ daily_cap_enabled: enabled })
+    .eq("id", userId)
+    .select("id");
+
+  if (error) throw new Error(`Failed to set the daily allowance switch: ${error.message}`);
+  if (!data?.length) return { error: "That account could not be found." };
+
+  revalidatePath(USERS_PATH);
+  revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
+}
+
+/**
  * Exempts one account from the team-wide spending cap, or puts it back under it
  * (0133). Admin only. Its spend still counts toward the team total.
  */

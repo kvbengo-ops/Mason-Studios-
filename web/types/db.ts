@@ -1051,6 +1051,8 @@ export type Database = {
           daily_cap_override_usd: number | null;
           hourly_cap_override_usd: number | null;
           global_cap_exempt: boolean;
+          // 0134: null follows app_settings.user_daily_cap_enabled.
+          daily_cap_enabled: boolean | null;
           email: string;
           id: string;
           role: ProfileRole;
@@ -1071,6 +1073,7 @@ export type Database = {
           daily_cap_override_usd?: number | null;
           hourly_cap_override_usd?: number | null;
           global_cap_exempt?: boolean;
+          daily_cap_enabled?: boolean | null;
           email: string;
           id: string;
           role?: ProfileRole;
@@ -1085,6 +1088,7 @@ export type Database = {
           daily_cap_override_usd?: number | null;
           hourly_cap_override_usd?: number | null;
           global_cap_exempt?: boolean;
+          daily_cap_enabled?: boolean | null;
           email?: string;
           id?: string;
           role?: ProfileRole;

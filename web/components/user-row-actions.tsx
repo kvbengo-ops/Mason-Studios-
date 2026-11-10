@@ -54,6 +54,8 @@ export function UserRowActions({
   canDemote?: boolean;
   allowance: {
     effectiveWeeklyCapUsd: number;
+    activeGrantsUsd?: number;
+    hasDailyCapSwitch?: boolean;
     hasOverride: boolean;
     maxWeeklyCapUsd: number;
     effectiveDailyCapUsd: number;

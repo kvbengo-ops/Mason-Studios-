@@ -229,7 +229,7 @@ export async function getSidebarBudget(
     // The installation setting (app_settings, 0077), which since 0078 is the
     // only input to whether the daily guard applies. Rides alongside the
     // snapshot RPC this function already awaits.
-    const dailyCapEnabled = await spend.getUserDailyCapEnabled();
+    const dailyCapEnabled = spend.dailyCapAppliesTo(profile, await spend.getUserDailyCapEnabled());
     const heldUsd = inFlight.byUserUsd.get(userId) ?? 0;
     const effectiveWeeklyCapUsd = caps.weeklyCapUsd + row.activeGrantsUsd;
     const dailyRemainingUsd = caps.dailyCapUsd - row.dailySpentUsd - heldUsd;

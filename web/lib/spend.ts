@@ -319,6 +319,19 @@ export interface AccountCapProfile {
   hourly_cap_override_usd?: number | null;
   /** profiles.global_cap_exempt (0133): the team-wide cap never blocks this account. */
   global_cap_exempt?: boolean | null;
+  /** profiles.daily_cap_enabled (0134): null follows the installation setting. */
+  daily_cap_enabled?: boolean | null;
+}
+
+/**
+ * Whether the daily burst guard applies to this account: its own switch (0134)
+ * if an admin set one, otherwise the installation setting.
+ */
+export function dailyCapAppliesTo(
+  profile: AccountCapProfile,
+  installationEnabled: boolean,
+): boolean {
+  return profile.daily_cap_enabled ?? installationEnabled;
 }
 
 /**
@@ -1528,7 +1541,7 @@ export async function getAccountBudgetSnapshot(
   profile: AccountCapProfile,
 ): Promise<AccountBudgetSnapshot> {
   const caps = resolveAccountCaps(profile);
-  const dailyCapEnabled = await getUserDailyCapEnabled();
+  const dailyCapEnabled = dailyCapAppliesTo(profile, await getUserDailyCapEnabled());
 
   // Five independent reads, fired together — same reasoning as lib/
   // sidebar-budget.ts's own comment on its (now-replaced) inline version of
@@ -1745,7 +1758,7 @@ export async function assertWithinSpendCaps(
   // Read here rather than at the top because the weekly check above refuses
   // first in every case that matters, so an account already over its weekly
   // allowance never pays for this lookup at all.
-  if (!(await getUserDailyCapEnabled())) return undefined;
+  if (!dailyCapAppliesTo(profile, await getUserDailyCapEnabled())) return undefined;
 
   const spentTodayUsd = (await getDailySpend(userId)) + inFlightForUserUsd;
   return guardResult(() => assertCapNotExceeded(spentTodayUsd, estimatedUsd, caps.dailyCapUsd));
@@ -1852,7 +1865,7 @@ export async function queueScenesIfWithinCaps(params: {
     p_global_cap_period: globalSpendCap.period,
     p_weekly_cap_usd: effectiveWeeklyCapUsd,
     p_daily_cap_usd: caps.dailyCapUsd,
-    p_daily_cap_enabled: dailyCapEnabled,
+    p_daily_cap_enabled: dailyCapAppliesTo(profile, dailyCapEnabled),
     p_hourly_cap_usd: profile.hourly_cap_override_usd ?? null,
     p_api_token_id: params.apiTokenId ?? null,
     p_prepare_token: params.prepareToken ?? null,
@@ -2015,6 +2028,6 @@ export async function resolveImageAttemptCeilings(
         : reduce(profile.hourly_cap_override_usd, inFlightForUserUsd),
     weeklyCapUsd: reduce(effectiveWeeklyCapUsd, inFlightForUserUsd),
     dailyCapUsd: reduce(caps.dailyCapUsd, inFlightForUserUsd),
-    dailyCapEnabled,
+    dailyCapEnabled: dailyCapAppliesTo(profile, dailyCapEnabled),
   };
 }

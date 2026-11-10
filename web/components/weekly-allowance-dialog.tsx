@@ -32,6 +32,7 @@ import { Label } from "@/components/ui/label";
 import { PendingButton } from "@/components/pending-button";
 import {
   setDailyCapOverride,
+  setDailyCapEnabled,
   setGlobalCapExempt,
   setHourlyCapOverride,
   setWeeklyCapOverride,
@@ -52,6 +53,10 @@ export function WeeklyAllowanceDialog({
    * has one, otherwise its role default. Pre-fills the input, so an admin
    * edits the number they were just looking at in the row. */
   effectiveWeeklyCapUsd,
+  /** Sum of the account's active grants. Display only: enforcement is base + grants, and the input above stays the base. */
+  activeGrantsUsd = 0,
+  /** True when this account has its own daily on/off switch (profiles.daily_cap_enabled, 0134). */
+  hasDailyCapSwitch = false,
   /** True when this account already carries an override, which is the only
    * thing that makes "Use role default" meaningful — offering a reset to an
    * account that has nothing to reset is a button that does nothing. */
@@ -86,6 +91,8 @@ export function WeeklyAllowanceDialog({
   userId: string;
   email: string;
   effectiveWeeklyCapUsd: number;
+  activeGrantsUsd?: number;
+  hasDailyCapSwitch?: boolean;
   hasOverride: boolean;
   maxWeeklyCapUsd: number;
   effectiveDailyCapUsd: number;
@@ -94,7 +101,7 @@ export function WeeklyAllowanceDialog({
   effectiveHourlyCapUsd: number | null;
   hasHourlyOverride: boolean;
   globalCapExempt?: boolean;
-  /** The INSTALLATION default (app_settings.user_daily_cap_enabled). Decides what "Follow the default" means below, and whether the amount field is worth showing at all. */
+  /** Whether the daily allowance applies to THIS account: its own switch, else the installation default. */
   dailyCapEnabled?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -109,6 +116,7 @@ export function WeeklyAllowanceDialog({
       setHourlyCredits(effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd));
       setChanged({ weekly: false, daily: false, hourly: false });
       setTeamCapApplies(!globalCapExempt);
+      setDailyOn(dailyCapEnabled);
       setErrorMessage(null);
     }
     if (isControlled) onOpenChange?.(next);
@@ -121,6 +129,7 @@ export function WeeklyAllowanceDialog({
   );
   const [changed, setChanged] = useState({ weekly: false, daily: false, hourly: false });
   const [teamCapApplies, setTeamCapApplies] = useState(!globalCapExempt);
+  const [dailyOn, setDailyOn] = useState(dailyCapEnabled);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -151,7 +160,12 @@ export function WeeklyAllowanceDialog({
           const weekly = await setWeeklyCapOverride(userId, weeklyCapUsd);
           if (weekly?.error) throw new Error(weekly.error);
         }
-        if ((dailyCapEnabled || clearOverrides) && dailyCapUsd !== undefined) {
+        // The daily switch before the amount; "Clear overrides" hands it back to the default.
+        if (clearOverrides ? hasDailyCapSwitch : dailyOn !== dailyCapEnabled) {
+          const daily = await setDailyCapEnabled(userId, clearOverrides ? null : dailyOn);
+          if (daily?.error) throw new Error(daily.error);
+        }
+        if ((dailyOn || clearOverrides) && dailyCapUsd !== undefined) {
           const daily = await setDailyCapOverride(userId, dailyCapUsd);
           if (daily?.error) throw new Error(daily.error);
         }
@@ -190,7 +204,7 @@ export function WeeklyAllowanceDialog({
       return;
     }
     let dailyCapUsd: number | undefined;
-    if (dailyCapEnabled && changed.daily) {
+    if (dailyOn && changed.daily) {
       const enteredDaily = Number(dailyCredits);
       if (dailyCredits.trim() === "" || !Number.isFinite(enteredDaily) || enteredDaily < 0) {
         setErrorMessage("Enter zero or a positive daily guard.");
@@ -257,15 +271,37 @@ export function WeeklyAllowanceDialog({
             {hasOverride
               ? `Currently ${formatUsd(effectiveWeeklyCapUsd)}, set on this account.`
               : `Currently ${formatUsd(effectiveWeeklyCapUsd)}, from their role.`}{" "}
+            {activeGrantsUsd !== 0
+              ? `Plus ${formatUsd(activeGrantsUsd)} in active grants = ${formatUsd(effectiveWeeklyCapUsd + activeGrantsUsd)} available this week. `
+              : null}
             Up to {formatUsd(maxWeeklyCapUsd)}.
           </p>
         </div>
 
-        {dailyCapEnabled ? (
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="daily-allowance-enabled">Daily allowance</Label>
+            <p className="text-xs text-muted-foreground">
+              {dailyOn
+                ? "This account is limited to a daily amount you set below."
+                : "No daily limit for this account — only the weekly allowance applies."}
+            </p>
+          </div>
+          <Toggle
+            id="daily-allowance-enabled"
+            checked={dailyOn}
+            onChange={(next) => {
+              setDailyOn(next);
+              // Turning it on asks for an amount: validate it on Save even if untouched.
+              if (next) setChanged((current) => ({ ...current, daily: true }));
+            }}
+            disabled={isPending}
+          />
+        </div>
+
+        {dailyOn ? (
           <>
-            {/* The daily guard, which until now had no control anywhere in the
-            app despite being read on this very row (profiles.
-            daily_cap_override_usd, 0031_account_allowances.sql). Shown UNDER
+            {/* The daily guard (profiles.daily_cap_override_usd). Shown UNDER
             the weekly field, not beside it, because that is the relationship:
             it limits how much of the week can go in one day, and a figure at
             or above the weekly allowance simply never fires. */}
@@ -341,7 +377,7 @@ export function WeeklyAllowanceDialog({
           </Button>
           {/* Only offered when there is an override to remove. Passing null
               is the clear — see setWeeklyCapOverride's own doc. */}
-          {hasOverride || hasDailyOverride || hasHourlyOverride ? (
+          {hasOverride || hasDailyOverride || hasHourlyOverride || hasDailyCapSwitch ? (
             <PendingButton
               variant="outline"
               onClick={() => submit(null, null, null, true)}
