@@ -26,6 +26,7 @@ import { addScene } from "@/actions/brief";
 import { elapsedLabel } from "@/lib/render-elapsed";
 import type { RailModel, RailEntry, RailGroup } from "@/lib/project-rail-types";
 import type { SceneStatus } from "@/types/db";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 /**
  * Map RailEntry status to SceneStatus for StatusIcon rendering.
@@ -70,7 +71,9 @@ function mapRailStatusToSceneStatus(status: Exclude<RailEntry["status"], "locked
  * the scene you are looking at fresh, this one keeps the rail fresh from
  * wherever you have wandered off to.
  */
-const RAIL_REFRESH_MS = 10_000;
+// 15s, not 10: the worker's dispatch/reconcile loops tick every 30s, so a
+// faster full-page refresh shows nothing new. Hidden tabs don't poll at all.
+const RAIL_REFRESH_MS = 15_000;
 
 // ---------------------------------------------------------------------------
 // Runtime busy reporting
@@ -495,11 +498,7 @@ export function ProjectRail({ model }: { model: RailModel }): JSX.Element {
   const anyClock = entries.some((entry) => Boolean(entry.elapsedSince));
   const nowMs = useNowMs(anyClock);
 
-  useEffect(() => {
-    if (!anyRunning) return;
-    const timer = setInterval(() => router.refresh(), RAIL_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [anyRunning, router]);
+  useVisibleInterval(() => router.refresh(), RAIL_REFRESH_MS, anyRunning);
 
   return (
     <nav

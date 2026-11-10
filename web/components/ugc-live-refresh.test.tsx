@@ -33,10 +33,22 @@ describe("UgcLiveRefresh", () => {
     render(<UgcLiveRefresh inFlight />);
 
     expect(refresh, "refreshed before the first interval elapsed").not.toHaveBeenCalled();
-    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(15_000);
     expect(refresh).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(20_000);
+    vi.advanceTimersByTime(30_000);
     expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it("skips ticks while the tab is hidden and catches up on return", () => {
+    const state = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    render(<UgcLiveRefresh inFlight />);
+    vi.advanceTimersByTime(60_000);
+    expect(refresh, "a hidden tab kept re-rendering the page").not.toHaveBeenCalled();
+
+    state.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    state.mockRestore();
   });
 
   it("makes no requests when nothing is in flight", () => {
@@ -46,15 +58,12 @@ describe("UgcLiveRefresh", () => {
     render(<UgcLiveRefresh inFlight={false} />);
 
     vi.advanceTimersByTime(60_000);
-    expect(
-      refresh,
-      "polled a screen where nothing can change on its own",
-    ).not.toHaveBeenCalled();
+    expect(refresh, "polled a screen where nothing can change on its own").not.toHaveBeenCalled();
   });
 
   it("stops when the last render finishes", () => {
     const { rerender } = render(<UgcLiveRefresh inFlight />);
-    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(15_000);
     expect(refresh).toHaveBeenCalledTimes(1);
 
     rerender(<UgcLiveRefresh inFlight={false} />);

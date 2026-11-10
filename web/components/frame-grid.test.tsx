@@ -118,7 +118,7 @@ describe("FrameGrid — keeping itself current while frames are generating", () 
     fireEvent.click(screen.getByRole("button", { name: /generate all frames/i }));
     await act(async () => {});
 
-    act(() => void vi.advanceTimersByTime(12_000));
+    act(() => void vi.advanceTimersByTime(16_000));
     expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(2);
 
     await act(async () => {

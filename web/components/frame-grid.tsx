@@ -5,15 +5,7 @@
 // render than the frame did to make, so the entire design goal here is:
 // make "this one's wrong, fix it" a single click with instant feedback.
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useOptimistic,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useCallback, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import type { JSX } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -35,6 +27,7 @@ import { isEditable } from "@/lib/editable-guard";
 import { useRailBusyIds, useRailBusySetter } from "@/components/project-rail";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Database } from "@/types/db";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type SceneStatus = Database["public"]["Tables"]["scenes"]["Row"]["status"];
 
@@ -76,7 +69,8 @@ const DEBOUNCE_MS = 600;
  * flight, so an idle Frames screen polls nothing at all — same rule as the
  * rail's own refresh (project-rail.tsx) and render-progress.tsx.
  */
-const FRAME_REFRESH_MS = 4_000;
+// 8s, and never from a hidden tab: each tick re-renders the whole page server-side.
+const FRAME_REFRESH_MS = 8_000;
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -182,11 +176,7 @@ export function FrameGrid({
   const anyGenerating = batchPending || scenes.some((scene) => scene.pending);
 
   const router = useRouter();
-  useEffect(() => {
-    if (!anyGenerating) return;
-    const id = setInterval(() => router.refresh(), FRAME_REFRESH_MS);
-    return (): void => clearInterval(id);
-  }, [anyGenerating, router]);
+  useVisibleInterval(() => router.refresh(), FRAME_REFRESH_MS, anyGenerating);
 
   // This file used to fire updateScenePromptAndRegenerate — save AND spend
   // REF_FRAME_COST_USD on fal — from the debounce below on every 600ms

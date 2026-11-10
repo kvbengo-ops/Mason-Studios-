@@ -22,29 +22,23 @@
 // operator leaves open between sessions, and a permanent 10s heartbeat
 // against Supabase for a page nobody is waiting on is a cost with no reader.
 
-import { useEffect, type JSX } from "react";
+import { type JSX } from "react";
 import { useRouter } from "next/navigation";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
-/** Matches render-progress.tsx's POLL_INTERVAL_MS — same job, same cadence. */
-const POLL_INTERVAL_MS = 10000;
+// 15s, not 10: the worker's dispatch/reconcile loops tick every 30s, so a
+// faster full-page refresh shows nothing new. Hidden tabs don't poll at all.
+const POLL_INTERVAL_MS = 15_000;
 
 export function UgcLiveRefresh({ inFlight }: { inFlight: boolean }): JSX.Element | null {
   const router = useRouter();
 
-  useEffect(() => {
-    if (!inFlight) return;
-
-    // router.refresh() re-runs the Server Component and reconciles the result
-    // into the existing tree, so the video element, the scroll position and
-    // anything typed into the prompt box survive. A location.reload() would
-    // take the operator's unsaved prompt with it, which on this screen is the
-    // one thing they cannot get back.
-    const interval = setInterval(() => {
-      router.refresh();
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [inFlight, router]);
+  // router.refresh() re-runs the Server Component and reconciles the result
+  // into the existing tree, so the video element, the scroll position and
+  // anything typed into the prompt box survive. A location.reload() would
+  // take the operator's unsaved prompt with it, which on this screen is the
+  // one thing they cannot get back.
+  useVisibleInterval(() => router.refresh(), POLL_INTERVAL_MS, inFlight);
 
   return null;
 }

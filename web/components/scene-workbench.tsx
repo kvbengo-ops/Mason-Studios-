@@ -38,6 +38,7 @@ import type { ActionResult } from "@/lib/action-result";
 import type { RenderBudgetFigures } from "@/lib/render-budget";
 import type { RenderErrorInfo } from "@/lib/render-error";
 import type { Database } from "@/types/db";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type SceneRow = Database["public"]["Tables"]["scenes"]["Row"];
 type AssetRow = Database["public"]["Tables"]["assets"]["Row"];
@@ -136,7 +137,9 @@ const DEBOUNCE_MS = 600;
  * the fix — the rail's own live status (the thing visible from every route)
  * is a separate concern owned elsewhere.
  */
-const IN_FLIGHT_REFRESH_MS = 10_000;
+// 15s, not 10: the worker's dispatch/reconcile loops tick every 30s, so a
+// faster full-page refresh shows nothing new. Hidden tabs don't poll at all.
+const IN_FLIGHT_REFRESH_MS = 15_000;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
@@ -357,11 +360,7 @@ export function SceneWorkbench({
     };
   }, [router]);
 
-  useEffect(() => {
-    if (!inFlight) return;
-    const timer = setInterval(() => router.refresh(), IN_FLIGHT_REFRESH_MS);
-    return (): void => clearInterval(timer);
-  }, [inFlight, router]);
+  useVisibleInterval(() => router.refresh(), IN_FLIGHT_REFRESH_MS, inFlight);
 
   /** Cancels a queued debounced save. Every control that REPLACES the prompt wholesale has to do this first, or the pending save lands afterwards and resurrects the text the operator just paid to replace. */
   const cancelPendingSave = useCallback(() => {

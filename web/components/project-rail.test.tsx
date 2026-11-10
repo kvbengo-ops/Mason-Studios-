@@ -898,7 +898,7 @@ describe("keeping itself current", () => {
       );
 
       expect(refresh).not.toHaveBeenCalled();
-      act(() => void vi.advanceTimersByTime(10_000));
+      act(() => void vi.advanceTimersByTime(15_000));
       expect(refresh).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

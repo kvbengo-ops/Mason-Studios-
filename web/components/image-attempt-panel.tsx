@@ -23,6 +23,7 @@ import { Spinner } from "@/components/spinner";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { formatUsd } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 /**
  * How often an unfinished attempt is re-checked.
@@ -169,9 +170,9 @@ export function ImageAttemptPanel({
     // Immediately, then on an interval: an operator returning to a finished
     // generation should see it resolve on arrival, not five seconds later.
     void poll();
-    const timer = setInterval(() => void poll(), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
   }, [hasUnfinished, poll]);
+  // Hidden tabs skip ticks and catch up on return.
+  useVisibleInterval(() => void poll(), POLL_INTERVAL_MS, hasUnfinished);
 
   return (
     <ImageAttemptsContext.Provider value={attempts}>
