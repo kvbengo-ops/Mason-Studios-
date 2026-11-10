@@ -22,9 +22,21 @@ import {
   MAX_ACCOUNT_DAILY_CAP_USD,
   MAX_ACCOUNT_WEEKLY_CAP_USD,
 } from "@/lib/allowance";
+import { CircleUserRound, Gauge, UserCheck, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { UserPresenceStrip } from "@/components/user-presence-strip";
 import { UserAvatar } from "@/components/user-avatar";
+import { ChangeLine, KpiTile, PANEL } from "@/components/kpi-tile";
+import { AreaChart } from "@/components/area-chart";
+import { DonutChart } from "@/components/donut-chart";
+import { NeedsAttention } from "@/components/needs-attention";
+import { TableColumnsMenu, type ToggleableColumn } from "@/components/table-columns-menu";
+import { loadFailedRunErrors, loadTeamSnapshot, type TeamSnapshot } from "@/lib/team-snapshot";
+import { weekToDateChange } from "@/lib/period-change";
+import { ROLE_LABELS } from "@/lib/model-access";
+import { getDecidableRequestCount } from "@/lib/sidebar-budget";
+import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
+import { getBytePlusBalanceUsd } from "@/lib/byteplus-balance";
+import { cn } from "@/lib/utils";
 import { AccountsControlLiveRefresh } from "@/components/accounts-control-live-refresh";
 import { DailyCapSwitch } from "@/components/daily-cap-switch";
 import { UserRowActions } from "@/components/user-row-actions";
@@ -52,11 +64,15 @@ import { requiresAccountApproval } from "@/lib/account-approval";
 import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
 import { getImageUrl } from "@/lib/storage";
 import { PresenceDot } from "@/components/presence-dot";
-import { lastSeenLabel, PRESENCE_WINDOW_MS } from "@/lib/presence";
+import { lastSeenLabel } from "@/lib/presence";
 import { BurnCell, type UserBurn } from "@/components/burn-cell";
-import { computeBurn, manilaDayKeys, weekSpentFromDays } from "@/lib/burn";
+import {
+  computeBurn,
+  manilaDayKeys,
+  manilaWindowStartIso,
+  weekSpentFromDays,
+} from "@/lib/burn";
 import { getDailySpendByUser, getTeamDailySpend } from "@/lib/burn-data";
-import { TeamBurnStrip } from "@/components/team-burn-strip";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -182,15 +198,48 @@ const SORT_COLUMN_TO_DB: Record<SortColumn, string> = {
 // in scope" section already makes about a ?status=pending filter.
 const DEFAULT_SORT: ParsedSort<SortColumn> = { column: "joined", direction: "desc" };
 
+// The dashboard tiles' filters (?filter=). Each narrows the same view query
+// the table already runs, so search, sort, paging, size and Archived compose
+// with it; archived accounts are never in the online/near-cap/spent sets.
+const USER_FILTERS = ["online", "pending", "near-cap", "spent-week"] as const;
+type UserFilter = (typeof USER_FILTERS)[number];
+const FILTER_LABEL: Record<UserFilter, string> = {
+  online: "online now",
+  pending: "pending approval",
+  "near-cap": "near weekly cap",
+  "spent-week": "spent this week",
+};
+
+function parseFilter(raw: string | string[] | undefined): UserFilter | null {
+  return USER_FILTERS.find((f) => f === raw) ?? null;
+}
+
+// Joined, Projects and Username hidden by default so the table fits 1440px;
+// the username and last-seen line now sit in the first cell.
+const TOGGLEABLE_COLUMNS: readonly ToggleableColumn[] = [
+  { id: "username", label: "Username", defaultHidden: true },
+  { id: "role", label: "Role" },
+  { id: "status", label: "Status" },
+  { id: "joined", label: "Joined", defaultHidden: true },
+  { id: "projects", label: "Projects", defaultHidden: true },
+  { id: "spend", label: "Used to date" },
+  { id: "burn", label: "Burn" },
+  { id: "today", label: "Used today" },
+  { id: "week", label: "Used this week" },
+  { id: "grants", label: "Active grants" },
+];
+
 function buildUsersHref(
   q: string,
   page: number,
   sort: ParsedSort<SortColumn>,
   size: PageSize,
   archived = false,
+  filter: UserFilter | null = null,
 ): string {
   const params = new URLSearchParams();
   if (archived) params.set("archived", "1");
+  if (filter) params.set("filter", filter);
   if (q) params.set("q", q);
   if (page > 1) params.set("page", String(page));
   if (sort.column !== DEFAULT_SORT.column || sort.direction !== DEFAULT_SORT.direction) {
@@ -212,9 +261,10 @@ export default async function UsersPage({
     dir?: string | string[];
     size?: string | string[];
     archived?: string | string[];
+    filter?: string | string[];
   }>;
 }): Promise<JSX.Element> {
-  const { user: viewer } = await requireAdmin();
+  const { user: viewer, profile: viewerProfile } = await requireAdmin();
 
   // Session client, not createAdminClient() — profiles_select_admin
   // (0002_rls.sql) already lets an admin read every profile, so the database
@@ -228,12 +278,13 @@ export default async function UsersPage({
   // counts and Top accounts, shown only in this view. Nothing is deleted, so
   // Reactivate still works and their spend history stays.
   const archived = resolvedSearchParams.archived === "1";
+  const filter = parseFilter(resolvedSearchParams.filter);
   const usersHref = (
     hrefQ: string,
     page: number,
     hrefSort: ParsedSort<SortColumn>,
     size: PageSize,
-  ): string => buildUsersHref(hrefQ, page, hrefSort, size, archived);
+  ): string => buildUsersHref(hrefQ, page, hrefSort, size, archived, filter);
   const requestedPage = parsePage(resolvedSearchParams.page);
   const pageSize = parsePageSize(resolvedSearchParams.size);
   const { from, to } = pageRange(requestedPage, pageSize);
@@ -268,7 +319,35 @@ export default async function UsersPage({
   const viewQuery = archived
     ? baseQuery.eq("status", "deactivated")
     : baseQuery.neq("status", "deactivated");
-  const filteredQuery = orFilter ? viewQuery.or(orFilter) : viewQuery;
+  const searchedQuery = orFilter ? viewQuery.or(orFilter) : viewQuery;
+
+  // Whole-team reads behind the tiles (lib/team-snapshot.ts). Started now and
+  // awaited only where needed, so it only sits in front of the table query
+  // when a filter actually needs its id set. Fail-soft: tiles say Unavailable.
+  const burnNow = new Date();
+  const teamPromise: Promise<TeamSnapshot | null> = loadTeamSnapshot(supabase, burnNow).catch(
+    (error: unknown) => {
+      console.error("Failed to load team snapshot for /users", error);
+      return null;
+    },
+  );
+  let filteredQuery = searchedQuery;
+  if (filter === "pending") {
+    filteredQuery = searchedQuery.eq("status", "pending");
+  } else if (filter) {
+    const snapshot = await teamPromise;
+    const ids =
+      filter === "online"
+        ? (snapshot?.onlineAccounts.map((a) => a.id) ?? [])
+        : filter === "near-cap"
+          ? [...(snapshot?.nearCapIds ?? [])]
+          : snapshot
+            ? snapshot.activeAccounts
+                .filter((a) => (snapshot.weekSpentByUser.get(a.id) ?? 0) > 0)
+                .map((a) => a.id)
+            : [];
+    filteredQuery = searchedQuery.in("id", ids);
+  }
 
   // Secondary `.order("id")` tiebreaker: without it, rows tied on the
   // primary sort column (e.g. two users with the same role, or the same
@@ -300,9 +379,9 @@ export default async function UsersPage({
   // head counts rather than one grouped read — PostgREST's `count: exact`
   // has no GROUP BY, and both are index-only counts on a column already
   // indexed for every other role filter on this page.
-  const burnNow = new Date();
   const burnDates = manilaDayKeys(burnNow, 7);
-  const presenceCutoff = new Date(new Date().getTime() - PRESENCE_WINDOW_MS).toISOString();
+  // 14 days: the Team burn chart, and this week vs the same days last week.
+  const teamDates = manilaDayKeys(burnNow, 14);
   const [
     { count: plainEditorCount },
     { count: trustedEditorCount },
@@ -310,10 +389,12 @@ export default async function UsersPage({
     { count: aiAnimatorCount },
     { count: followingDefaultCount },
     { count: archivedCount },
-    presenceTotal,
-    presenceOnline,
-    onlineProfiles,
+    team,
     teamDaily,
+    pendingAllowanceRequests,
+    failedRunErrors,
+    kieBalanceUsd,
+    bytePlusBalanceUsd,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -348,24 +429,21 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("status", "deactivated"),
-    supabase.from("profiles").select("id", { count: "exact", head: true }),
-    supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .gte("last_seen_at", presenceCutoff),
-    supabase
-      .from("profiles")
-      .select("id, username, email, avatar_storage_key")
-      .gte("last_seen_at", presenceCutoff)
-      .order("last_seen_at", { ascending: false })
-      .order("id", { ascending: true })
-      .limit(6),
+    teamPromise,
     // Whole team, archived (deactivated) accounts' past spend included. Not
-    // page-bound, but one row per day. Fail-soft: the strip says unavailable.
-    getTeamDailySpend(supabase, 7, burnNow).catch((error: unknown) => {
-      console.error("Failed to load team daily spend for /users burn strip", error);
+    // page-bound, but one row per day. Fail-soft: the tiles say unavailable.
+    getTeamDailySpend(supabase, teamDates.length, burnNow).catch((error: unknown) => {
+      console.error("Failed to load team daily spend for /users", error);
       return null;
     }),
+    // Needs attention. Each read is fail-soft (null), and null lines are skipped.
+    getDecidableRequestCount(viewer.id, viewerProfile),
+    loadFailedRunErrors(supabase, manilaWindowStartIso(burnNow, 1)).catch((error: unknown) => {
+      console.error("Failed to load failed runs for /users", error);
+      return null;
+    }),
+    getKieAccountBalanceUsd(),
+    getBytePlusBalanceUsd(),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -530,7 +608,7 @@ export default async function UsersPage({
   }
 
   const onlineUsers = await Promise.all(
-    (onlineProfiles.data ?? []).map(async (profile) => {
+    (team?.onlineAccounts ?? []).slice(0, 6).map(async (profile) => {
       let avatarUrl = avatarUrlByUserId.get(profile.id);
       if (!avatarUrl && profile.avatar_storage_key) {
         try {
@@ -543,11 +621,42 @@ export default async function UsersPage({
     }),
   );
 
+  // Dashboard figures. Counts and tiles leave archived accounts out; spend
+  // totals keep their past spend (team reads include it).
+  const weekToDate = teamDaily ? weekToDateChange(teamDaily, burnNow) : null;
+  const pendingCount = team
+    ? team.activeAccounts.filter((a) => a.status === "pending").length
+    : null;
+  const nearCapCount = team?.nearCapIds ? team.nearCapIds.size : null;
+  const spentWeekCount = team
+    ? team.activeAccounts.filter((a) => (team.weekSpentByUser.get(a.id) ?? 0) > 0).length
+    : null;
+  let roleSlices: { label: string; valueUsd: number; sub?: string }[] | null = null;
+  if (team) {
+    const byRole = new Map<ProfileRole, number>();
+    for (const account of team.accounts) {
+      const usd = team.weekSpentByUser.get(account.id) ?? 0;
+      if (usd > 0) byRole.set(account.role, (byRole.get(account.role) ?? 0) + usd);
+    }
+    roleSlices = [...byRole]
+      .sort((a, b) => b[1] - a[1])
+      .map(([role, usd]) => ({ label: ROLE_LABELS[role], valueUsd: usd }));
+    // Spend no current profile owns (a deleted account), so the centre
+    // total matches the team's week.
+    const attributed = roleSlices.reduce((sum, s) => sum + s.valueUsd, 0);
+    const unattributed = (weekToDate?.currentUsd ?? attributed) - attributed;
+    if (unattributed >= 0.005) {
+      roleSlices.push({ label: "Unattributed", valueUsd: unattributed, sub: "deleted accounts" });
+    }
+  }
+  const tileHref = (target: UserFilter): string =>
+    buildUsersHref(q, 1, sort, pageSize, false, filter === target ? null : target);
+
   // The true empty state: no search term in play, and there are no profiles
   // at all. Distinct from "no users match this search" below — collapsing
   // the two would make a working search feel like a broken page on the
   // first typo, same reasoning as /projects and /library.
-  if (totalCount === 0 && !q) {
+  if (totalCount === 0 && !q && !filter) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 p-16 text-center">
         <h1 className="text-2xl font-medium text-foreground">No users yet</h1>
@@ -586,11 +695,22 @@ export default async function UsersPage({
               {totalCount} {archived ? "archived" : totalCount === 1 ? "user" : "users"}
             </p>
             <Link
-              href={buildUsersHref("", 1, sort, pageSize, !archived)}
+              href={buildUsersHref("", 1, sort, pageSize, !archived, filter)}
               className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
             >
               {archived ? "Back to active accounts" : `Archived (${archivedCount ?? 0})`}
             </Link>
+            {filter ? (
+              <span className="text-sm text-muted-foreground">
+                Showing {FILTER_LABEL[filter]} ·{" "}
+                <Link
+                  href={buildUsersHref(q, 1, sort, pageSize, archived)}
+                  className="underline-offset-4 hover:text-foreground hover:underline"
+                >
+                  Clear filter
+                </Link>
+              </span>
+            ) : null}
             <PageSizeControl size={pageSize} buildHref={(size) => usersHref(q, 1, sort, size)} />
           </div>
         </div>
@@ -625,13 +745,132 @@ export default async function UsersPage({
         </div>
       </div>
 
-      <UserPresenceStrip
-        total={presenceTotal.error ? null : presenceTotal.count}
-        online={presenceOnline.error ? null : presenceOnline.count}
-        users={onlineUsers}
-      />
+      {/* Each tile is a link that filters the table below to those accounts
+          (?filter=); clicking the active one clears it. */}
+      <section aria-label="Team overview" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiTile
+          label="Online now"
+          icon={CircleUserRound}
+          value={team ? `${team.onlineAccounts.length} of ${team.activeAccounts.length}` : "Unavailable"}
+          sub="Active in the last 2 minutes"
+          href={tileHref("online")}
+          active={filter === "online"}
+        >
+          {onlineUsers.length > 0 ? (
+            <span className="flex items-center gap-2">
+              <span className="flex -space-x-2">
+                {/* Not UserAvatar: its lightbox is a button, and this tile is a link. */}
+                {onlineUsers.map((u) => (
+                  <span
+                    key={u.id}
+                    title={u.username || u.email}
+                    className="grid size-7 place-items-center overflow-hidden rounded-full border bg-muted text-xs text-muted-foreground ring-2 ring-card"
+                  >
+                    {u.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- signed thumb URL, same as UserAvatar's lightbox
+                      <img src={u.avatarUrl} alt="" className="size-full object-cover" />
+                    ) : (
+                      (u.username || u.email || "?")[0]?.toUpperCase()
+                    )}
+                  </span>
+                ))}
+              </span>
+              {team && team.onlineAccounts.length > onlineUsers.length ? (
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  +{team.onlineAccounts.length - onlineUsers.length}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </KpiTile>
+        <KpiTile
+          label="Spent this week"
+          icon={Wallet}
+          value={weekToDate ? formatUsd(weekToDate.currentUsd) : "Unavailable"}
+          sub={
+            <ChangeLine change={weekToDate?.change ?? null} vs="same days last week" />
+          }
+          href={tileHref("spent-week")}
+          active={filter === "spent-week"}
+        >
+          {spentWeekCount !== null ? (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {spentWeekCount} {spentWeekCount === 1 ? "account" : "accounts"} spent this week
+            </span>
+          ) : null}
+        </KpiTile>
+        <KpiTile
+          label="Pending approvals"
+          icon={UserCheck}
+          value={pendingCount !== null ? String(pendingCount) : "Unavailable"}
+          sub={pendingCount ? "Accounts waiting for a decision" : "Nobody waiting"}
+          alert={Boolean(pendingCount)}
+          href={tileHref("pending")}
+          active={filter === "pending"}
+        />
+        <KpiTile
+          label="Near weekly cap"
+          icon={Gauge}
+          value={nearCapCount !== null ? String(nearCapCount) : "Unavailable"}
+          sub="At 80% or more of weekly cap + grants"
+          alert={Boolean(nearCapCount)}
+          href={tileHref("near-cap")}
+          active={filter === "near-cap"}
+        />
+      </section>
 
-      <TeamBurnStrip dates={burnDates} days={teamDaily} now={burnNow} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <section aria-labelledby="team-burn-heading" className={cn(PANEL, "p-5 sm:p-6 lg:col-span-3")}>
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 id="team-burn-heading" className="text-sm font-semibold text-foreground">
+                Team burn
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Daily spend, last 14 days (Manila) · deactivated accounts included
+              </p>
+            </div>
+            <Link
+              href="/accounts-control"
+              className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              Accounts Control
+            </Link>
+          </div>
+          {teamDaily ? (
+            <AreaChart
+              ariaLabel="Team daily spend, last 14 days"
+              points={teamDates.map((date, i) => ({ date, valueUsd: teamDaily[i] ?? 0 }))}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Team spend is temporarily unavailable.</p>
+          )}
+        </section>
+        <section aria-labelledby="role-spend-heading" className={cn(PANEL, "p-5 sm:p-6 lg:col-span-2")}>
+          <h2 id="role-spend-heading" className="text-sm font-semibold text-foreground">
+            Spend by role
+          </h2>
+          <p className="mb-4 text-xs text-muted-foreground">This week (Manila, from Monday)</p>
+          {roleSlices === null ? (
+            <p className="text-sm text-muted-foreground">Spend by role is temporarily unavailable.</p>
+          ) : roleSlices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No spend yet this week.</p>
+          ) : (
+            <DonutChart ariaLabel="Spend by role this week" slices={roleSlices} centreSub="this week" />
+          )}
+        </section>
+      </div>
+
+      <NeedsAttention
+        input={{
+          pendingAccounts: pendingCount,
+          pendingAllowanceRequests,
+          nearCapAccounts: nearCapCount,
+          failedRunErrors,
+          kieBalanceUsd,
+          bytePlusBalanceUsd,
+        }}
+      />
 
       {/* Live search, debounced 500ms — see components/live-search.tsx for
           the full reasoning (no API route, focus/cursor survival, the
@@ -650,6 +889,7 @@ export default async function UsersPage({
             : {}),
           ...(pageSize !== DEFAULT_PAGE_SIZE ? { size: String(pageSize) } : {}),
           ...(archived ? { archived: "1" } : {}),
+          ...(filter ? { filter } : {}),
         }}
         clearHref={q ? usersHref("", 1, sort, pageSize) : null}
       >
@@ -658,6 +898,8 @@ export default async function UsersPage({
             <p className="text-base font-medium text-foreground">
               {q ? (
                 <>No users match &ldquo;{q}&rdquo;.</>
+              ) : filter ? (
+                <>No accounts are {FILTER_LABEL[filter]}.</>
               ) : archived ? (
                 "No archived accounts."
               ) : (
@@ -673,7 +915,7 @@ export default async function UsersPage({
             </p>
           </div>
         ) : (
-          <>
+          <TableColumnsMenu storageKey="users.hidden-columns" columns={TOGGLEABLE_COLUMNS}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -684,13 +926,14 @@ export default async function UsersPage({
                     on submit. */}
                   <SortableTableHead
                     column="email"
-                    label="Email"
+                    label="Account"
                     sort={sort}
                     defaultDirection="asc"
                     buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="username"
+                    col="username"
                     label="Username"
                     sort={sort}
                     defaultDirection="asc"
@@ -698,6 +941,7 @@ export default async function UsersPage({
                   />
                   <SortableTableHead
                     column="role"
+                    col="role"
                     label="Role"
                     sort={sort}
                     defaultDirection="asc"
@@ -705,6 +949,7 @@ export default async function UsersPage({
                   />
                   <SortableTableHead
                     column="status"
+                    col="status"
                     label="Status"
                     sort={sort}
                     defaultDirection="asc"
@@ -712,12 +957,14 @@ export default async function UsersPage({
                   />
                   <SortableTableHead
                     column="joined"
+                    col="joined"
                     label="Joined"
                     sort={sort}
                     buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="projects"
+                    col="projects"
                     label="Projects"
                     align="right"
                     sort={sort}
@@ -725,6 +972,7 @@ export default async function UsersPage({
                   />
                   <SortableTableHead
                     column="spend"
+                    col="spend"
                     label="Used to date"
                     align="right"
                     sort={sort}
@@ -732,6 +980,7 @@ export default async function UsersPage({
                   />
                   <SortableTableHead
                     column="burn"
+                    col="burn"
                     label="Burn"
                     align="right"
                     sort={sort}
@@ -748,9 +997,15 @@ export default async function UsersPage({
                       period label can't tell a reader whether it's spent or
                       remaining, which is the exact defect this task exists
                       to fix. */}
-                  <TableHead numeric>Used today</TableHead>
-                  <TableHead numeric>Used this week</TableHead>
-                  <TableHead numeric>Active grants</TableHead>
+                  <TableHead numeric data-col="today">
+                    Used today
+                  </TableHead>
+                  <TableHead numeric data-col="week">
+                    Used this week
+                  </TableHead>
+                  <TableHead numeric data-col="grants">
+                    Active grants
+                  </TableHead>
                   {/* Labelled now that it is never empty: every editor-tier
                       row carries either a decision to make or an actions
                       menu. The old sr-only header existed because the cell
@@ -856,10 +1111,15 @@ export default async function UsersPage({
                               offlineClassName="bg-muted-foreground/50"
                             />
                           </UserAvatar>
-                          <span>{user.email}</span>
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate">{user.email}</span>
+                            <span className="truncate text-xs font-normal text-muted-foreground">
+                              {user.username} � {lastSeenLabel(lastSeenByUserId.get(user.id))}
+                            </span>
+                          </div>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-col="username">
                         <div className="flex flex-col gap-1">
                           <span className="text-muted-foreground">{user.username}</span>
                           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -871,34 +1131,38 @@ export default async function UsersPage({
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-col="role">
                         <RoleBadge role={user.role} />
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-col="status">
                         <AccountStatusBadge role={user.role} status={user.status} />
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
+                      <TableCell data-col="joined" className="whitespace-nowrap text-muted-foreground">
                         {dateTimeFormatter.format(new Date(user.created_at))}
                       </TableCell>
-                      <TableCell numeric>{user.project_count}</TableCell>
-                      <TableCell numeric>{formatUsd(user.spend_usd)}</TableCell>
-                      <TableCell numeric>
+                      <TableCell numeric data-col="projects">
+                        {user.project_count}
+                      </TableCell>
+                      <TableCell numeric data-col="spend">
+                        {formatUsd(user.spend_usd)}
+                      </TableCell>
+                      <TableCell numeric data-col="burn">
                         <BurnCell burn={burn} />
                       </TableCell>
-                      <TableCell numeric className="text-muted-foreground">
+                      <TableCell numeric data-col="today" className="text-muted-foreground">
                         {caps && spendWindow
                           ? rowDailyCapEnabled
                             ? `${formatUsd(spendWindow.spent_today_usd)} / ${formatUsd(caps.dailyCapUsd)}`
                             : formatUsd(spendWindow.spent_today_usd)
                           : "—"}
                       </TableCell>
-                      <TableCell numeric className="text-muted-foreground">
+                      <TableCell numeric data-col="week" className="text-muted-foreground">
                         {effectiveWeeklyCapUsd !== null && spendWindow
                           ? `${formatUsd(spendWindow.spent_this_week_usd)} / ${formatUsd(effectiveWeeklyCapUsd)}`
                           : "—"}
                       </TableCell>
                       {/* Read-only totals with the latest active transfer direction. */}
-                      <TableCell numeric className="text-muted-foreground">
+                      <TableCell numeric data-col="grants" className="text-muted-foreground">
                         {activeGrants.count > 0 ? (
                           <span className="inline-flex items-center justify-end gap-2">
                             {`${formatUsd(activeGrants.totalUsd)} (${activeGrants.count})`}
@@ -1024,7 +1288,7 @@ export default async function UsersPage({
                 requestedPage < totalPages ? usersHref(q, requestedPage + 1, sort, pageSize) : null
               }
             />
-          </>
+          </TableColumnsMenu>
         )}
       </LiveSearch>
     </div>

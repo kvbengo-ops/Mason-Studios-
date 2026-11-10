@@ -5,7 +5,6 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import UsersPage from "./page";
 import { createClient } from "@/lib/supabase/server";
-import { UserPresenceStrip } from "@/components/user-presence-strip";
 import { manilaDayKey } from "@/lib/burn";
 
 vi.mock("@/actions/guard", () => ({
@@ -29,6 +28,18 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/db-aggregates", () => ({
   getUserActiveGrantsTotals: vi.fn(async () => new Map()),
+}));
+
+vi.mock("@/lib/sidebar-budget", () => ({
+  getDecidableRequestCount: vi.fn(async () => 0),
+}));
+
+vi.mock("@/lib/kie-balance", () => ({
+  getKieAccountBalanceUsd: vi.fn(async () => null),
+}));
+
+vi.mock("@/lib/byteplus-balance", () => ({
+  getBytePlusBalanceUsd: vi.fn(async () => null),
 }));
 
 vi.mock("@/components/live-search", () => ({
@@ -116,16 +127,12 @@ describe("UsersPage row actions", () => {
         error: null,
       })),
       from: vi.fn((table: string) => {
-        let onlineOnly = false;
         const builder = {
           select: vi.fn(() => builder),
           or: vi.fn(() => builder),
           eq: vi.fn(() => builder),
           neq: vi.fn(() => builder),
-          gte: vi.fn(() => {
-            onlineOnly = true;
-            return builder;
-          }),
+          gte: vi.fn(() => builder),
           in: vi.fn(() => builder),
           not: vi.fn(() => builder),
           order: vi.fn(() => builder),
@@ -139,18 +146,21 @@ describe("UsersPage row actions", () => {
             Promise.resolve({
               data:
                 table === "profiles"
-                  ? (onlineOnly ? directoryRows.slice(0, 2) : directoryRows).map(
-                      ({ id, username, email }) => ({
-                        id,
-                        username,
-                        email,
-                        daily_cap_override_usd: null,
-                        weekly_cap_override_usd: null,
-                      }),
-                    )
+                  ? directoryRows.map(({ id, username, email, role, status }, index) => ({
+                      id,
+                      username,
+                      email,
+                      role,
+                      status,
+                      avatar_storage_key: null,
+                      // The first two were seen just now: online.
+                      last_seen_at: index < 2 ? new Date().toISOString() : null,
+                      daily_cap_override_usd: null,
+                      weekly_cap_override_usd: null,
+                    }))
                   : [],
               error: null,
-              count: onlineOnly ? 2 : 8,
+              count: 0,
             }).then(resolve),
         };
         return builder;
@@ -160,13 +170,13 @@ describe("UsersPage row actions", () => {
     const element = await UsersPage({ searchParams: Promise.resolve({}) });
     render(element);
 
-    // Totals cover all accounts, not just the three rows on this page.
-    const activity = screen.getByRole("region", { name: "User presence" });
-    expect(within(activity).getByText("2 online")).toBeTruthy();
-    expect(within(activity).getByText("of 8")).toBeTruthy();
-    expect(within(activity).getByText("6 offline")).toBeTruthy();
-    expect(within(activity).getByRole("img", { name: "2 of 8 users online" })).toBeTruthy();
-    expect(within(activity).getByTitle("editor_one")).toBeTruthy();
+    // Online now counts the whole (non-archived) team, with its avatar stack.
+    const overview = screen.getByRole("region", { name: "Team overview" });
+    const online = within(overview).getByRole("link", { name: /Online now/ });
+    expect(online.textContent).toContain("2 of 3");
+    expect(online.getAttribute("href")).toBe("/users?filter=online");
+    expect(within(online).getByTitle("editor_one")).toBeTruthy();
+    expect(screen.getByText("Nothing needs attention.")).toBeTruthy();
 
     const editorLink = screen.getByRole("link", {
       name: /view creations for editor@example\.com/i,
@@ -234,37 +244,103 @@ describe("UsersPage row actions", () => {
     expect(screen.getByRole("columnheader", { name: "Burn" })).toBeTruthy();
     // $70 over 7 days.
     expect(screen.getByText("$10.00/day")).toBeTruthy();
-    // One sparkline for the row, one for the team strip under the presence strip.
-    expect(screen.getAllByRole("img", { name: /^Daily spend/ })).toHaveLength(2);
-    expect(screen.getByRole("link", { name: /this week/ }).getAttribute("href")).toBe(
-      "/accounts-control",
-    );
+    // One sparkline for the row; the team chart is the 14-day area chart.
+    expect(screen.getAllByRole("img", { name: /^Daily spend/ })).toHaveLength(1);
+    expect(screen.getByRole("img", { name: /^Team daily spend, last 14 days/ })).toBeTruthy();
+    // The same rpc row is today's team spend: $70 this week, nothing last week.
+    const spent = screen.getByRole("link", { name: /Spent this week/ });
+    expect(spent.textContent).toContain("$70.00 vs same days last week");
   });
 });
 
-describe("UserPresenceStrip", () => {
-  it("shows at most six named avatars and the remaining online count", () => {
-    const users = Array.from({ length: 11 }, (_, index) => ({
-      id: String(index),
-      username: `editor_${index}`,
-      email: `editor${index}@example.com`,
-    }));
-    render(<UserPresenceStrip total={45} online={11} users={users} />);
-    expect(screen.getAllByTitle(/^editor_/)).toHaveLength(6);
-    expect(screen.getByText("+5")).toBeTruthy();
-    expect(screen.getByRole("img", { name: "11 of 45 users online" })).toBeTruthy();
+describe("UsersPage filters", () => {
+  // Records every call made on the user_directory_burn query.
+  function mockClient(): { directoryCalls: [string, unknown[]][] } {
+    const directoryCalls: [string, unknown[]][] = [];
+    const rows = [
+      {
+        id: "editor-1",
+        email: "editor@example.com",
+        username: "editor_one",
+        role: "editor",
+        created_at: "2026-10-30T00:00:00Z",
+        project_count: 0,
+        spend_usd: 70,
+        burn_usd: 10,
+        status: "active",
+      },
+    ];
+    const profile = (id: string, username: string, email: string): Record<string, unknown> => ({
+      id,
+      username,
+      email,
+      role: "editor",
+      status: "active",
+      avatar_storage_key: null,
+      last_seen_at: null,
+      daily_cap_override_usd: null,
+      weekly_cap_override_usd: 50,
+    });
+    vi.mocked(createClient).mockResolvedValue({
+      rpc: vi.fn(async () => ({ data: [], error: null })),
+      from: vi.fn((table: string) => {
+        const builder: Record<string, unknown> = {};
+        const record =
+          (name: string) =>
+          (...args: unknown[]): unknown => {
+            if (table === "user_directory_burn") directoryCalls.push([name, args]);
+            return builder;
+          };
+        for (const name of ["select", "or", "eq", "neq", "gte", "in", "not", "order", "limit"]) {
+          builder[name] = vi.fn(record(name));
+        }
+        builder.range = vi.fn(async () => ({ data: rows, error: null, count: rows.length }));
+        builder.then = (resolve: (value: unknown) => unknown) =>
+          Promise.resolve({
+            data:
+              table === "profiles"
+                ? [
+                    profile("editor-1", "editor_one", "editor@example.com"),
+                    profile("editor-2", "editor_two", "two@example.com"),
+                  ]
+                : table === "account_spend_windows"
+                  ? [
+                      // 80% of a $50 cap is $40: editor-1 is near, editor-2 is not.
+                      { user_id: "editor-1", spent_today_usd: 0, spent_this_week_usd: 40 },
+                      { user_id: "editor-2", spent_today_usd: 0, spent_this_week_usd: 39.99 },
+                    ]
+                  : [],
+            error: null,
+            count: 0,
+          }).then(resolve);
+        return builder;
+      }),
+    } as never);
+    return { directoryCalls };
+  }
+
+  it("near-cap narrows the table to accounts at 80%+ of weekly cap + grants", async () => {
+    const { directoryCalls } = mockClient();
+    render(await UsersPage({ searchParams: Promise.resolve({ filter: "near-cap", q: "ed" }) }));
+    expect(directoryCalls).toContainEqual(["in", ["id", ["editor-1"]]]);
+    // Search still applies alongside the filter.
+    expect(directoryCalls.some(([name]) => name === "or")).toBe(true);
+    const tile = screen.getByRole("link", { name: /Near weekly cap/ });
+    expect(tile.textContent).toContain("1");
+    expect(tile.getAttribute("aria-current")).toBe("true");
+    // Clicking the active tile clears the filter but keeps the search.
+    expect(tile.getAttribute("href")).toBe("/users?q=ed");
+    expect(screen.getByRole("link", { name: "Clear filter" }).getAttribute("href")).toBe(
+      "/users?q=ed",
+    );
   });
 
-  it("shows the empty state and an empty bar when nobody is online", () => {
-    render(<UserPresenceStrip total={0} online={0} users={[]} />);
-    expect(screen.getByText("Nobody online right now")).toBeTruthy();
-    const bar = screen.getByRole("img", { name: "0 of 0 users online" });
-    expect((bar.firstElementChild as HTMLElement).style.width).toBe("0%");
-  });
-
-  it("keeps failed counts unavailable instead of displaying zero", () => {
-    render(<UserPresenceStrip total={null} online={null} users={[]} />);
-    expect(screen.getByText("User activity is temporarily unavailable.")).toBeTruthy();
-    expect(screen.queryByRole("img")).toBeNull();
+  it("pending filters on status, and tile links keep sort and size", async () => {
+    const { directoryCalls } = mockClient();
+    render(await UsersPage({ searchParams: Promise.resolve({ filter: "pending", size: "50" }) }));
+    expect(directoryCalls).toContainEqual(["eq", ["status", "pending"]]);
+    expect(screen.getByRole("link", { name: /Online now/ }).getAttribute("href")).toBe(
+      "/users?filter=online&size=50",
+    );
   });
 });
