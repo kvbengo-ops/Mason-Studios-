@@ -25,6 +25,7 @@ import {
 import { CircleUserRound, Gauge, UserCheck, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { AvatarThumb } from "@/components/avatar-thumb";
 import { ChangeLine, KpiTile, PANEL } from "@/components/kpi-tile";
 import { AreaChart } from "@/components/area-chart";
 import { DonutChart } from "@/components/donut-chart";
@@ -759,20 +760,8 @@ export default async function UsersPage({
           {onlineUsers.length > 0 ? (
             <span className="flex items-center gap-2">
               <span className="flex -space-x-2">
-                {/* Not UserAvatar: its lightbox is a button, and this tile is a link. */}
                 {onlineUsers.map((u) => (
-                  <span
-                    key={u.id}
-                    title={u.username || u.email}
-                    className="grid size-7 place-items-center overflow-hidden rounded-full border bg-muted text-xs text-muted-foreground ring-2 ring-card"
-                  >
-                    {u.avatarUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- signed thumb URL, same as UserAvatar's lightbox
-                      <img src={u.avatarUrl} alt="" className="size-full object-cover" />
-                    ) : (
-                      (u.username || u.email || "?")[0]?.toUpperCase()
-                    )}
-                  </span>
+                  <AvatarThumb key={u.id} {...u} className="size-7 ring-2 ring-card" />
                 ))}
               </span>
               {team && team.onlineAccounts.length > onlineUsers.length ? (
@@ -1114,7 +1103,7 @@ export default async function UsersPage({
                           <div className="flex min-w-0 flex-col">
                             <span className="truncate">{user.email}</span>
                             <span className="truncate text-xs font-normal text-muted-foreground">
-                              {user.username} · {lastSeenLabel(lastSeenByUserId.get(user.id))}
+                              {user.username} Â· {lastSeenLabel(lastSeenByUserId.get(user.id))}
                             </span>
                           </div>
                         </div>
