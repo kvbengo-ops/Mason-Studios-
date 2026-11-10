@@ -53,6 +53,9 @@ import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
 import { getImageUrl } from "@/lib/storage";
 import { PresenceDot } from "@/components/presence-dot";
 import { lastSeenLabel, PRESENCE_WINDOW_MS } from "@/lib/presence";
+import { BurnCell, type UserBurn } from "@/components/burn-cell";
+import { computeBurn, manilaDayKeys, manilaWeekPosition } from "@/lib/burn";
+import { getDailySpendByUser } from "@/lib/burn-data";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -119,6 +122,7 @@ interface UserDirectoryRow {
   project_count: number;
   spend_usd: number;
   status: ProfileStatus;
+  burn_usd: number;
 }
 
 // The six sortable columns, and the actual column each one orders by on
@@ -135,6 +139,7 @@ const SORT_COLUMNS = [
   "joined",
   "projects",
   "spend",
+  "burn",
 ] as const;
 type SortColumn = (typeof SORT_COLUMNS)[number];
 
@@ -146,6 +151,9 @@ const SORT_COLUMN_TO_DB: Record<SortColumn, string> = {
   joined: "created_at",
   projects: "project_count",
   spend: "spend_usd",
+  // Average spend per Manila day over the last 7 days (user_directory_burn,
+  // 0135) — in the view so it orders next to search and paging.
+  burn: "burn_usd",
 };
 
 // Default: newest signups first — the same order this page rendered in
@@ -251,8 +259,8 @@ export default async function UsersPage({
   // ever per-row; the win is collapsing three queries, two of them gated
   // behind the first one's round trip, into one).
   const baseQuery = supabase
-    .from("user_directory")
-    .select("id, email, username, role, created_at, project_count, spend_usd, status", {
+    .from("user_directory_burn")
+    .select("id, email, username, role, created_at, project_count, spend_usd, status, burn_usd", {
       count: "exact",
     });
   const orFilter = buildIlikeOrFilter(["email", "username"], q);
@@ -430,6 +438,12 @@ export default async function UsersPage({
   // getUserActiveGrantsUsd called once per row, for the same "one bounded
   // query per page, not one per user" reason getUserProjectCounts documents.
   const activeGrantsByUserId = new Map<string, ActiveGrantTotals>();
+  // Per-day spend for the Burn column: one bounded read for this page's ids
+  // (spend_daily_by_user, 0135). Fail-soft like the grants read: the column
+  // shows "—" rather than taking the page down.
+  const burnNow = new Date();
+  const burnDates = manilaDayKeys(burnNow, 7);
+  let dailySpendByUserId = new Map<string, number[]>();
   let resolveAccountCaps: ResolveAccountCapsFn | null = null;
   // The largest weekly allowance any role gets, and therefore the ceiling on
   // a per-account override (weeklyCapOverrideError, lib/allowance.ts). Read
@@ -447,26 +461,34 @@ export default async function UsersPage({
 
   if (userIds.length > 0) {
     const nowIso = new Date().toISOString();
-    const [{ data: overridesData }, { data: windowsData }, activeGrantsTotals] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select(
-          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd, global_cap_exempt, daily_cap_enabled",
-        )
-        .in("id", userIds),
-      supabase
-        .from("account_spend_windows")
-        .select("user_id, spent_today_usd, spent_this_week_usd")
-        .in("user_id", userIds),
-      // Fail-soft, same contract as the resolveAccountCaps dynamic import
-      // just below: a broken RPC must degrade this one column to "—", not
-      // take down the whole page an admin needs when something else (a
-      // cap env var, say) is ALSO broken.
-      getUserActiveGrantsTotals(supabase, userIds, nowIso).catch((error: unknown) => {
-        console.error("Failed to load active allowance grant totals for /users", error);
-        return new Map<string, ActiveGrantTotals>();
-      }),
-    ]);
+    const [{ data: overridesData }, { data: windowsData }, activeGrantsTotals, dailySpend] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd, global_cap_exempt, daily_cap_enabled",
+          )
+          .in("id", userIds),
+        supabase
+          .from("account_spend_windows")
+          .select("user_id, spent_today_usd, spent_this_week_usd")
+          .in("user_id", userIds),
+        // Fail-soft, same contract as the resolveAccountCaps dynamic import
+        // just below: a broken RPC must degrade this one column to "—", not
+        // take down the whole page an admin needs when something else (a
+        // cap env var, say) is ALSO broken.
+        getUserActiveGrantsTotals(supabase, userIds, nowIso).catch((error: unknown) => {
+          console.error("Failed to load active allowance grant totals for /users", error);
+          return new Map<string, ActiveGrantTotals>();
+        }),
+        getDailySpendByUser(supabase, userIds, burnDates.length, burnNow).catch(
+          (error: unknown) => {
+            console.error("Failed to load daily spend for /users burn column", error);
+            return new Map<string, number[]>();
+          },
+        ),
+      ]);
+    dailySpendByUserId = dailySpend;
     for (const row of overridesData ?? []) {
       overrideByUserId.set(row.id, row);
       lastSeenByUserId.set(row.id, row.last_seen_at);
@@ -698,6 +720,13 @@ export default async function UsersPage({
                     sort={sort}
                     buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
+                  <SortableTableHead
+                    column="burn"
+                    label="Burn"
+                    align="right"
+                    sort={sort}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
+                  />
                   {/* Not sortable, unlike the columns above: these come from
                       a per-page join (profiles' overrides + account_spend_
                       windows), not user_directory — there is no single
@@ -748,6 +777,27 @@ export default async function UsersPage({
                   // the N+1 pattern this page's other columns already avoid.
                   const effectiveWeeklyCapUsd = caps
                     ? caps.weeklyCapUsd + activeGrants.totalUsd
+                    : null;
+
+                  // Burn: this account's last 7 Manila days, and the pace those
+                  // days imply against the weekly total shown in the next
+                  // columns. null (read failed) renders "—".
+                  const burnDays = dailySpendByUserId.get(user.id);
+                  const burn: UserBurn | null = burnDays
+                    ? {
+                        dates: burnDates,
+                        days: burnDays,
+                        ...computeBurn({
+                          days: burnDays,
+                          weekSpentUsd:
+                            spendWindow?.spent_this_week_usd ??
+                            burnDays
+                              .slice(-manilaWeekPosition(burnNow).dayOfWeek)
+                              .reduce((sum, usd) => sum + usd, 0),
+                          weekTotalUsd: effectiveWeeklyCapUsd,
+                          now: burnNow,
+                        }),
+                      }
                     : null;
 
                   // Read four times in the trust toggle below (direction,
@@ -815,6 +865,9 @@ export default async function UsersPage({
                       </TableCell>
                       <TableCell numeric>{user.project_count}</TableCell>
                       <TableCell numeric>{formatUsd(user.spend_usd)}</TableCell>
+                      <TableCell numeric>
+                        <BurnCell burn={burn} />
+                      </TableCell>
                       <TableCell numeric className="text-muted-foreground">
                         {caps && spendWindow
                           ? rowDailyCapEnabled

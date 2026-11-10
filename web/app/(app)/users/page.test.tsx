@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import UsersPage from "./page";
 import { createClient } from "@/lib/supabase/server";
 import { UserPresenceStrip } from "@/components/user-presence-strip";
+import { manilaDayKey } from "@/lib/burn";
 
 vi.mock("@/actions/guard", () => ({
   requireAdmin: vi.fn(async () => ({
@@ -83,6 +84,7 @@ describe("UsersPage row actions", () => {
         created_at: "2026-10-30T00:00:00Z",
         project_count: 2,
         spend_usd: 1.5,
+        burn_usd: 10,
         status: "active",
       },
       {
@@ -108,6 +110,11 @@ describe("UsersPage row actions", () => {
     ];
 
     vi.mocked(createClient).mockResolvedValue({
+      // spend_daily_by_user: editor-1 spent $70 today, nobody else spent anything.
+      rpc: vi.fn(async () => ({
+        data: [{ user_id: "editor-1", day: manilaDayKey(new Date()), total_usd: 70 }],
+        error: null,
+      })),
       from: vi.fn((table: string) => {
         let onlineOnly = false;
         const builder = {
@@ -124,7 +131,7 @@ describe("UsersPage row actions", () => {
           order: vi.fn(() => builder),
           limit: vi.fn(() => builder),
           range: vi.fn(async () => ({
-            data: table === "user_directory" ? directoryRows : [],
+            data: table === "user_directory_burn" ? directoryRows : [],
             error: null,
             count: directoryRows.length,
           })),
@@ -180,6 +187,54 @@ describe("UsersPage row actions", () => {
     expect(
       screen.getByTestId("user-row-actions-editor-1").getAttribute("data-allowance-only"),
     ).toBe("false");
+  });
+
+  it("shows a Burn cell for an account with spend and a dash for one without", async () => {
+    const row = (id: string, burn: number): Record<string, unknown> => ({
+      id,
+      email: `${id}@example.com`,
+      username: id,
+      role: "editor",
+      created_at: "2026-10-30T00:00:00Z",
+      project_count: 0,
+      spend_usd: 0,
+      burn_usd: burn,
+      status: "active",
+    });
+    const rows = [row("editor-1", 10), row("editor-2", 0)];
+    vi.mocked(createClient).mockResolvedValue({
+      rpc: vi.fn(async () => ({
+        data: [{ user_id: "editor-1", day: manilaDayKey(new Date()), total_usd: 70 }],
+        error: null,
+      })),
+      from: vi.fn((table: string) => {
+        const builder = {
+          select: vi.fn(() => builder),
+          or: vi.fn(() => builder),
+          eq: vi.fn(() => builder),
+          neq: vi.fn(() => builder),
+          gte: vi.fn(() => builder),
+          in: vi.fn(() => builder),
+          order: vi.fn(() => builder),
+          limit: vi.fn(() => builder),
+          range: vi.fn(async () => ({
+            data: table === "user_directory_burn" ? rows : [],
+            error: null,
+            count: rows.length,
+          })),
+          then: (resolve: (value: { data: unknown[]; error: null; count: number }) => unknown) =>
+            Promise.resolve({ data: [], error: null, count: 0 }).then(resolve),
+        };
+        return builder;
+      }),
+    } as never);
+
+    render(await UsersPage({ searchParams: Promise.resolve({ sort: "burn", dir: "desc" }) }));
+
+    expect(screen.getByRole("columnheader", { name: "Burn" })).toBeTruthy();
+    // $70 over 7 days.
+    expect(screen.getByText("$10.00/day")).toBeTruthy();
+    expect(screen.getAllByRole("img", { name: /^Daily spend/ })).toHaveLength(1);
   });
 });
 

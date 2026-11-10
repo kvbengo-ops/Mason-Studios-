@@ -1996,6 +1996,23 @@ export type Database = {
         };
         Relationships: [];
       };
+      // user_directory plus burn_usd (0135_spend_burn_rate.sql): average spend per
+      // Asia/Manila day over the last 7 days. Backs /users' sortable Burn column.
+      // Hand-patched, like the entries above.
+      user_directory_burn: {
+        Row: {
+          id: string;
+          email: string;
+          username: string;
+          role: ProfileRole;
+          created_at: string;
+          project_count: number;
+          spend_usd: number;
+          status: ProfileStatus;
+          burn_usd: number;
+        };
+        Relationships: [];
+      };
       // projects LEFT JOINed to owner email, per-project scene count and
       // all-time cost — see 0029_project_directory.sql. Backs /projects'
       // sortable table the same way user_directory backs /users': ordering
@@ -2372,6 +2389,16 @@ export type Database = {
       // already notes). The migration IS applied as of 2026-08-22 — remote
       // is at 0048 — so this entry now matches the live schema; it simply
       // has not been regenerated via `make types`.
+      // 0135_spend_burn_rate.sql. Per (Manila day) spend for the accounts in user_ids;
+      // user_ids null = team totals with user_id null.
+      spend_daily_by_user: {
+        Args: { from_ts: string; to_ts: string; user_ids?: string[] | null };
+        Returns: { user_id: string | null; day: string; total_usd: number }[];
+      };
+      spend_models_by_user: {
+        Args: { target_user_id: string; from_ts: string; to_ts: string };
+        Returns: { model: string; vendor: string; run_count: number; cost_usd: number }[];
+      };
       spend_category_totals_by_user: {
         Args: { from_ts: string; to_ts: string };
         Returns: {
