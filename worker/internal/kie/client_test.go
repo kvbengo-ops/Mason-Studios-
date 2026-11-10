@@ -906,3 +906,22 @@ func TestSubmit_PreservesEverySelectedModel(t *testing.T) {
 		})
 	}
 }
+
+// Admit runs after the slot wait and before the POST: an error from it means
+// nothing reaches kie.
+func TestClient_Submit_AdmitErrorSendsNothing(t *testing.T) {
+	var posts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { posts++ }))
+	defer srv.Close()
+
+	paused := errors.New("paused")
+	c := newTestClient(t, srv)
+	c.Admit = func() error { return paused }
+	_, err := c.Submit(context.Background(), SubmitRequest{KieModelID: "bytedance/seedance-2-5", Prompt: "x", ImageURL: "https://example.com/frame.png"})
+	if !errors.Is(err, paused) {
+		t.Fatalf("Submit() error = %v, want it to wrap the Admit error", err)
+	}
+	if posts != 0 {
+		t.Errorf("%d POSTs reached kie, want 0", posts)
+	}
+}

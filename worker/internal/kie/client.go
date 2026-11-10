@@ -154,6 +154,12 @@ type Client struct {
 	// thread a logger through just to get the wire record above.
 	log *slog.Logger
 
+	// Admit, when set, runs after the submit slot is reached and before the
+	// createTask POST; a non-nil error aborts that submit with nothing sent.
+	// The worker points it at its balance gate, so scenes already waiting for
+	// a slot when kie reports no credit stop instead of being refused one by one.
+	Admit func() error
+
 	// submitGap/nextSubmit space createTask POSTs. nextSubmit is the next free
 	// slot, reserved under mu; the wait and the POST happen outside it.
 	submitGap  time.Duration // overridable in tests
@@ -364,6 +370,11 @@ func (c *Client) Submit(ctx context.Context, req SubmitRequest) (string, error) 
 	var out createTaskResponse
 	if err := c.waitSubmitSlot(ctx); err != nil {
 		return "", fmt.Errorf("kie: submit %s: %w", req.KieModelID, err)
+	}
+	if c.Admit != nil {
+		if err := c.Admit(); err != nil {
+			return "", fmt.Errorf("kie: submit %s: %w", req.KieModelID, err)
+		}
 	}
 	if err := c.doJSON(ctx, http.MethodPost, u, payload, &out); err != nil {
 		return "", fmt.Errorf("kie: submit %s: %w", req.KieModelID, err)

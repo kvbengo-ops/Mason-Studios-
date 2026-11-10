@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"ugc-pipeline/worker/internal/byteplus"
 	"ugc-pipeline/worker/internal/config"
@@ -22,6 +23,16 @@ func dispatchWithSubmitErr(t *testing.T, fs *fakeStore, submitErr error) {
 }
 
 func dispatchWithRequeues(t *testing.T, fs *fakeStore, submitErr error, requeues *CapacityRequeues) {
+	t.Helper()
+	dispatchWith(t, fs, submitErr, requeues, nil)
+}
+
+func dispatchWithGate(t *testing.T, fs *fakeStore, submitErr error, gate *BalanceGate) {
+	t.Helper()
+	dispatchWith(t, fs, submitErr, nil, gate)
+}
+
+func dispatchWith(t *testing.T, fs *fakeStore, submitErr error, requeues *CapacityRequeues, gate *BalanceGate) {
 	t.Helper()
 	signSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -41,6 +52,7 @@ func dispatchWithRequeues(t *testing.T, fs *fakeStore, submitErr error, requeues
 		Logger:           testLogger(),
 		Kie:              &fakeVideoVendor{submitErr: submitErr},
 		CapacityRequeues: requeues,
+		Balance:          gate,
 	}
 	scene := store.Scene{ID: "scene-1", ProjectID: "project-1", DurationS: 8, Status: "rendering"}
 	dispatchScene(context.Background(), deps, scene, "https://worker.example")
@@ -143,5 +155,42 @@ func TestDispatchScene_KieRateLimited_FailsAfterMaxRequeues(t *testing.T) {
 	if len(fs.releaseCalls) != maxCapacityRequeues || len(fs.markFailedCalls) != 1 {
 		t.Fatalf("rate limit %d: %d requeues, %d failures; want it failed, not requeued",
 			maxCapacityRequeues+1, len(fs.releaseCalls), len(fs.markFailedCalls))
+	}
+}
+
+// kie refused for credit before queuing anything: the scene that tripped the
+// gate goes back in the queue, unbilled, and the gate closes for the next tick.
+func TestDispatchScene_InsufficientBalance_ReturnsSceneToQueueAndTripsGate(t *testing.T) {
+	fs := &fakeStore{}
+	gate := &BalanceGate{}
+	dispatchWithGate(t, fs, fmt.Errorf("kie: submit x: %w", kie.ErrInsufficientBalance), gate)
+
+	if len(fs.releaseCalls) != 1 || len(fs.markFailedCalls) != 0 {
+		t.Errorf("%d requeues, %d failures; want 1 and 0 — nothing was billed", len(fs.releaseCalls), len(fs.markFailedCalls))
+	}
+	if blocked, _ := gate.Blocked(time.Now()); !blocked {
+		t.Error("gate still open after an insufficient-balance refusal")
+	}
+}
+
+// A scene stopped by the closed gate (Admit) is requeued, and never counted:
+// a pause outlasts maxCapacityRequeues, so counting would fail it.
+func TestDispatchScene_BalancePaused_RequeuesWithoutCounting(t *testing.T) {
+	fs := &fakeStore{}
+	requeues := &CapacityRequeues{}
+	for i := 0; i < maxCapacityRequeues+5; i++ {
+		dispatchWithRequeues(t, fs, fmt.Errorf("kie: submit x: %w", ErrBalancePaused), requeues)
+	}
+	if len(fs.releaseCalls) != maxCapacityRequeues+5 || len(fs.markFailedCalls) != 0 {
+		t.Errorf("%d requeues, %d failures; want %d and 0", len(fs.releaseCalls), len(fs.markFailedCalls), maxCapacityRequeues+5)
+	}
+}
+
+// If the scene cannot be put back it still ends failed, with the reason.
+func TestDispatchScene_InsufficientBalance_ReleaseFailureFailsTheScene(t *testing.T) {
+	fs := &fakeStore{releaseErr: store.ErrNotFound}
+	dispatchWithGate(t, fs, fmt.Errorf("kie: submit x: %w", kie.ErrInsufficientBalance), &BalanceGate{})
+	if len(fs.markFailedCalls) != 1 {
+		t.Fatalf("MarkFailed called %d times, want 1", len(fs.markFailedCalls))
 	}
 }

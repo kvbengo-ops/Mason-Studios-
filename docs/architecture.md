@@ -489,10 +489,12 @@ that order; the first failure blocks the request. The balance check reads
 **The balance check is a snapshot, and always racy** — several renders can pass it and
 still drain the account before kie bills any of them. The backstop is in the worker:
 when kie refuses a submission for lack of funds, `loop.BalanceGate` closes the dispatch
-loop *ahead of* `ClaimQueuedScenes`, on a 15m → 60m backoff. Placement is the point —
-claiming is what flips a scene to `'rendering'`, and the worker may not flip it back, so
-an unguarded drained account would convert up to `RENDER_CONCURRENCY` scenes to
-`'failed'` every 30 seconds, none of which were ever attempted.
+loop *ahead of* `ClaimQueuedScenes`, on a 15m → 60m backoff. Scenes kie never saw —
+the one it refused, and any already claimed and waiting for their submit slot
+(`kie.Client.Admit` checks the gate just before each `createTask`) — go back to `'queued'`
+through `ReleaseUnsubmittedClaim`, unbilled, instead of failing. An unguarded drained
+account would otherwise convert every claimed scene to `'failed'`, none of which were
+ever attempted.
 
 **`runs.cost_usd` is a receipt, not a computed figure** — the worker writes it from
 kie's own `creditsConsumed` on the task, not from the rate table. A drifted rate table

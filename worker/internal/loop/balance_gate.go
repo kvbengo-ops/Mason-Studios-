@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -19,12 +20,11 @@ import (
 // Two constraints shape the design, and both are worth stating because they
 // rule out the fixes that look obvious first:
 //
-//  1. **The worker may not put a scene back to 'queued'.** AGENTS.md's one
-//     rule: web owns draft/frame_ready/queued, worker owns
-//     rendering/done/failed. So a scene the account could not pay for cannot
-//     simply be un-claimed — MarkFailed is the only terminal state available,
-//     and the fix has to be about not claiming the NEXT ten, not about
-//     rescuing the current ten.
+//  1. **The worker owns rendering/done/failed, not draft/frame_ready.** It may
+//     return a claimed, never-submitted scene to 'queued'
+//     (Store.ReleaseUnsubmittedClaim), and does: a scene refused for credit,
+//     or stopped by Admit while the gate is closed, goes back in the queue
+//     unbilled rather than failing.
 //  2. **The worker cannot read the account balance.** That endpoint needs
 //     fal's admin scope and the worker only ever holds FAL_KEY (API scope),
 //     which gets a 403 — deliberately, since admin scope is full account
@@ -119,6 +119,21 @@ func (g *BalanceGate) Trip(now time.Time) time.Duration {
 		g.until = deadline
 	}
 	return g.backoff
+}
+
+// ErrBalancePaused is what Admit returns while the gate is closed: kie said it
+// is out of credit, so nothing more is sent until the pause ends. Dispatch
+// requeues the scene without counting it against maxCapacityRequeues; a pause
+// can last an hour, far longer than that bound.
+var ErrBalancePaused = errors.New("kie submissions are paused: the account was out of credit")
+
+// Admit is kie.Client.Admit's check: nil while the gate is open, otherwise
+// ErrBalancePaused. Nil-safe like Blocked.
+func (g *BalanceGate) Admit() error {
+	if blocked, _ := g.Blocked(time.Now()); blocked {
+		return ErrBalancePaused
+	}
+	return nil
 }
 
 // Clear reopens the gate and forgets the accumulated backoff, called when a

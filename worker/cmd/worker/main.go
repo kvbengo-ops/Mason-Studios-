@@ -109,6 +109,10 @@ func run() error {
 	// config.Config.KieAPIKey), so there is no longer an "opt-in" state to
 	// gate construction on the way KIE_ENABLED used to.
 	kieClient := kie.NewClient(cfg.KieAPIKey, cfg.IsDev(), nil, mockVideoURL)
+	// One gate for the process: dispatch trips it, and the kie client checks it
+	// just before each createTask.
+	balanceGate := &loop.BalanceGate{}
+	kieClient.Admit = balanceGate.Admit
 	if cfg.IsDev() {
 		logger.Warn("MODE=development: kie submissions are simulated, no real renders will be requested",
 			slog.String("mock_video_url", mockVideoURL))
@@ -147,7 +151,7 @@ func run() error {
 		// One gate for the process, shared by every dispatch tick — `deps`
 		// is captured by value in the loop closures below, so this has to be
 		// a pointer or each tick would get a fresh, always-open copy.
-		Balance:          &loop.BalanceGate{},
+		Balance:          balanceGate,
 		CapacityRequeues: &loop.CapacityRequeues{},
 	}
 	if !cfg.AssembleEnabled {

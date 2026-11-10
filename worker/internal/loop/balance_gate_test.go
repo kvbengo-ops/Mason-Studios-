@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -118,5 +119,20 @@ func TestBalanceGateClearResetsTheBackoffNotJustTheWindow(t *testing.T) {
 	}
 	if d := g.Trip(now); d != balanceCooldownInitial {
 		t.Errorf("first trip after Clear = %v, want back to %v", d, balanceCooldownInitial)
+	}
+}
+
+func TestBalanceGateAdmit(t *testing.T) {
+	var nilGate *BalanceGate
+	if err := nilGate.Admit(); err != nil {
+		t.Errorf("nil gate Admit() = %v, want nil", err)
+	}
+	g := &BalanceGate{}
+	if err := g.Admit(); err != nil {
+		t.Errorf("open gate Admit() = %v, want nil", err)
+	}
+	g.Trip(time.Now())
+	if err := g.Admit(); !errors.Is(err, ErrBalancePaused) {
+		t.Errorf("closed gate Admit() = %v, want ErrBalancePaused", err)
 	}
 }

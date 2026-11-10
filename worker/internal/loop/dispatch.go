@@ -118,6 +118,19 @@ func Dispatch(ctx context.Context, deps Deps) error {
 	return nil
 }
 
+// returnToQueue puts a claimed scene kie never saw back in the queue. If it
+// cannot be put back, the scene fails with the reason rather than staying
+// 'rendering' with no task id.
+func returnToQueue(ctx context.Context, deps Deps, logger *slog.Logger, scene store.Scene, cause error, msg string) {
+	recCtx, cancel := recoveryCtx(ctx)
+	defer cancel()
+	if rerr := deps.Store.ReleaseUnsubmittedClaim(recCtx, scene.ID); rerr != nil {
+		failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w (and could not return it to the queue: %v)", cause, rerr))
+		return
+	}
+	logger.Warn(msg, slog.String("error", cause.Error()))
+}
+
 // dispatchScene submits a single already-claimed (status='rendering') scene
 // to kie, or marks it failed if it cannot be submitted. It never leaves a
 // scene claimed-but-unsubmitted: every path ends in either MarkRendering or
@@ -471,24 +484,25 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 				slog.String("error", err.Error()), slog.Int("requeues", n), slog.Int("max_requeues", maxCapacityRequeues))
 			return
 		}
+		// The gate closed while this scene waited for its submit slot: nothing
+		// was sent. Back to the queue, uncounted — a pause outlasts any
+		// requeue bound.
+		if errors.Is(err, ErrBalancePaused) {
+			returnToQueue(ctx, deps, logger, scene, err, "dispatch: kie account paused, scene returned to the queue")
+			return
+		}
 		// web/lib/spend.ts's pre-flight balance check (part 1b) is a
 		// snapshot and always racy: several renders can pass it and still
 		// drain the account before kie actually submits this one. This is
-		// where the truth arrives — the vendor's own refusal — so it gets
-		// its own distinct, human-readable reason instead of surfacing as a
-		// bare "vendor reported code=402" line in runs.error.
+		// where the truth arrives — the vendor's own refusal. kie never queued
+		// the job, so nothing was billed: close the gate so the next tick
+		// claims nothing and the scenes already waiting stop at Admit, then
+		// return this scene to the queue instead of failing it.
 		if errors.Is(err, kie.ErrInsufficientBalance) {
-			// Close the gate before failing this scene, so the next tick
-			// does not claim ten more and fail those too. This scene is
-			// still lost — the worker may not return it to 'queued' (see
-			// BalanceGate's doc comment) — but it is the last one until the
-			// gate reopens.
 			pause := deps.Balance.Trip(time.Now())
 			logger.Warn("dispatch: account out of credit, pausing dispatch",
 				slog.Duration("pause", pause))
-			failScene(ctx, deps, logger, scene, fmt.Errorf(
-				"the kie account is out of credit — an admin needs to add funds before this scene can render: %w", err,
-			))
+			returnToQueue(ctx, deps, logger, scene, err, "dispatch: kie account out of credit, scene returned to the queue")
 			return
 		}
 		failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %w", err))
