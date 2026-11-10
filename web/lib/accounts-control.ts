@@ -1,3 +1,4 @@
+import { BULK_ALLOWANCE_SCOPE_ROLES } from "@/lib/allowance";
 import {
   binExpiryLabel,
   binRetentionCutoffIso,
@@ -304,7 +305,9 @@ export async function loadAccountsControlOverview(
     supabase
       .from("user_directory")
       .select("id, email, username, role, status, created_at, project_count, spend_usd")
-      .in("role", ["admin", "editor", "trusted_editor"])
+      // Every role: hybrid_editor and ai_animator (0131) were missing, so most
+      // of the team never appeared in Top accounts.
+      .in("role", ["admin", ...BULK_ALLOWANCE_SCOPE_ROLES.all])
       .order("spend_usd", { ascending: false }),
     // user_directory predates last_seen_at; an admin's session reads profiles directly.
     supabase.from("profiles").select("id, last_seen_at"),

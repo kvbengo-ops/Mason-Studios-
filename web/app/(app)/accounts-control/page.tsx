@@ -55,6 +55,7 @@ import { pageRange, parsePage, totalPageCount } from "@/lib/pagination";
 import { formatRunwayDays, isRunwayShort } from "@/lib/runway";
 import { extFromFilename } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { AccountsControlLiveRefresh } from "@/components/accounts-control-live-refresh";
 
 export type AccountsControlView = "spending" | "accounts" | "runs";
 export type AccountsControlTab = "videos" | "images" | "deleted";
@@ -663,6 +664,7 @@ export default async function AccountsControlPage({
 
   return (
     <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:gap-8 md:px-8 md:py-10">
+      <AccountsControlLiveRefresh />
       <header className="flex flex-wrap items-end justify-between gap-5">
         <div className="flex max-w-2xl flex-col gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
