@@ -9,7 +9,10 @@ vi.mock("@/actions/account", () => ({
 }));
 vi.mock("@/components/weekly-allowance-dialog", () => ({ WeeklyAllowanceDialog: () => null }));
 vi.mock("@/components/deactivate-account-dialog", () => ({ DeactivateAccountDialog: () => null }));
-vi.mock("@/components/promote-admin-dialog", () => ({ PromoteAdminDialog: () => null }));
+vi.mock("@/components/promote-admin-dialog", () => ({
+  PromoteAdminDialog: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="promote-admin" /> : null,
+}));
 vi.mock("@/components/burn-drawer", () => ({
   BurnDrawer: ({ account }: { account: { email: string; weekSpentUsd: number } }) => (
     <div data-testid="burn-drawer">
@@ -27,36 +30,53 @@ afterEach(() => {
 });
 
 describe("UserRowActions role menu", () => {
-  it("offers every other non-admin role, the new two included, and sets the one picked", async () => {
+  it("has one Change role… item instead of one item per role", async () => {
     const user = userEvent.setup();
     render(<UserRowActions userId="u-1" email="a@example.com" role="editor" allowance={null} />);
 
     await user.click(screen.getByRole("button", { name: /Actions for a@example.com/ }));
     const labels = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(labels).toEqual(
-      expect.arrayContaining([
-        "Make trusted",
-        "Make Hybrid Editor",
-        "Make AI Animator",
-        "Make admin",
-      ]),
-    );
-    expect(labels).not.toContain("Make editor");
+    expect(labels).toEqual(["Change role…", "Deactivate account"]);
+  });
 
-    await user.click(screen.getByRole("menuitem", { name: "Make Hybrid Editor" }));
+  it("sets the role picked in the Change role modal", async () => {
+    const user = userEvent.setup();
+    render(<UserRowActions userId="u-1" email="a@example.com" role="editor" allowance={null} />);
+
+    await user.click(screen.getByRole("button", { name: /Actions for a@example.com/ }));
+    await user.click(screen.getByRole("menuitem", { name: "Change role…" }));
+    await user.click(screen.getByRole("radio", { name: /Hybrid Editor/ }));
+    await user.click(screen.getByRole("button", { name: "Change role" }));
     expect(setAccountRole).toHaveBeenCalledWith("u-1", "hybrid_editor");
   });
 
-  it("lets a Hybrid Editor be moved back to editor", async () => {
+  it("offers Change role… on an admin row only when it can be demoted", async () => {
     const user = userEvent.setup();
-    render(
-      <UserRowActions userId="u-2" email="b@example.com" role="hybrid_editor" allowance={null} />,
+    const { unmount } = render(
+      <UserRowActions
+        userId="u-5"
+        email="e@example.com"
+        role="admin"
+        allowance={null}
+        allowanceOnly
+      />,
     );
+    await user.click(screen.getByRole("button", { name: /Actions for e@example.com/ }));
+    expect(screen.queryByRole("menuitem", { name: "Change role…" })).toBeNull();
+    unmount();
 
-    await user.click(screen.getByRole("button", { name: /Actions for b@example.com/ }));
-    expect(screen.queryByRole("menuitem", { name: "Make Hybrid Editor" })).toBeNull();
-    await user.click(screen.getByRole("menuitem", { name: "Make editor" }));
-    expect(setAccountRole).toHaveBeenCalledWith("u-2", "editor");
+    render(
+      <UserRowActions
+        userId="u-5"
+        email="e@example.com"
+        role="admin"
+        allowance={null}
+        allowanceOnly
+        canDemote
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Actions for e@example.com/ }));
+    expect(screen.getByRole("menuitem", { name: "Change role…" })).toBeTruthy();
   });
 
   it("opens the burn drawer from View burn", async () => {

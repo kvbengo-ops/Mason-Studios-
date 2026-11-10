@@ -11,9 +11,8 @@
 // the other and never both: an account is either awaiting a decision or
 // past it.
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import type { JSX } from "react";
-import { unstable_rethrow } from "next/navigation";
 import { MoreHorizontalIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -26,16 +25,8 @@ import { WeeklyAllowanceDialog } from "@/components/weekly-allowance-dialog";
 import { DeactivateAccountDialog } from "@/components/deactivate-account-dialog";
 import { PromoteAdminDialog } from "@/components/promote-admin-dialog";
 import { BurnDrawer, type BurnDrawerAccount } from "@/components/burn-drawer";
-import { demoteAdmin, setAccountRole } from "@/actions/account";
-import { ASSIGNABLE_ROLES, type AssignableRole } from "@/lib/model-access";
+import { ChangeRoleDialog } from "@/components/change-role-dialog";
 import type { ProfileRole } from "@/types/db";
-
-const MAKE_ROLE_LABEL: Record<AssignableRole, string> = {
-  editor: "Make editor",
-  trusted_editor: "Make trusted",
-  hybrid_editor: "Make Hybrid Editor",
-  ai_animator: "Make AI Animator",
-};
 
 export function UserRowActions({
   userId,
@@ -50,7 +41,7 @@ export function UserRowActions({
 }: {
   userId: string;
   email: string;
-  /** The row's current role: the menu offers every OTHER non-admin role (setAccountRole). */
+  /** The row's current role, shown and excluded in Change role…. */
   role: ProfileRole;
   allowanceOnly?: boolean;
   canDemote?: boolean;
@@ -75,40 +66,7 @@ export function UserRowActions({
   const [allowanceOpen, setAllowanceOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [promoteAdminOpen, setPromoteAdminOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  function changeRole(next: ProfileRole): void {
-    setErrorMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await setAccountRole(userId, next);
-        // The lost-race branch (someone else changed this role first) comes
-        // back as data, not a throw — see lib/action-result.ts.
-        if (result?.error) setErrorMessage(result.error);
-      } catch (error) {
-        unstable_rethrow(error);
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to change that account's role.",
-        );
-      }
-    });
-  }
-
-  function demote(role: "editor" | "trusted_editor"): void {
-    setErrorMessage(null);
-    startTransition(async () => {
-      try {
-        const result = await demoteAdmin(userId, role);
-        if (result?.error) setErrorMessage(result.error);
-      } catch (error) {
-        unstable_rethrow(error);
-        setErrorMessage(
-          error instanceof Error ? error.message : "Failed to change that account's role.",
-        );
-      }
-    });
-  }
+  const [roleOpen, setRoleOpen] = useState(false);
 
   return (
     <div className="flex flex-col items-end gap-0.5">
@@ -117,7 +75,7 @@ export function UserRowActions({
           {/* The row's own identity is in the label, not the icon: "Actions"
               repeated down a column is unusable to a screen reader without
               saying whose. */}
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" disabled={isPending}>
+          <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
             <MoreHorizontalIcon className="h-4 w-4" />
             <span className="sr-only">Actions for {email}</span>
           </Button>
@@ -135,32 +93,18 @@ export function UserRowActions({
               View burn
             </DropdownMenuItem>
           ) : null}
-          {!allowanceOnly ? (
-            <>
-              {/* Every non-admin role but the current one (0131 added Hybrid Editor and
-                  AI Animator). Admin has its own confirm dialog below. */}
-              {ASSIGNABLE_ROLES.filter((next) => next !== role).map((next) => (
-                <DropdownMenuItem key={next} onSelect={() => changeRole(next)}>
-                  {MAKE_ROLE_LABEL[next]}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuItem
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setPromoteAdminOpen(true);
-                }}
-              >
-                Make admin
-              </DropdownMenuItem>
-            </>
-          ) : null}
-          {canDemote ? (
-            <>
-              <DropdownMenuItem onSelect={() => demote("trusted_editor")}>
-                Make trusted editor
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => demote("editor")}>Make editor</DropdownMenuItem>
-            </>
+          {/* Every role change lives behind this one item: editor-tier rows
+              pick any other role or Admin, an admin row (not the viewer's own)
+              can only be demoted. An admin row without that has nothing to change. */}
+          {!allowanceOnly || canDemote ? (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                setRoleOpen(true);
+              }}
+            >
+              Change role…
+            </DropdownMenuItem>
           ) : null}
           {allowance ? (
             <DropdownMenuItem
@@ -220,6 +164,17 @@ export function UserRowActions({
         />
       ) : null}
 
+      {roleOpen ? (
+        <ChangeRoleDialog
+          userId={userId}
+          email={email}
+          role={role}
+          open={roleOpen}
+          onOpenChange={setRoleOpen}
+          onPromoteToAdmin={() => setPromoteAdminOpen(true)}
+        />
+      ) : null}
+
       {!allowanceOnly ? (
         <PromoteAdminDialog
           userId={userId}
@@ -227,10 +182,6 @@ export function UserRowActions({
           open={promoteAdminOpen}
           onOpenChange={setPromoteAdminOpen}
         />
-      ) : null}
-
-      {errorMessage ? (
-        <span className="max-w-48 text-right text-xs text-destructive">{errorMessage}</span>
       ) : null}
     </div>
   );
