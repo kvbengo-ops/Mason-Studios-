@@ -48,6 +48,9 @@ func TestLoad_AllRequiredPresent_Defaults(t *testing.T) {
 	if cfg.RenderConcurrency != 10 {
 		t.Errorf("RenderConcurrency default = %d, want 10", cfg.RenderConcurrency)
 	}
+	if cfg.KieMaxSubmitsPerTick != 30 {
+		t.Errorf("KieMaxSubmitsPerTick default = %d, want 30", cfg.KieMaxSubmitsPerTick)
+	}
 	if cfg.FFmpegConcurrency != 2 {
 		t.Errorf("FFmpegConcurrency default = %d, want 2", cfg.FFmpegConcurrency)
 	}
@@ -137,6 +140,7 @@ func TestLoad_AudioEnabled(t *testing.T) {
 func TestLoad_Overrides(t *testing.T) {
 	env := fullEnv()
 	env["RENDER_CONCURRENCY"] = "25"
+	env["KIE_MAX_SUBMITS_PER_TICK"] = "12"
 	env["FFMPEG_CONCURRENCY"] = "4"
 	env["PORT"] = "9090"
 	cfg, err := load(env)
@@ -145,6 +149,9 @@ func TestLoad_Overrides(t *testing.T) {
 	}
 	if cfg.RenderConcurrency != 25 {
 		t.Errorf("RenderConcurrency = %d, want 25", cfg.RenderConcurrency)
+	}
+	if cfg.KieMaxSubmitsPerTick != 12 {
+		t.Errorf("KieMaxSubmitsPerTick = %d, want 12", cfg.KieMaxSubmitsPerTick)
 	}
 	if cfg.FFmpegConcurrency != 4 {
 		t.Errorf("FFmpegConcurrency = %d, want 4", cfg.FFmpegConcurrency)
@@ -235,6 +242,12 @@ func TestLoad_InvalidIntVar(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "RENDER_CONCURRENCY") {
 		t.Errorf("load() error = %q, want it to name RENDER_CONCURRENCY", err.Error())
+	}
+
+	env = fullEnv()
+	env["KIE_MAX_SUBMITS_PER_TICK"] = "lots"
+	if _, err := load(env); err == nil || !strings.Contains(err.Error(), "KIE_MAX_SUBMITS_PER_TICK") {
+		t.Errorf("load() error = %v, want one naming KIE_MAX_SUBMITS_PER_TICK", err)
 	}
 }
 
@@ -451,6 +464,7 @@ func TestLoad_KieKeyOptionalInDevelopment(t *testing.T) {
 func TestLoad_NumericVarsMustBePositive(t *testing.T) {
 	for _, name := range []string{
 		"RENDER_CONCURRENCY",
+		"KIE_MAX_SUBMITS_PER_TICK",
 		"FFMPEG_CONCURRENCY",
 		"PORT",
 		"RECONCILE_GIVE_UP_AFTER_MINUTES",

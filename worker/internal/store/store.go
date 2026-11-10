@@ -265,6 +265,9 @@ const sceneClaimLockKey = 0x5343_4c4d // "SCLM"
 // worker instances — or a restart racing itself — cannot double-submit the
 // same scene to kie.
 //
+// perTick (KIE_MAX_SUBMITS_PER_TICK; <= 0 = no per-claim cap) bounds how many
+// scenes this one call claims; ceiling still bounds the total in 'rendering'.
+//
 // byteplusCap (BYTEPLUS_MAX_INFLIGHT; 0 = no separate cap) bounds the
 // Seedance 2.5 · BytePlus scenes in flight. Over it, BytePlus scenes are
 // simply not claimed — they stay 'queued' for a later tick, since the
@@ -293,9 +296,12 @@ const sceneClaimLockKey = 0x5343_4c4d // "SCLM"
 // nothing more than which process's 30s timer fires first; with it, a
 // development worker's candidate CTE never even selects a row a production
 // web app wrote, so there is no race left to lose.
-func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap int) ([]Scene, error) {
+func (s *Store) ClaimQueuedScenes(ctx context.Context, ceiling, byteplusCap, perTick int) ([]Scene, error) {
 	if ceiling <= 0 {
 		return nil, nil
+	}
+	if perTick <= 0 {
+		perTick = ceiling
 	}
 
 	// Fairness comes from the row_number partition, not DISTINCT ON. DISTINCT ON
@@ -380,7 +386,12 @@ candidates AS (
     -- it a development worker's ceiling is eaten by production renders it can
     -- never see or finish, and vice versa — two workers sharing one
     -- concurrency count for work neither can dispatch for the other.
-    LIMIT greatest(0, $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1))
+    --
+    -- $6 (perTick) caps one claim, whatever the free slots: a claimed scene
+    -- must reach kie before reconcile's 45s staleAfter, and kie submits are
+    -- spaced, so a tick may only hold what it can submit in that time. Inside
+    -- the same LIMIT so it shares the statement's snapshot.
+    LIMIT least($6, greatest(0, $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1)))
 )
 UPDATE scenes
 SET status = 'rendering', submitted_at = now()
@@ -440,7 +451,7 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
 		return nil, fmt.Errorf("store: claim queued scenes: lock: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap)
+	rows, err := tx.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap, perTick)
 	if err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: %w", err)
 	}
@@ -456,8 +467,8 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
 }
 
 // ReleaseUnsubmittedClaim puts a scene this worker claimed back in the queue
-// for a later tick — only for a capacity refusal (byteplus.ErrAtCapacity),
-// where no vendor ever saw the job. Guarded in SQL to a 'rendering' scene of
+// for a later tick — only when a vendor refused before queuing the job
+// (byteplus.ErrAtCapacity, kie.ErrRateLimited), so nothing was billed. Guarded in SQL to a 'rendering' scene of
 // this MODE with no task id, so it can never un-claim a submitted (possibly
 // billed) render. submitted_at goes back to NULL with the claim it stamped,
 // or reconcile would see a queued scene's stale claim time.

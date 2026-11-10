@@ -62,6 +62,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -93,6 +94,11 @@ const (
 	// is preferred over EstimateCost's estimate (models.go) whenever one
 	// exists.
 	creditUSD = 0.005
+
+	// defaultSubmitGap spaces createTask POSTs ~14 per 10s. kie accepts 20 per
+	// 10s and a refused request never enters its queue; the web app's image
+	// generation shares that limit, so this leaves it headroom.
+	defaultSubmitGap = 700 * time.Millisecond
 )
 
 // kieStatus is kie.ai's own task-state vocabulary, UNVERIFIED — see this
@@ -147,6 +153,12 @@ type Client struct {
 	// Optional. nil falls back to slog.Default(), so no call site has to
 	// thread a logger through just to get the wire record above.
 	log *slog.Logger
+
+	// submitGap/nextSubmit space createTask POSTs. nextSubmit is the next free
+	// slot, reserved under mu; the wait and the POST happen outside it.
+	submitGap  time.Duration // overridable in tests
+	mu         sync.Mutex
+	nextSubmit time.Time
 }
 
 // NewClient builds a Client. mockVideoURL is the URL Submit/Result hand
@@ -164,7 +176,22 @@ func NewClient(apiKey string, mock bool, httpClient *http.Client, mockVideoURL s
 		baseURL:       baseURL,
 		uploadBaseURL: fileUploadBaseURL,
 		mockVideoURL:  mockVideoURL,
+		submitGap:     defaultSubmitGap,
 	}
+}
+
+// waitSubmitSlot reserves the next createTask slot and waits for it, so
+// concurrent submits leave at least submitGap apart. The lock is released
+// before the wait: it is never held across the HTTP call.
+func (c *Client) waitSubmitSlot(ctx context.Context) error {
+	c.mu.Lock()
+	slot := time.Now()
+	if c.nextSubmit.After(slot) {
+		slot = c.nextSubmit
+	}
+	c.nextSubmit = slot.Add(c.submitGap)
+	c.mu.Unlock()
+	return sleepFor(ctx, time.Until(slot))
 }
 
 // createTaskRequest is UNVERIFIED against the live API — see this file's
@@ -335,10 +362,16 @@ func (c *Client) Submit(ctx context.Context, req SubmitRequest) (string, error) 
 
 	u := c.baseURL + "/api/v1/jobs/createTask" // UNVERIFIED path — see header comment.
 	var out createTaskResponse
+	if err := c.waitSubmitSlot(ctx); err != nil {
+		return "", fmt.Errorf("kie: submit %s: %w", req.KieModelID, err)
+	}
 	if err := c.doJSON(ctx, http.MethodPost, u, payload, &out); err != nil {
 		return "", fmt.Errorf("kie: submit %s: %w", req.KieModelID, err)
 	}
 	if out.Code != 0 && out.Code != http.StatusOK {
+		if out.Code == http.StatusTooManyRequests {
+			return "", fmt.Errorf("%w: kie: submit %s: vendor reported code=%d msg=%q", ErrRateLimited, req.KieModelID, out.Code, out.Msg)
+		}
 		// See ErrInsufficientBalance's doc comment: kie's own out-of-credit
 		// signal arrives in this envelope's `code`/`msg`, not necessarily as
 		// an HTTP status — the same place TestClient_Submit_VendorReportedError
@@ -596,9 +629,10 @@ func looksLikeInsufficientBalance(code int, msg string) bool {
 // ---------------------------------------------------------------------------
 
 // doJSON mirrors fal/client.go's own doJSON: idempotent GETs retry on
-// transient failure, POST only retries after an explicit 429 (kie may have
-// already accepted and billed a POST whose response was lost), and a 429/408
-// Retry-After is honoured when present, capped by retryAfterCap.
+// transient failure and a GET 429/408 Retry-After is honoured when present,
+// capped by retryAfterCap. A POST is never retried here (kie may have already
+// accepted and billed one whose response was lost); a POST 429 returns
+// ErrRateLimited at once so dispatch can requeue the scene.
 func (c *Client) doJSON(ctx context.Context, method, rawURL string, body []byte, out any) error {
 	var lastErr error
 	var retryAfter time.Duration
@@ -669,6 +703,12 @@ func (c *Client) doOnce(ctx context.Context, method, rawURL string, body []byte,
 		return r, 0, e
 	case resp.StatusCode >= 400:
 		baseErr := fmt.Errorf("client error: status %d: %s", resp.StatusCode, string(respBody))
+		if resp.StatusCode == http.StatusTooManyRequests && method != http.MethodGet {
+			// No in-process retry for a createTask: kie never queued it, and
+			// waiting here holds a claimed scene toward reconcile's 45s line.
+			// Dispatch requeues it instead.
+			return false, 0, fmt.Errorf("%w: %w", ErrRateLimited, baseErr)
+		}
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout {
 			if resp.StatusCode == http.StatusRequestTimeout && method != http.MethodGet {
 				// A 408 on a POST is ambiguous — kie may have accepted and

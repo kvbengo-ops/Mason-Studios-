@@ -174,3 +174,8 @@ type Result struct {
 // and must not replay the request automatically without a vendor-backed
 // idempotency key.
 var ErrSubmissionOutcomeUnknown = errors.New("submission outcome unknown")
+
+// ErrRateLimited marks a createTask kie refused for rate (body code=429, or
+// HTTP 429). kie never queued the job, so nothing was billed and dispatch
+// returns the scene to the queue instead of failing it.
+var ErrRateLimited = errors.New("kie rate-limited the submission")

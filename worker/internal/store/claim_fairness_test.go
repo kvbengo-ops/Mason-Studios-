@@ -131,7 +131,7 @@ func TestClaimInterleavesUsersRatherThanDrainingOne(t *testing.T) {
 	busy := seedQueuedScenesForNewUser(ctx, t, s, 30)
 	quiet := seedQueuedScenesForNewUser(ctx, t, s, 1)
 
-	claimed, err := s.ClaimQueuedScenes(ctx, 10, 0)
+	claimed, err := s.ClaimQueuedScenes(ctx, 10, 0, 0)
 	if err != nil {
 		t.Fatalf("ClaimQueuedScenes: %v", err)
 	}
@@ -192,7 +192,7 @@ func TestConcurrentClaimsNeverHandOutTheSameScene(t *testing.T) {
 			}
 			defer w.Close()
 
-			got, err := w.ClaimQueuedScenes(ctx, scenes, 0)
+			got, err := w.ClaimQueuedScenes(ctx, scenes, 0, 0)
 			if err != nil {
 				mu.Lock()
 				claimErr = err

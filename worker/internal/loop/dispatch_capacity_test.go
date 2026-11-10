@@ -10,6 +10,7 @@ import (
 
 	"ugc-pipeline/worker/internal/byteplus"
 	"ugc-pipeline/worker/internal/config"
+	"ugc-pipeline/worker/internal/kie"
 	"ugc-pipeline/worker/internal/store"
 )
 
@@ -107,5 +108,40 @@ func TestDispatchScene_AtCapacity_FailsAfterMaxRequeues(t *testing.T) {
 	}
 	if got := requeues.note("scene-1"); got != 1 {
 		t.Errorf("count after failing = %d, want it forgotten (next note 1)", got)
+	}
+}
+
+// kie refused the createTask for rate before queuing it: nothing billed, no
+// run row, the scene goes back in the queue.
+func TestDispatchScene_KieRateLimited_ReturnsSceneToQueue(t *testing.T) {
+	fs := &fakeStore{}
+	dispatchWithSubmitErr(t, fs, fmt.Errorf("kie: submit x: %w", kie.ErrRateLimited))
+
+	if len(fs.releaseCalls) != 1 || fs.releaseCalls[0] != "scene-1" {
+		t.Errorf("ReleaseUnsubmittedClaim calls = %v, want [scene-1]", fs.releaseCalls)
+	}
+	if len(fs.markFailedCalls) != 0 {
+		t.Errorf("MarkFailed called %d times, want 0 — a rate limit is not a failure and bills nothing", len(fs.markFailedCalls))
+	}
+}
+
+// Past maxCapacityRequeues the scene fails, saying kie kept rate-limiting.
+func TestDispatchScene_KieRateLimited_FailsAfterMaxRequeues(t *testing.T) {
+	fs := &fakeStore{}
+	requeues := &CapacityRequeues{}
+	limited := fmt.Errorf("kie: submit x: %w", kie.ErrRateLimited)
+
+	for i := 0; i < maxCapacityRequeues; i++ {
+		dispatchWithRequeues(t, fs, limited, requeues)
+	}
+	if len(fs.releaseCalls) != maxCapacityRequeues || len(fs.markFailedCalls) != 0 {
+		t.Fatalf("after %d rate limits: %d requeues, %d failures; want %d and 0",
+			maxCapacityRequeues, len(fs.releaseCalls), len(fs.markFailedCalls), maxCapacityRequeues)
+	}
+
+	dispatchWithRequeues(t, fs, limited, requeues)
+	if len(fs.releaseCalls) != maxCapacityRequeues || len(fs.markFailedCalls) != 1 {
+		t.Fatalf("rate limit %d: %d requeues, %d failures; want it failed, not requeued",
+			maxCapacityRequeues+1, len(fs.releaseCalls), len(fs.markFailedCalls))
 	}
 }
