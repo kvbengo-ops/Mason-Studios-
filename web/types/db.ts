@@ -1050,6 +1050,7 @@ export type Database = {
           // is resolved. Added by 0031_account_allowances.sql.
           daily_cap_override_usd: number | null;
           hourly_cap_override_usd: number | null;
+          global_cap_exempt: boolean;
           email: string;
           id: string;
           role: ProfileRole;
@@ -1069,6 +1070,7 @@ export type Database = {
           created_at?: string;
           daily_cap_override_usd?: number | null;
           hourly_cap_override_usd?: number | null;
+          global_cap_exempt?: boolean;
           email: string;
           id: string;
           role?: ProfileRole;
@@ -1082,6 +1084,7 @@ export type Database = {
           created_at?: string;
           daily_cap_override_usd?: number | null;
           hourly_cap_override_usd?: number | null;
+          global_cap_exempt?: boolean;
           email?: string;
           id?: string;
           role?: ProfileRole;

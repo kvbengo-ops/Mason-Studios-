@@ -62,6 +62,7 @@ export function UserRowActions({
     dailyCapEnabled: boolean;
     effectiveHourlyCapUsd: number | null;
     hasHourlyOverride: boolean;
+    globalCapExempt?: boolean;
   } | null;
 }): JSX.Element {
   const [allowanceOpen, setAllowanceOpen] = useState(false);

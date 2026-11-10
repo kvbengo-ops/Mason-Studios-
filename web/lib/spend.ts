@@ -317,6 +317,16 @@ export interface AccountCapProfile {
   daily_cap_override_usd: number | null;
   weekly_cap_override_usd: number | null;
   hourly_cap_override_usd?: number | null;
+  /** profiles.global_cap_exempt (0133): the team-wide cap never blocks this account. */
+  global_cap_exempt?: boolean | null;
+}
+
+/**
+ * Whether the team-wide cap can block this account. An admin can exempt one
+ * account (0133); its spend still counts toward the team total either way.
+ */
+export function globalCapAppliesTo(profile: AccountCapProfile): boolean {
+  return profile.global_cap_exempt !== true;
 }
 
 export type GlobalSpendCapPeriod = "daily" | "weekly";
@@ -1551,9 +1561,10 @@ export async function getAccountBudgetSnapshot(
   const heldUsd = inFlight.byUserUsd.get(userId) ?? 0;
   const dailyRemainingUsd = caps.dailyCapUsd - dailySpentUsd - heldUsd;
   const weeklyRemainingUsd = effectiveWeeklyCapUsd - weeklySpentUsd - heldUsd;
-  const globalRemainingUsd = globalSpend.settings.enabled
-    ? globalSpend.settings.capUsd - globalSpend.spentUsd - inFlight.globalUsd
-    : Number.POSITIVE_INFINITY;
+  const globalRemainingUsd =
+    globalSpend.settings.enabled && globalCapAppliesTo(profile)
+      ? globalSpend.settings.capUsd - globalSpend.spentUsd - inFlight.globalUsd
+      : Number.POSITIVE_INFINITY;
   const hourlyCapUsd = profile.hourly_cap_override_usd ?? null;
   const hourlyRemainingUsd = hourlyCapUsd === null ? null : hourlyCapUsd - hourlySpentUsd - heldUsd;
   const remaining = {
@@ -1584,7 +1595,7 @@ export async function getAccountBudgetSnapshot(
     hourlyRemainingUsd,
     hourlyCapUsd,
     hourlyUsedUsd: hourlySpentUsd,
-    globalCapEnabled: globalSpend.settings.enabled,
+    globalCapEnabled: globalSpend.settings.enabled && globalCapAppliesTo(profile),
     globalCapPeriod: globalSpend.settings.period,
     globalRemainingUsd,
     globalCapUsd: globalSpend.settings.capUsd,
@@ -1680,7 +1691,7 @@ export async function assertWithinSpendCaps(
   const inFlightForUserUsd = inFlight.byUserUsd.get(userId) ?? 0;
 
   const globalSpend = await getGlobalSpendSnapshot();
-  if (globalSpend.settings.enabled) {
+  if (globalSpend.settings.enabled && globalCapAppliesTo(profile)) {
     const globalCapResult = guardResult(() =>
       assertGlobalCapNotExceeded(
         globalSpend.spentUsd + inFlight.globalUsd,
@@ -1837,7 +1848,7 @@ export async function queueScenesIfWithinCaps(params: {
     p_hour_start_ts: null,
     p_now_ts: now.toISOString(),
     p_global_cap_usd: globalSpendCap.capUsd,
-    p_global_cap_enabled: globalSpendCap.enabled,
+    p_global_cap_enabled: globalSpendCap.enabled && globalCapAppliesTo(profile),
     p_global_cap_period: globalSpendCap.period,
     p_weekly_cap_usd: effectiveWeeklyCapUsd,
     p_daily_cap_usd: caps.dailyCapUsd,
@@ -1996,7 +2007,7 @@ export async function resolveImageAttemptCeilings(
     weekStartIso: startOfManilaWeekIso(now),
     nowIso: now.toISOString(),
     globalDailyCapUsd: reduce(globalSpendCap.capUsd, inFlight.globalUsd),
-    globalCapEnabled: globalSpendCap.enabled,
+    globalCapEnabled: globalSpendCap.enabled && globalCapAppliesTo(profile),
     globalCapPeriod: globalSpendCap.period,
     hourlyCapUsd:
       profile.hourly_cap_override_usd == null

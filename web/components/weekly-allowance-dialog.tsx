@@ -30,7 +30,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PendingButton } from "@/components/pending-button";
-import { setDailyCapOverride, setHourlyCapOverride, setWeeklyCapOverride } from "@/actions/account";
+import {
+  setDailyCapOverride,
+  setGlobalCapExempt,
+  setHourlyCapOverride,
+  setWeeklyCapOverride,
+} from "@/actions/account";
+import { Toggle } from "@/components/all-editors-allowance-dialog";
 import { dailyCapOverrideError, weeklyCapOverrideError } from "@/lib/allowance";
 import { formatUsd } from "@/lib/format-usd";
 
@@ -64,6 +70,8 @@ export function WeeklyAllowanceDialog({
   maxDailyCapUsd,
   effectiveHourlyCapUsd,
   hasHourlyOverride,
+  /** profiles.global_cap_exempt (0133): true when the team-wide cap never blocks this account. */
+  globalCapExempt = false,
   dailyCapEnabled = true,
   /**
    * Controlled open state, for a caller that supplies its own trigger —
@@ -85,6 +93,7 @@ export function WeeklyAllowanceDialog({
   maxDailyCapUsd: number;
   effectiveHourlyCapUsd: number | null;
   hasHourlyOverride: boolean;
+  globalCapExempt?: boolean;
   /** The INSTALLATION default (app_settings.user_daily_cap_enabled). Decides what "Follow the default" means below, and whether the amount field is worth showing at all. */
   dailyCapEnabled?: boolean;
   open?: boolean;
@@ -99,6 +108,7 @@ export function WeeklyAllowanceDialog({
       setDailyCredits(String(effectiveDailyCapUsd));
       setHourlyCredits(effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd));
       setChanged({ weekly: false, daily: false, hourly: false });
+      setTeamCapApplies(!globalCapExempt);
       setErrorMessage(null);
     }
     if (isControlled) onOpenChange?.(next);
@@ -110,6 +120,7 @@ export function WeeklyAllowanceDialog({
     effectiveHourlyCapUsd === null ? "" : String(effectiveHourlyCapUsd),
   );
   const [changed, setChanged] = useState({ weekly: false, daily: false, hourly: false });
+  const [teamCapApplies, setTeamCapApplies] = useState(!globalCapExempt);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -147,6 +158,11 @@ export function WeeklyAllowanceDialog({
         if (hourlyCapUsd !== undefined) {
           const hourly = await setHourlyCapOverride(userId, hourlyCapUsd);
           if (hourly?.error) throw new Error(hourly.error);
+        }
+        // Its own switch, saved only when flipped; "Clear overrides" leaves it alone.
+        if (!clearOverrides && teamCapApplies === globalCapExempt) {
+          const exempt = await setGlobalCapExempt(userId, !teamCapApplies);
+          if (exempt?.error) throw new Error(exempt.error);
         }
         setOpen(false);
       } catch (error) {
@@ -298,6 +314,23 @@ export function WeeklyAllowanceDialog({
               ? `Currently ${formatUsd(effectiveHourlyCapUsd ?? 0)}, set on this account.`
               : "Optional per-account limit; usage rolls off after 60 minutes."}
           </p>
+        </div>
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="team-cap-applies">Team spending cap applies</Label>
+            <p className="text-xs text-muted-foreground">
+              {teamCapApplies
+                ? "This account stops when the team-wide cap is reached."
+                : "Exempt: the team-wide cap never blocks this account. Its spend still counts toward the team total."}
+            </p>
+          </div>
+          <Toggle
+            id="team-cap-applies"
+            checked={teamCapApplies}
+            onChange={setTeamCapApplies}
+            disabled={isPending}
+          />
         </div>
 
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}

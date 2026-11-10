@@ -2,11 +2,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { setDailyCapOverride, setHourlyCapOverride, setWeeklyCapOverride } from "@/actions/account";
+import {
+  setDailyCapOverride,
+  setGlobalCapExempt,
+  setHourlyCapOverride,
+  setWeeklyCapOverride,
+} from "@/actions/account";
 import { WeeklyAllowanceDialog } from "./weekly-allowance-dialog";
 
 vi.mock("@/actions/account", () => ({
   setDailyCapOverride: vi.fn(),
+  setGlobalCapExempt: vi.fn(),
   setHourlyCapOverride: vi.fn(),
   setWeeklyCapOverride: vi.fn(),
 }));
@@ -14,11 +20,76 @@ vi.mock("@/actions/account", () => ({
 afterEach(() => {
   cleanup();
   vi.mocked(setDailyCapOverride).mockReset();
+  vi.mocked(setGlobalCapExempt).mockReset();
   vi.mocked(setHourlyCapOverride).mockReset();
   vi.mocked(setWeeklyCapOverride).mockReset();
 });
 
 describe("WeeklyAllowanceDialog", () => {
+  it("exempts the account from the team cap when the switch is turned off, and writes nothing else", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setGlobalCapExempt).mockResolvedValue(undefined);
+    render(
+      <WeeklyAllowanceDialog
+        userId="editor-1"
+        email="editor@example.com"
+        effectiveWeeklyCapUsd={150}
+        hasOverride
+        maxWeeklyCapUsd={700}
+        effectiveDailyCapUsd={30}
+        hasDailyOverride
+        maxDailyCapUsd={100}
+        effectiveHourlyCapUsd={null}
+        hasHourlyOverride={false}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /allowance.*editor@example\.com/i }));
+    const dialog = screen.getByRole("dialog");
+    const teamCap = within(dialog).getByRole("switch", { name: "Team spending cap applies" });
+    expect(teamCap.getAttribute("aria-checked")).toBe("true");
+    await user.click(teamCap);
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(setGlobalCapExempt).toHaveBeenCalledWith("editor-1", true));
+    expect(setWeeklyCapOverride).not.toHaveBeenCalled();
+    expect(setDailyCapOverride).not.toHaveBeenCalled();
+    expect(setHourlyCapOverride).not.toHaveBeenCalled();
+  });
+
+  it("does not touch the exemption when the switch is left alone", async () => {
+    const user = userEvent.setup();
+    vi.mocked(setHourlyCapOverride).mockResolvedValue(undefined);
+    render(
+      <WeeklyAllowanceDialog
+        userId="editor-1"
+        email="editor@example.com"
+        effectiveWeeklyCapUsd={150}
+        hasOverride
+        maxWeeklyCapUsd={700}
+        effectiveDailyCapUsd={30}
+        hasDailyOverride
+        maxDailyCapUsd={100}
+        effectiveHourlyCapUsd={null}
+        hasHourlyOverride={false}
+        globalCapExempt
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /allowance.*editor@example\.com/i }));
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("switch", { name: "Team spending cap applies" })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+    await user.type(within(dialog).getByLabelText("USD per rolling hour"), "5");
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(setHourlyCapOverride).toHaveBeenCalledWith("editor-1", 5));
+    expect(setGlobalCapExempt).not.toHaveBeenCalled();
+  });
+
   it("discards unsaved edits and uses refreshed account limits when reopened", async () => {
     const user = userEvent.setup();
     const props = {

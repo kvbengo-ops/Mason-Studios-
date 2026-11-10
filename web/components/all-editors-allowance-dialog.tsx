@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 const capInput = (value: number | null | "mixed"): string =>
   typeof value === "number" ? String(value) : "";
 
-function Toggle({
+export function Toggle({
   id,
   checked,
   onChange,

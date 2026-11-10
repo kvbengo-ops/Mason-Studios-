@@ -195,31 +195,32 @@ export async function getSidebarBudget(
     // detail reader for the display split; no new grant predicate or SQL.
     // Recipients are session-scoped, and a failed directory read must not
     // hide the budget or the pass trigger.
-    const [row, grants, transferRecipients, globalSpend, hourlySpentUsd, inFlight] = await Promise.all([
-      getSidebarBudgetSnapshot(
-        admin,
-        userId,
-        spend.startOfManilaDayIso(),
-        spend.startOfManilaWeekIso(),
-        nowIso,
-      ),
-      spend.getActiveGrantsSummary(userId, nowIso),
-      (async (): Promise<TransferRecipient[] | null> => {
-        if (profile.role !== "editor" && profile.role !== "trusted_editor") return [];
-        try {
-          const session = await createClient();
-          const { data, error } = await session.rpc("transfer_recipients");
-          if (error) throw error;
-          return data ?? [];
-        } catch (error) {
-          console.error("Failed to load pass recipients", error);
-          return null;
-        }
-      })(),
-      spend.getGlobalSpendSnapshot(),
-      profile.hourly_cap_override_usd == null ? Promise.resolve(0) : spend.getHourlySpend(userId),
-      spend.getInFlightSpendSafe(),
-    ]);
+    const [row, grants, transferRecipients, globalSpend, hourlySpentUsd, inFlight] =
+      await Promise.all([
+        getSidebarBudgetSnapshot(
+          admin,
+          userId,
+          spend.startOfManilaDayIso(),
+          spend.startOfManilaWeekIso(),
+          nowIso,
+        ),
+        spend.getActiveGrantsSummary(userId, nowIso),
+        (async (): Promise<TransferRecipient[] | null> => {
+          if (profile.role !== "editor" && profile.role !== "trusted_editor") return [];
+          try {
+            const session = await createClient();
+            const { data, error } = await session.rpc("transfer_recipients");
+            if (error) throw error;
+            return data ?? [];
+          } catch (error) {
+            console.error("Failed to load pass recipients", error);
+            return null;
+          }
+        })(),
+        spend.getGlobalSpendSnapshot(),
+        profile.hourly_cap_override_usd == null ? Promise.resolve(0) : spend.getHourlySpend(userId),
+        spend.getInFlightSpendSafe(),
+      ]);
 
     // The same derivation spend.getAccountBudgetSnapshot performs over its
     // five separate reads (see that function for render/page.tsx and
@@ -233,8 +234,13 @@ export async function getSidebarBudget(
     const effectiveWeeklyCapUsd = caps.weeklyCapUsd + row.activeGrantsUsd;
     const dailyRemainingUsd = caps.dailyCapUsd - row.dailySpentUsd - heldUsd;
     const weeklyRemainingUsd = effectiveWeeklyCapUsd - row.weeklySpentUsd - heldUsd;
-    const globalRemainingUsd = globalSpend.settings.enabled
+    // The team's own headroom (shown to admins) vs. whether it can block THIS
+    // account (an exempt account, 0133, is never blocked by it).
+    const teamRemainingUsd = globalSpend.settings.enabled
       ? globalSpend.settings.capUsd - globalSpend.spentUsd - inFlight.globalUsd
+      : Number.POSITIVE_INFINITY;
+    const globalRemainingUsd = spend.globalCapAppliesTo(profile)
+      ? teamRemainingUsd
       : Number.POSITIVE_INFINITY;
     const hourlyCapUsd = profile.hourly_cap_override_usd ?? null;
     const hourlyRemainingUsd =
@@ -310,7 +316,7 @@ export async function getSidebarBudget(
       // budget.tsx — but computed above for everyone, since
       // requestDialogState needs it regardless of role (see this block's
       // own comment).
-      globalRemainingUsd: profile.role === "admin" ? globalRemainingUsd : null,
+      globalRemainingUsd: profile.role === "admin" ? teamRemainingUsd : null,
       globalCapUsd:
         profile.role === "admin" && globalSpend.settings.enabled
           ? globalSpend.settings.capUsd

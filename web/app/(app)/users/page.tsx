@@ -285,7 +285,10 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("role", "hybrid_editor"),
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "ai_animator"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "ai_animator"),
     // Every editor-tier account, which since 0078 is exactly the set the
     // installation default decides for — there is no per-account override
     // left to exempt anyone. Named in the disable dialog so an admin sees
@@ -349,6 +352,7 @@ export default async function UsersPage({
       daily_cap_override_usd: number | null;
       weekly_cap_override_usd: number | null;
       hourly_cap_override_usd: number | null;
+      global_cap_exempt: boolean;
     }
   >();
   const spendWindowByUserId = new Map<
@@ -395,7 +399,7 @@ export default async function UsersPage({
       supabase
         .from("profiles")
         .select(
-          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd",
+          "id, avatar_storage_key, last_seen_at, daily_cap_override_usd, weekly_cap_override_usd, hourly_cap_override_usd, global_cap_exempt",
         )
         .in("id", userIds),
       supabase
@@ -678,6 +682,7 @@ export default async function UsersPage({
                           maxDailyCapUsd,
                           effectiveHourlyCapUsd: override?.hourly_cap_override_usd ?? null,
                           hasHourlyOverride: override?.hourly_cap_override_usd != null,
+                          globalCapExempt: override?.global_cap_exempt === true,
                           dailyCapEnabled,
                         }
                       : null;

@@ -484,6 +484,28 @@ export async function setHourlyCapOverride(
 }
 
 /**
+ * Exempts one account from the team-wide spending cap, or puts it back under it
+ * (0133). Admin only. Its spend still counts toward the team total.
+ */
+export async function setGlobalCapExempt(userId: string, exempt: boolean): Promise<ActionResult> {
+  await requireAdmin();
+  if (typeof exempt !== "boolean") return { error: "Choose whether the team cap applies." };
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("profiles")
+    .update({ global_cap_exempt: exempt })
+    .eq("id", userId)
+    .select("id");
+
+  if (error) throw new Error(`Failed to set the team cap exemption: ${error.message}`);
+  if (!data?.length) return { error: "That account could not be found." };
+
+  revalidatePath(USERS_PATH);
+  revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
+}
+
+/**
  * Sets, or clears, the weekly allowance override on EVERY editor-tier
  * account at once, from /users.
  *

@@ -945,6 +945,32 @@ describe("assertWithinSpendCaps — kie balance step", () => {
 
   const estimatedUsd = 3; // well under every real DAILY_CAP_USD/WEEKLY_CAP_USD default
 
+  it("lets an exempt account past an exhausted team cap, and still blocks everyone else", async () => {
+    const { getKieAccountBalanceUsd } = await import("@/lib/kie-balance");
+    vi.mocked(getKieAccountBalanceUsd).mockResolvedValue(1000);
+    await mockZeroSpend();
+    const { createAdminClient } = await import("@/lib/supabase/server");
+    // The team has already spent $150 against the default $100 daily team cap;
+    // this account itself has spent nothing.
+    const client = createAdminClient() as unknown as { rpc: ReturnType<typeof vi.fn> };
+    client.rpc = vi.fn((fn: string) =>
+      Promise.resolve({ data: fn === "spend_total_usd" ? 150 : 0, error: null }),
+    );
+    const { assertWithinSpendCaps } = await import("./spend");
+
+    expect(await assertWithinSpendCaps("u1", editorProfile, estimatedUsd)).toEqual({
+      error: expect.stringMatching(/global/i),
+    });
+    expect(
+      await assertWithinSpendCaps(
+        "u1",
+        { ...editorProfile, global_cap_exempt: true },
+        estimatedUsd,
+      ),
+      "an exempt account was still stopped by the team cap",
+    ).toBeUndefined();
+  });
+
   it("refuses when the kie balance cannot cover the estimate", async () => {
     const { getKieAccountBalanceUsd } = await import("@/lib/kie-balance");
     vi.mocked(getKieAccountBalanceUsd).mockResolvedValue(1);
