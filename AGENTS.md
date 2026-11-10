@@ -99,7 +99,8 @@ Captions are gone. Subtitles are added in CapCut after export.
 - **`profiles.last_seen_at`** is the presence heartbeat (`touchPresence`, every 60 s per
   visible tab); Accounts Control shows green within 2 minutes.
 - **Uploads keep PNG and JPEG as sent.** `toJpeg` converts WebP only (Kling rejects it).
-- **Prompts are capped at `MAX_PROMPT_CHARS` = 20,000** (`lib/prompt-limits.ts`) on `/ugc`;
+- **Prompts are capped at `MAX_PROMPT_CHARS` = 20,000** (`lib/prompt-limits.ts`) on `/ugc`
+  and the Image Generator (checked again after `@tag` expansion);
   a lower per-model vendor cap (`maxPromptChars`) still wins.
 - **Image ratios are 9:16, 1:1 and 16:9 on every model**; Nano Banana 2 is gone from the
   picker (`nano-banana-2-1` stays).

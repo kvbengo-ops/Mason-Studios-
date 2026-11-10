@@ -218,3 +218,37 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
     }
   });
 });
+
+describe("generatePersonalImage takes prompts up to 20,000 characters", () => {
+  it("refuses 20,001 characters before touching the database", async () => {
+    const { generatePersonalImage } = await import("./image-generator");
+
+    expect(
+      await generatePersonalImage(
+        generateForm({
+          prompt: "a".repeat(20_001),
+          imageModel: "nano-banana-2-1",
+          aspectRatio: "1:1",
+        }),
+      ),
+    ).toEqual({ error: "That prompt is 20,001 characters; the limit is 20,000." });
+  });
+
+  it("lets exactly 20,000 characters past the length check", async () => {
+    const { generatePersonalImage } = await import("./image-generator");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      // Past the check means reaching the admin client, which throws here by design.
+      const outcome = await generatePersonalImage(
+        generateForm({
+          prompt: "a".repeat(20_000),
+          imageModel: "nano-banana-2-1",
+          aspectRatio: "1:1",
+        }),
+      ).catch((error: unknown) => error);
+      expect(outcome).not.toEqual({ error: expect.stringContaining("the limit is") });
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});

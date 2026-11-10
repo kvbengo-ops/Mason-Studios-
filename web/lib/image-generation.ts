@@ -53,6 +53,7 @@ import { isImageAspectRatio } from "@/lib/image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, isImageResolution } from "@/lib/image-resolutions";
 import { saveGeneratedImageAsElement } from "@/lib/generated-image-element";
 import { descriptionFor, substituteElementTags, tagsInOrder } from "@/lib/element-tags";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import type { Database } from "@/types/db";
 
 /**
@@ -169,14 +170,13 @@ const ALREADY_COMPLETED_MESSAGE =
   "That request already completed — refresh the image history to see it.";
 
 /**
- * Upper bound on a prompt, enforced before anything is reserved.
- *
- * Not a vendor limit -- kie's own is higher and undocumented. This is a guard
- * against a paste of an entire script arriving as one prompt: the cost is the
- * same either way, so a runaway input spends real money on something nobody
- * meant to submit. Generous enough that no deliberate prompt hits it.
+ * Upper bound on a prompt, enforced before anything is reserved: the same
+ * 20,000 as /ugc (lib/prompt-limits.ts). kie documents 20,000 characters for
+ * Nano Banana 2.1, GPT Image 2.5 and GPT Image 2.6 (checked 2026-11-10);
+ * BytePlus publishes no Seedream limit. Checked again after @tags expand into
+ * element descriptions, since that longer text is what the vendor receives.
  */
-const MAX_PROMPT_LENGTH = 2000;
+const MAX_PROMPT_LENGTH = MAX_PROMPT_CHARS;
 
 /**
  * At most this many tagged references reach the vendor.
@@ -425,7 +425,7 @@ export async function generateImageFor(
   }
   if (prompt.length > MAX_PROMPT_LENGTH) {
     return {
-      error: `That prompt is ${prompt.length} characters; the limit is ${MAX_PROMPT_LENGTH}.`,
+      error: `That prompt is ${prompt.length.toLocaleString("en-US")} characters; the limit is ${MAX_PROMPT_LENGTH.toLocaleString("en-US")}.`,
     };
   }
   if (!idempotencyKey) {
@@ -441,6 +441,11 @@ export async function generateImageFor(
   // and its picture (attached as a conditioning reference). Done before the
   // estimate because it decides which model runs.
   const resolved = await resolvePromptReferences(admin, owner.userId, prompt);
+  if (resolved.prompt.length > MAX_PROMPT_LENGTH) {
+    return {
+      error: `With @tag descriptions filled in, that prompt is ${resolved.prompt.length.toLocaleString("en-US")} characters; the limit is ${MAX_PROMPT_LENGTH.toLocaleString("en-US")}. Shorten the prompt or a tagged element's description.`,
+    };
+  }
 
   // CHAINING. The previous beat's image, conditioning this one, so a sequence
   // reads as one moment continuing rather than three unrelated pictures of a

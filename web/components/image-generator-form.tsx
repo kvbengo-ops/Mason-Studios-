@@ -9,6 +9,7 @@ import { PendingButton } from "@/components/pending-button";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
+import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import { UgcReferencePicker } from "@/components/ugc-reference-picker";
 import type { PickedReference } from "@/components/ugc-reference-picker";
 import { findElementByTag, type ElementTag } from "@/lib/elements";
@@ -173,6 +174,7 @@ export function ImageGeneratorForm({
   const generateLocked = pending || inFlight > 0;
   const disabledReason = unavailableReason;
   const [prompt, setPrompt] = useState("");
+  const promptTooLong = prompt.trim().length > MAX_PROMPT_CHARS;
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [referencePickerTab, setReferencePickerTab] = useState<"uploads" | "elements">("elements");
   const taggedPictures = tagsInOrder(prompt)
@@ -338,7 +340,7 @@ export function ImageGeneratorForm({
 
   function handleGenerate(confirmed = false): void {
     const trimmedPrompt = prompt.trim();
-    if (disabledReason || generateLocked || !trimmedPrompt) return;
+    if (disabledReason || generateLocked || !trimmedPrompt || promptTooLong) return;
     if (!confirmed) {
       setConfirmation(imageCount);
       return;
@@ -559,6 +561,8 @@ export function ImageGeneratorForm({
                     value={prompt}
                     onChange={updatePromptDraft}
                     elements={elements}
+                    charCount={prompt.trim().length}
+                    maxChars={MAX_PROMPT_CHARS}
                     placeholder="Describe the scene you imagine — subject, setting, light. Type @ for a saved reference."
                     // Height and colour only — NOT padding or font metrics. Those are
                     // shared with the highlight mirror drawn on top of this box,
@@ -772,7 +776,7 @@ export function ImageGeneratorForm({
                 <PendingButton
                   type="submit"
                   pending={pending}
-                  disabled={generateLocked || !!disabledReason || !prompt.trim()}
+                  disabled={generateLocked || !!disabledReason || !prompt.trim() || promptTooLong}
                   aria-label={imageCount === 1 ? "Generate" : `Generate ${imageCount} images`}
                   aria-describedby={
                     disabledReason ? "image-generator-disabled" : "image-generator-cost"
