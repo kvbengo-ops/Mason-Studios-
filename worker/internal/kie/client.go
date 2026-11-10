@@ -180,6 +180,9 @@ func NewClient(apiKey string, mock bool, httpClient *http.Client, mockVideoURL s
 	}
 }
 
+// SubmitGap is the spacing this client enforces between createTask POSTs.
+func (c *Client) SubmitGap() time.Duration { return c.submitGap }
+
 // waitSubmitSlot reserves the next createTask slot and waits for it, so
 // concurrent submits leave at least submitGap apart. The lock is released
 // before the wait: it is never held across the HTTP call.

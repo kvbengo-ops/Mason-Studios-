@@ -114,6 +114,20 @@ func run() error {
 			slog.String("mock_video_url", mockVideoURL))
 	}
 
+	// The resolved values, after defaults, so the throttle can be checked from
+	// outside the process. "env" means the variable is set and non-empty (the
+	// rule config.positiveIntVar applies); anything else took the default.
+	source := func(name string) string {
+		if os.Getenv(name) != "" {
+			return "env"
+		}
+		return "default"
+	}
+	logger.Info(fmt.Sprintf("kie submit throttle: max %d per tick (%s), spacing %dms, render concurrency %d (%s)",
+		cfg.KieMaxSubmitsPerTick, source("KIE_MAX_SUBMITS_PER_TICK"),
+		kieClient.SubmitGap().Milliseconds(),
+		cfg.RenderConcurrency, source("RENDER_CONCURRENCY")))
+
 	// The explicit Seedance 2.5 · BytePlus ModelArk selection goes to BytePlus
 	// only — without BYTEPLUS_API_KEY it fails, never falls back to kie
 	// (internal/byteplus). The existing Seedance 2.5 selection stays on kie.
