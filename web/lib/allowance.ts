@@ -257,13 +257,22 @@ export function peerGrantAmountError(amountUsd: number, peerMaxGrantUsd: number)
  * `null` as the amount means "clear the override and fall back to the role
  * default" — always legal, so it is not this function's business.
  *
- * The upper bound is ADMIN_WEEKLY_CAP_USD rather than an arbitrary number:
+ * The upper bound is MAX_ACCOUNT_WEEKLY_CAP_USD (was ADMIN_WEEKLY_CAP_USD):
  * it is the largest weekly allowance the system already hands anyone by
  * role, so an override above it is far more likely a typo (5000 for 50)
  * than an intent. It is not a security boundary — an admin who genuinely
  * needs more raises the env var — it is a guard against the one mistake
  * that costs real money and has no undo once a render is submitted.
  */
+/**
+ * The highest weekly / daily amount an admin can set on any account (owner,
+ * 2026-11-10). Fixed here, not read from the env: ADMIN_*_CAP_USD used to be
+ * this ceiling AND the admin starting allowance, so lowering admins' start to
+ * $500 blocked every account above $500 from being edited.
+ */
+export const MAX_ACCOUNT_WEEKLY_CAP_USD = 5_000;
+export const MAX_ACCOUNT_DAILY_CAP_USD = 5_000;
+
 export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): string | null {
   // Zero is deliberate: it lets an admin pause new paid renders for one
   // account without changing that account's role or disabling its access to
@@ -285,8 +294,8 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
   }
   if (amountUsd > maxUsd) {
     return (
-      `${formatUsd(maxUsd)} is the highest allowance any role gets — ` +
-      "raise the cap env vars if someone genuinely needs more than that."
+      `${formatUsd(maxUsd)} is the highest weekly allowance — ` +
+      "the most you can set on one account."
     );
   }
   return null;
@@ -295,7 +304,7 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
 /**
  * weeklyCapOverrideError's daily twin, for profiles.daily_cap_override_usd.
  *
- * Bounded by ADMIN_DAILY_CAP_USD rather than the weekly ceiling, and NOT
+ * Bounded by MAX_ACCOUNT_DAILY_CAP_USD rather than the weekly ceiling, and NOT
  * cross-checked against this account's weekly figure — deliberately. The
  * "a daily guard must not exceed the weekly allowance" rule is enforced by
  * resolveAccountCaps (lib/spend.ts) clamping on READ, which holds for
@@ -322,7 +331,8 @@ export function weeklyCapOverrideError(amountUsd: number, maxUsd: number): strin
 // one had no way to leave the other alone.
 // ---------------------------------------------------------------------------
 
-export type BulkAllowanceScope = "editor" | "trusted_editor" | "hybrid_editor" | "ai_animator" | "all";
+export type BulkAllowanceScope =
+  "editor" | "trusted_editor" | "hybrid_editor" | "ai_animator" | "all";
 
 export interface BulkSpendingLimits {
   count: number;
@@ -371,8 +381,8 @@ export function dailyCapOverrideError(amountUsd: number, maxUsd: number): string
   }
   if (amountUsd > maxUsd) {
     return (
-      `${formatUsd(maxUsd)} is the highest daily guard any role gets — ` +
-      "raise the cap env vars if someone genuinely needs more than that."
+      `${formatUsd(maxUsd)} is the highest daily allowance — ` +
+      "the most you can set on one account."
     );
   }
   return null;

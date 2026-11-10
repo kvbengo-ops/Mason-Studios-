@@ -14,18 +14,14 @@ import { ASSIGNABLE_ROLES, isAssignableRole } from "@/lib/model-access";
 import {
   BULK_ALLOWANCE_SCOPE_ROLES,
   dailyCapOverrideError,
+  MAX_ACCOUNT_DAILY_CAP_USD,
+  MAX_ACCOUNT_WEEKLY_CAP_USD,
   weeklyCapOverrideError,
   type BulkAllowanceScope,
   type BulkSpendingLimits,
 } from "@/lib/allowance";
 import { revokeActiveGrantsFor } from "@/lib/allowance-grants";
-import {
-  ADMIN_DAILY_CAP_USD,
-  ADMIN_WEEKLY_CAP_USD,
-  dailyCapForRole,
-  resolveAccountCaps,
-  weeklyCapForRole,
-} from "@/lib/spend";
+import { dailyCapForRole, resolveAccountCaps, weeklyCapForRole } from "@/lib/spend";
 import type { GlobalSpendCapPeriod } from "@/lib/spend";
 
 const USERS_PATH = "/users";
@@ -398,7 +394,7 @@ export async function demoteAdmin(
  * Per-account overrides can target any role, including admins. The bulk
  * allowance controls remain explicitly scoped to editor tiers.
  *
- * ADMIN_WEEKLY_CAP_USD is imported statically, exactly as actions/
+ * lib/spend.ts is imported statically, exactly as actions/
  * allowance.ts imports WEEKLY_CAP_USD. That does couple this file's other
  * action to lib/spend.ts's module-load throw on a malformed cap env var —
  * accepted deliberately, because an app whose cap vars do not parse is
@@ -414,7 +410,7 @@ export async function setWeeklyCapOverride(
   // Authoritative check. The dialog runs the same function for a fast-fail,
   // but a Server Action is reachable without it.
   if (weeklyCapUsd !== null) {
-    const error = weeklyCapOverrideError(weeklyCapUsd, ADMIN_WEEKLY_CAP_USD);
+    const error = weeklyCapOverrideError(weeklyCapUsd, MAX_ACCOUNT_WEEKLY_CAP_USD);
     if (error) return { error };
   }
 
@@ -506,7 +502,7 @@ export async function setDailyCapOverride(
   // Authoritative check, same as the weekly twin: the dialog runs this for
   // a fast-fail, but a Server Action is reachable without it.
   if (dailyCapUsd !== null) {
-    const error = dailyCapOverrideError(dailyCapUsd, ADMIN_DAILY_CAP_USD);
+    const error = dailyCapOverrideError(dailyCapUsd, MAX_ACCOUNT_DAILY_CAP_USD);
     if (error) return { error };
   }
 
@@ -708,7 +704,7 @@ export async function setAllEditorsWeeklyCap(
   }
 
   if (weeklyCapUsd !== null) {
-    const error = weeklyCapOverrideError(weeklyCapUsd, ADMIN_WEEKLY_CAP_USD);
+    const error = weeklyCapOverrideError(weeklyCapUsd, MAX_ACCOUNT_WEEKLY_CAP_USD);
     if (error) return { error };
   }
 
@@ -871,7 +867,7 @@ export async function setAllEditorsDailyCap(
   }
 
   if (dailyCapUsd !== null) {
-    const error = dailyCapOverrideError(dailyCapUsd, ADMIN_DAILY_CAP_USD);
+    const error = dailyCapOverrideError(dailyCapUsd, MAX_ACCOUNT_DAILY_CAP_USD);
     if (error) return { error };
   }
 

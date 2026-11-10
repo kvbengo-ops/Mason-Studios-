@@ -17,7 +17,11 @@ import type { ParsedSort } from "@/lib/sort-params";
 import { formatUsd } from "@/lib/format-usd";
 import { decideAccountApproval } from "@/actions/account";
 import { AllEditorsAllowanceDialog } from "@/components/all-editors-allowance-dialog";
-import { BULK_ALLOWANCE_SCOPE_ROLES } from "@/lib/allowance";
+import {
+  BULK_ALLOWANCE_SCOPE_ROLES,
+  MAX_ACCOUNT_DAILY_CAP_USD,
+  MAX_ACCOUNT_WEEKLY_CAP_USD,
+} from "@/lib/allowance";
 import { Badge } from "@/components/ui/badge";
 import { DailyCapSwitch } from "@/components/daily-cap-switch";
 import { UserRowActions } from "@/components/user-row-actions";
@@ -469,8 +473,8 @@ export default async function UsersPage({
     try {
       const spend = await import("@/lib/spend");
       resolveAccountCaps = spend.resolveAccountCaps;
-      maxWeeklyCapUsd = spend.ADMIN_WEEKLY_CAP_USD;
-      maxDailyCapUsd = spend.ADMIN_DAILY_CAP_USD;
+      maxWeeklyCapUsd = MAX_ACCOUNT_WEEKLY_CAP_USD;
+      maxDailyCapUsd = MAX_ACCOUNT_DAILY_CAP_USD;
       dailyCapEnabled = await spend.getUserDailyCapEnabled();
     } catch (error) {
       console.error("Failed to load lib/spend for /users allowance columns", error);

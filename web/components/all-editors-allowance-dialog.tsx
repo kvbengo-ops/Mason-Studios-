@@ -94,12 +94,12 @@ export function Toggle({
 }
 
 export function AllEditorsAllowanceDialog({
-  /** ADMIN_WEEKLY_CAP_USD, resolved server-side — see the per-account
+  /** MAX_ACCOUNT_WEEKLY_CAP_USD (lib/allowance.ts) — see the per-account
    * dialog's prop doc for why this is never a client import. */
   maxWeeklyCapUsd,
   /** Accounts on the plain `editor` role. */
   editorCount,
-  /** ADMIN_DAILY_CAP_USD, resolved server-side — the ceiling the daily field validates against. */
+  /** MAX_ACCOUNT_DAILY_CAP_USD (lib/allowance.ts) — the ceiling the daily field validates against. */
   maxDailyCapUsd,
   /** Accounts on `trusted_editor`. Counted separately because the scope
    * below writes to one tier or the other, and the copy names the number it

@@ -61,7 +61,7 @@ export function WeeklyAllowanceDialog({
    * thing that makes "Use role default" meaningful — offering a reset to an
    * account that has nothing to reset is a button that does nothing. */
   hasOverride,
-  /** ADMIN_WEEKLY_CAP_USD, resolved server-side. The page reads it through
+  /** MAX_ACCOUNT_WEEKLY_CAP_USD (lib/allowance.ts). The page reads it through
    * its existing dynamic import of lib/spend, never a client import — that
    * module throws at load on a malformed cap env var. */
   maxWeeklyCapUsd,
@@ -71,7 +71,7 @@ export function WeeklyAllowanceDialog({
   effectiveDailyCapUsd,
   /** True when daily_cap_override_usd is set on this account. */
   hasDailyOverride,
-  /** ADMIN_DAILY_CAP_USD, resolved server-side — same route as the weekly ceiling. */
+  /** MAX_ACCOUNT_DAILY_CAP_USD (lib/allowance.ts) — same route as the weekly ceiling. */
   maxDailyCapUsd,
   effectiveHourlyCapUsd,
   hasHourlyOverride,

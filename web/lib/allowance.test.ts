@@ -276,7 +276,7 @@ describe("weeklyCapOverrideError", () => {
   it("accepts a value at the ceiling but not one over it", () => {
     expect(weeklyCapOverrideError(MAX, MAX)).toBeNull();
     // 5000 for 50 is the mistake this exists for.
-    expect(weeklyCapOverrideError(MAX + 0.01, MAX)).toMatch(/highest allowance any role gets/i);
+    expect(weeklyCapOverrideError(MAX + 0.01, MAX)).toMatch(/highest weekly allowance/i);
   });
 
   it("accepts an ordinary value", () => {
@@ -287,5 +287,15 @@ describe("weeklyCapOverrideError", () => {
     // Fail closed: an unreadable ceiling means lib/spend did not load, and
     // guessing a limit is worse than refusing to set one.
     expect(weeklyCapOverrideError(25, max)).not.toBeNull();
+  });
+});
+
+describe("the fixed $5,000 per-account maximum", () => {
+  it("accepts amounts above the admin starting value, up to $5,000", async () => {
+    const { MAX_ACCOUNT_WEEKLY_CAP_USD, MAX_ACCOUNT_DAILY_CAP_USD } = await import("./allowance");
+    expect(MAX_ACCOUNT_WEEKLY_CAP_USD).toBe(5_000);
+    expect(MAX_ACCOUNT_DAILY_CAP_USD).toBe(5_000);
+    expect(weeklyCapOverrideError(700, MAX_ACCOUNT_WEEKLY_CAP_USD)).toBeNull();
+    expect(weeklyCapOverrideError(5_000.01, MAX_ACCOUNT_WEEKLY_CAP_USD)).not.toBeNull();
   });
 });
