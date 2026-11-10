@@ -24,6 +24,8 @@ import { RoleBadge } from "@/components/role-badge";
 import { PresenceDot } from "@/components/presence-dot";
 import { RoleSelect } from "@/components/role-select";
 import { GlobalSpendCapControl } from "@/components/global-spend-cap-control";
+import { KpiTile, PANEL } from "@/components/kpi-tile";
+import { DonutChart } from "@/components/donut-chart";
 import {
   Table,
   TableBody,
@@ -84,7 +86,6 @@ const SEGMENT =
   "inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const SEGMENT_ON = "bg-card text-foreground shadow-sm";
 const SEGMENT_OFF = "text-muted-foreground hover:text-foreground";
-const PANEL = "min-w-0 rounded-2xl border border-border/70 bg-card";
 
 function parseView(raw: string | string[] | undefined): AccountsControlView {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -473,125 +474,6 @@ function DeletedSection({ deleted }: { deleted: AccountControlDeletedData }): JS
   );
 }
 
-function Stat({
-  label,
-  value,
-  sub,
-  alert = false,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  alert?: boolean;
-  icon: LucideIcon;
-}): JSX.Element {
-  return (
-    <div
-      className={cn(
-        PANEL,
-        "relative flex flex-col gap-3 p-5 sm:p-6",
-        alert && "border-destructive/40",
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
-        <span
-          className={cn(
-            "grid size-9 place-items-center rounded-xl",
-            alert ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
-          )}
-        >
-          <Icon aria-hidden="true" className="size-4" />
-        </span>
-      </div>
-      <span className="text-3xl font-semibold tracking-tight tabular-nums">{value}</span>
-      <span
-        className={cn(
-          "text-xs tabular-nums",
-          alert ? "font-medium text-destructive" : "text-muted-foreground",
-        )}
-      >
-        {sub}
-      </span>
-    </div>
-  );
-}
-
-// Literal class names so Tailwind generates them; colours cycle past five.
-const DONUT_STROKES = [
-  "stroke-chart-1",
-  "stroke-chart-2",
-  "stroke-chart-3",
-  "stroke-chart-4",
-  "stroke-chart-5",
-];
-const DONUT_DOTS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
-
-/** Models used as a donut of credit share, total in the centre, legend beside it. */
-function ModelDonut({
-  usage,
-}: {
-  usage: readonly { label: string; runs: number; costUsd: number }[];
-}): JSX.Element {
-  const totalUsd = usage.reduce((sum, m) => sum + m.costUsd, 0);
-  const totalRuns = usage.reduce((sum, m) => sum + m.runs, 0);
-  const shares = usage.map((m) => (totalUsd > 0 ? (m.costUsd / totalUsd) * 100 : 0));
-  return (
-    <div className="flex flex-col items-center gap-8 sm:flex-row sm:items-center">
-      {/* r = 15.915 makes the circumference 100, so a dash length is a percentage. */}
-      <div className="relative size-48 shrink-0">
-        <svg aria-hidden="true" viewBox="0 0 42 42" className="size-full -rotate-90">
-          <circle cx={21} cy={21} r={15.915} fill="none" strokeWidth={6} className="stroke-muted" />
-          {usage.map((m, i) => {
-            const share = shares[i] ?? 0;
-            // ponytail: O(n²) prefix sum, n is a handful of models.
-            const offset = -shares.slice(0, i).reduce((sum, s) => sum + s, 0);
-            return share > 0 ? (
-              <circle
-                key={m.label}
-                cx={21}
-                cy={21}
-                r={15.915}
-                fill="none"
-                strokeWidth={6}
-                strokeDasharray={`${share} ${100 - share}`}
-                strokeDashoffset={offset}
-                className={DONUT_STROKES[i % DONUT_STROKES.length]}
-              />
-            ) : null;
-          })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-2xl font-semibold tracking-tight tabular-nums">
-            {formatUsd(totalUsd)}
-          </span>
-          <span className="text-xs text-muted-foreground">{totalRuns} runs</span>
-        </div>
-      </div>
-      <ul className="grid w-full grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
-        {usage.map((m, i) => (
-          <li key={m.label} className="flex min-w-0 flex-col gap-1">
-            <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              <span
-                aria-hidden="true"
-                className={cn("size-2 shrink-0 rounded-full", DONUT_DOTS[i % DONUT_DOTS.length])}
-              />
-              <span className="truncate" title={m.label}>
-                {m.label}
-              </span>
-            </span>
-            <span className="text-base font-semibold tabular-nums">{formatUsd(m.costUsd)}</span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">
-              {m.runs} run{m.runs === 1 ? "" : "s"}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export default async function AccountsControlPage({
   searchParams,
 }: {
@@ -702,19 +584,19 @@ export default async function AccountsControlPage({
       ) : null}
 
       <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Stat
+        <KpiTile
           icon={BarChart3}
           label="Today (UTC)"
           value={formatUsd(overview.todaySpendUsd)}
           sub="So far today"
         />
-        <Stat
+        <KpiTile
           icon={History}
           label="This month"
           value={formatUsd(overview.monthSpendUsd)}
           sub={`${formatUsd(overview.weekSpendUsd)} last 7 days`}
         />
-        <Stat
+        <KpiTile
           icon={Wallet}
           label="Kie balance"
           value={
@@ -723,7 +605,7 @@ export default async function AccountsControlPage({
           sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
           alert={kieEmpty || runwayShort}
         />
-        <Stat
+        <KpiTile
           icon={Wallet}
           label="BytePlus balance"
           value={
@@ -1070,7 +952,15 @@ export default async function AccountsControlPage({
             {overview.modelUsage.length === 0 ? (
               <EmptyState>No billed runs in this window.</EmptyState>
             ) : (
-              <ModelDonut usage={overview.modelUsage} />
+              <DonutChart
+                ariaLabel="Models used"
+                slices={overview.modelUsage.map((m) => ({
+                  label: m.label,
+                  valueUsd: m.costUsd,
+                  sub: `${m.runs} run${m.runs === 1 ? "" : "s"}`,
+                }))}
+                centreSub={`${overview.modelUsage.reduce((sum, m) => sum + m.runs, 0)} runs`}
+              />
             )}
           </ViewPanel>
 

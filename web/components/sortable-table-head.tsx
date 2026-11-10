@@ -25,6 +25,8 @@ export interface SortableTableHeadProps<Column extends string> {
    * SortableTableHead callers, which don't pass it) render exactly as
    * before. */
   className?: string;
+  /** Rendered as `data-col`, for a TableColumnsMenu that can hide this column. */
+  col?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ export function SortableTableHead<Column extends string>({
   defaultDirection = "desc",
   align = "left",
   className,
+  col,
 }: SortableTableHeadProps<Column>): JSX.Element {
   const isActive = sort.column === column;
   // toggleDirection, not a second inline copy of the same flip: the rule
@@ -70,6 +73,7 @@ export function SortableTableHead<Column extends string>({
 
   return (
     <TableHead
+      data-col={col}
       aria-sort={isActive ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
       // whitespace-nowrap: the label and the sort icon share one
       // `inline-flex` row (below) — a two-word label ("Cost to date",
