@@ -3,6 +3,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { JSX, ReactNode } from "react";
+import { Dialog } from "@/components/ui/dialog";
 import { manilaDayKeys } from "@/lib/burn";
 import type { AccountBurnDetail } from "@/actions/burn";
 
@@ -14,6 +16,11 @@ afterEach(cleanup);
 
 // Wednesday 12:00 Manila: three days into the week, four to go.
 const WED = new Date("2026-11-11T04:00:00Z");
+
+// The body's title and description are Radix dialog parts: they need a Dialog around them, as in the real drawer.
+function inDialog(children: ReactNode): JSX.Element {
+  return <Dialog open>{children}</Dialog>;
+}
 
 const account: BurnDrawerAccount = {
   userId: "11111111-1111-4111-8111-111111111111",
@@ -43,14 +50,16 @@ function renderBody(
   }> = {},
 ): void {
   render(
-    <BurnDrawerBody
-      account={overrides.account ?? account}
-      detail={overrides.detail === undefined ? detail : overrides.detail}
-      windowDays={overrides.windowDays ?? 14}
-      onWindowChange={overrides.onWindowChange ?? vi.fn()}
-      status={overrides.status ?? "ready"}
-      now={WED}
-    />,
+    inDialog(
+      <BurnDrawerBody
+        account={overrides.account ?? account}
+        detail={overrides.detail === undefined ? detail : overrides.detail}
+        windowDays={overrides.windowDays ?? 14}
+        onWindowChange={overrides.onWindowChange ?? vi.fn()}
+        status={overrides.status ?? "ready"}
+        now={WED}
+      />,
+    ),
   );
 }
 
@@ -63,17 +72,8 @@ describe("BurnDrawerBody", () => {
   });
 
   it("charts the window with the daily allowance as a dashed line", () => {
-    const { container } = render(
-      <BurnDrawerBody
-        account={account}
-        detail={detail}
-        windowDays={14}
-        onWindowChange={vi.fn()}
-        status="ready"
-        now={WED}
-      />,
-    );
-    expect(container.querySelectorAll("rect")).toHaveLength(14);
+    renderBody();
+    expect(document.querySelectorAll("rect")).toHaveLength(14);
     const line = screen.getByTestId("daily-allowance-line");
     expect(line.getAttribute("stroke-dasharray")).toBeTruthy();
     expect(
