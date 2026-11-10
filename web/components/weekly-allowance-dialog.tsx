@@ -278,6 +278,27 @@ export function WeeklyAllowanceDialog({
           </p>
         </div>
 
+        {/* Read-only: what this account can spend this week as saved now (base + grants). */}
+        <dl
+          aria-label="This week's balance"
+          className="grid grid-cols-3 gap-2 rounded-lg border border-border bg-muted/30 p-3 text-sm"
+        >
+          <div className="grid gap-0.5">
+            <dt className="text-xs text-muted-foreground">Weekly cap</dt>
+            <dd className="font-medium tabular-nums">{formatUsd(effectiveWeeklyCapUsd)}</dd>
+          </div>
+          <div className="grid gap-0.5">
+            <dt className="text-xs text-muted-foreground">Active grants</dt>
+            <dd className="font-medium tabular-nums">{formatUsd(activeGrantsUsd)}</dd>
+          </div>
+          <div className="grid gap-0.5">
+            <dt className="text-xs text-muted-foreground">Total this week</dt>
+            <dd className="font-semibold tabular-nums">
+              {formatUsd(effectiveWeeklyCapUsd + activeGrantsUsd)}
+            </dd>
+          </div>
+        </dl>
+
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
             <Label htmlFor="daily-allowance-enabled">Daily allowance</Label>

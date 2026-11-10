@@ -26,6 +26,31 @@ afterEach(() => {
 });
 
 describe("WeeklyAllowanceDialog", () => {
+  it("shows the weekly cap, active grants and their total as a read-only balance", async () => {
+    const user = userEvent.setup();
+    render(
+      <WeeklyAllowanceDialog
+        userId="editor-1"
+        email="editor@example.com"
+        effectiveWeeklyCapUsd={553}
+        activeGrantsUsd={147.58}
+        hasOverride
+        maxWeeklyCapUsd={100000}
+        effectiveDailyCapUsd={75}
+        hasDailyOverride
+        maxDailyCapUsd={100000}
+        effectiveHourlyCapUsd={null}
+        hasHourlyOverride={false}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /allowance.*editor@example\.com/i }));
+    const balance = within(screen.getByRole("dialog")).getByLabelText("This week's balance");
+    expect(balance.textContent).toContain("$553.00");
+    expect(balance.textContent).toContain("$147.58");
+    expect(balance.textContent).toContain("$700.58");
+  });
+
   it("exempts the account from the team cap when the switch is turned off, and writes nothing else", async () => {
     const user = userEvent.setup();
     vi.mocked(setGlobalCapExempt).mockResolvedValue(undefined);
