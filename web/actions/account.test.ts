@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decideAccountApproval,
+  setAccountRole,
   promoteToAdmin,
   setTrustedEditor,
   setWeeklyCapOverride,
@@ -11,6 +12,7 @@ import {
   getBulkSpendingLimits,
 } from "./account";
 import { requireAdmin } from "@/actions/guard";
+import { weeklyCapForRole } from "@/lib/spend";
 import { createAdminClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -62,9 +64,28 @@ function fakeBuilder(result: FakeQueryResult): FakeQueryBuilder {
     in: vi.fn(() => builder),
     gt: vi.fn(() => builder),
     is: vi.fn(() => builder),
-    select: vi.fn(async () => result),
+    select: vi.fn(() => {
+      const read = {
+        eq: vi.fn(() => read),
+        // The account as stampStartingCaps/roleOf read it: already has its own
+        // caps, so no stamp write muddies the assertions on the main write.
+        maybeSingle: vi.fn(async () => ({ data: SAVED_PROFILE, error: null })),
+        then: (
+          onFulfilled: (value: FakeQueryResult) => unknown,
+          onRejected?: (e: unknown) => unknown,
+        ) => Promise.resolve(result).then(onFulfilled, onRejected),
+      };
+      return read;
+    }),
   };
   return builder;
+}
+
+const SAVED_PROFILE = { role: "editor", weekly_cap_override_usd: 5, daily_cap_override_usd: 5 };
+
+/** The roles a bulk write targeted, in order — one `.eq("role", r)` per role now. */
+function rolesWritten(builder: FakeQueryBuilder): unknown[] {
+  return builder.eq.mock.calls.filter(([column]) => column === "role").map(([, role]) => role);
 }
 
 const ADMIN = { id: "admin-1", email: "admin@example.com" };
@@ -344,14 +365,19 @@ describe("setWeeklyCapOverride", () => {
     expect(builder.update).toHaveBeenCalledWith({ weekly_cap_override_usd: 25 });
   });
 
-  it("clears the override with null, so the role default applies again", async () => {
+  it("resets with null to the role's starting value, written as a number", async () => {
     vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
     const builder = fakeBuilder({ data: [{ id: "user-1" }], error: null });
     vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
 
     await setWeeklyCapOverride("user-1", null);
 
-    expect(builder.update).toHaveBeenCalledWith({ weekly_cap_override_usd: null });
+    // Never null: a null override would read the env live, and the env is only
+    // a starting value (owner, 2026-11-10).
+    expect(builder.update).toHaveBeenCalledWith({
+      weekly_cap_override_usd: weeklyCapForRole("editor"),
+    });
+    expect(builder.update).not.toHaveBeenCalledWith({ weekly_cap_override_usd: null });
   });
 
   it("refuses a negative amount without reaching the database", async () => {
@@ -405,7 +431,7 @@ describe("setAllEditorsDailyCap", () => {
 
     const result = await setAllEditorsDailyCap(2, "editor");
 
-    expect(builder.in).toHaveBeenCalledWith("role", ["editor"]);
+    expect(rolesWritten(builder)).toEqual(["editor"]);
     expect(builder.update).toHaveBeenCalledWith({ daily_cap_override_usd: 2 });
     expect(result).toEqual({ updated: 2 });
   });
@@ -421,7 +447,11 @@ describe("setAllEditorsDailyCap", () => {
 
     await setAllEditorsDailyCap(0, "all");
 
-    expect(builder.update).toHaveBeenCalledTimes(1);
+    // One write per role, and none of them a grant revocation.
+    expect(builder.update).toHaveBeenCalledTimes(4);
+    expect(builder.update.mock.calls.every(([patch]) => "daily_cap_override_usd" in patch)).toBe(
+      true,
+    );
     expect(builder.update).toHaveBeenCalledWith({ daily_cap_override_usd: 0 });
   });
 
@@ -459,6 +489,47 @@ describe("setAllEditorsHourlyCap", () => {
   });
 });
 
+describe("starting allowance", () => {
+  it("copies the role's starting caps onto a newly approved account that has none", async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+    const builder = fakeBuilder({ data: [{ id: "user-1" }], error: null });
+    builder.select.mockImplementation(() => {
+      const read = {
+        eq: vi.fn(() => read),
+        maybeSingle: vi.fn(async () => ({
+          data: {
+            role: "ai_animator",
+            weekly_cap_override_usd: null,
+            daily_cap_override_usd: null,
+          },
+          error: null,
+        })),
+        then: (onFulfilled: (value: FakeQueryResult) => unknown) =>
+          Promise.resolve({ data: [{ id: "user-1" }], error: null }).then(onFulfilled),
+      };
+      return read;
+    });
+    vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
+
+    await decideAccountApproval("user-1", "approve");
+
+    expect(builder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ weekly_cap_override_usd: weeklyCapForRole("ai_animator") }),
+    );
+  });
+
+  it("never overwrites an account that already has its own caps", async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+    const builder = fakeBuilder({ data: [{ id: "user-1" }], error: null });
+    vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
+
+    await setAccountRole("user-1", "ai_animator");
+
+    expect(builder.update).toHaveBeenCalledTimes(1);
+    expect(builder.update).toHaveBeenCalledWith({ role: "ai_animator" });
+  });
+});
+
 describe("bulk limits skip archived accounts", () => {
   it("never writes a bulk weekly limit to a deactivated account", async () => {
     vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
@@ -481,14 +552,15 @@ describe("setAllEditorsWeeklyCap", () => {
 
     // Named explicitly rather than "not admin": this writes to many rows at
     // once, so adding a future role must be a deliberate edit here.
-    expect(builder.in).toHaveBeenCalledWith("role", [
+    expect(rolesWritten(builder)).toEqual([
       "editor",
       "trusted_editor",
       "hybrid_editor",
       "ai_animator",
     ]);
     expect(builder.update).toHaveBeenCalledWith({ weekly_cap_override_usd: 25 });
-    expect(result).toEqual({ updated: 2 });
+    // The fake answers two rows for each of the four role writes.
+    expect(result).toEqual({ updated: 8 });
   });
 
   it.each([
@@ -504,7 +576,7 @@ describe("setAllEditorsWeeklyCap", () => {
 
     await setAllEditorsWeeklyCap(25, scope);
 
-    expect(builder.in).toHaveBeenCalledWith("role", roles);
+    expect(rolesWritten(builder)).toEqual(roles);
   });
 
   // Admins are protected by their absence from every scope, not by a

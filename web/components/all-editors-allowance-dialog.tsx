@@ -360,10 +360,10 @@ export function AllEditorsAllowanceDialog({
             disabled={disabled}
           />
           <p className="text-xs text-muted-foreground">
-            Up to {formatUsd(maxWeeklyCapUsd)}. This is not the role default — it sets a value on
-            the accounts that exist today. Someone who signs up later starts on the role default
-            until you run this again. &ldquo;Use role defaults&rdquo; clears it for the selected
-            accounts. Set to 0 to remove the base allowance and revoke approved grants. Allowance
+            Up to {formatUsd(maxWeeklyCapUsd)}. This sets a value on the accounts that exist today;
+            someone who signs up later gets their role&apos;s starting value. &ldquo;Reset to
+            starting values&rdquo; puts each selected account back on its role&apos;s starting
+            value. Set to 0 to remove the base allowance and revoke approved grants. Allowance
             received from colleagues remains available. Untouched limits stay unchanged.
           </p>
         </div>
@@ -483,7 +483,7 @@ export function AllEditorsAllowanceDialog({
             pending={isPending}
             disabled={disabled || scopedCount === 0}
           >
-            Use role defaults
+            Reset to starting values
           </PendingButton>
           <PendingButton
             onClick={handleSave}

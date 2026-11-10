@@ -19,7 +19,13 @@ import {
   type BulkSpendingLimits,
 } from "@/lib/allowance";
 import { revokeActiveGrantsFor } from "@/lib/allowance-grants";
-import { ADMIN_DAILY_CAP_USD, ADMIN_WEEKLY_CAP_USD, resolveAccountCaps } from "@/lib/spend";
+import {
+  ADMIN_DAILY_CAP_USD,
+  ADMIN_WEEKLY_CAP_USD,
+  dailyCapForRole,
+  resolveAccountCaps,
+  weeklyCapForRole,
+} from "@/lib/spend";
 import type { GlobalSpendCapPeriod } from "@/lib/spend";
 
 const USERS_PATH = "/users";
@@ -73,6 +79,60 @@ const DECIDABLE_FROM: Record<AccountDecision, ProfileStatus[]> = {
   deactivate: ["active"],
   reactivate: ["deactivated"],
 };
+
+/**
+ * The env (WEEKLY_CAP_USD, TRUSTED_WEEKLY_CAP_USD, ...) is only an account's
+ * STARTING allowance (owner, 2026-11-10). It is copied onto the account once,
+ * when it is approved or first given a role, and from then on the account's
+ * own columns are the whole story: an admin changes them in Allowance or
+ * Spending limits, and editing the env never moves an existing account.
+ *
+ * A role daily of 0 means "no daily guard" (resolveAccountCaps), so it is
+ * stored as null, never as an explicit 0 that would refuse every render.
+ */
+function startingCaps(role: ProfileRole): { weeklyUsd: number; dailyUsd: number | null } {
+  const dailyUsd = dailyCapForRole(role);
+  return { weeklyUsd: weeklyCapForRole(role), dailyUsd: dailyUsd > 0 ? dailyUsd : null };
+}
+
+/** The account's role, for a reset to its starting caps. Unknown accounts reset to the editor start. */
+async function roleOf(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<ProfileRole> {
+  const { data } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+  return (data?.role as ProfileRole | undefined) ?? "editor";
+}
+
+/** Copies the role's starting caps onto an account that has none yet. Never overwrites. */
+async function stampStartingCaps(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await admin
+    .from("profiles")
+    .select("role, weekly_cap_override_usd, daily_cap_override_usd")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error)
+    throw new Error(
+      `Failed to read ${userId} before setting its starting allowance: ${error.message}`,
+    );
+  if (!data) return;
+
+  const start = startingCaps(data.role);
+  const patch: { weekly_cap_override_usd?: number; daily_cap_override_usd?: number } = {};
+  if (data.weekly_cap_override_usd === null) patch.weekly_cap_override_usd = start.weeklyUsd;
+  if (data.daily_cap_override_usd === null && start.dailyUsd !== null) {
+    patch.daily_cap_override_usd = start.dailyUsd;
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  const { error: writeError } = await admin.from("profiles").update(patch).eq("id", userId);
+  if (writeError) {
+    throw new Error(`Failed to set the starting allowance for ${userId}: ${writeError.message}`);
+  }
+}
 
 /**
  * Approves or rejects a pending account, from /users.
@@ -131,6 +191,10 @@ export async function decideAccountApproval(
       error:
         "That account no longer needs approval or someone else already decided it — this list now shows where it stands.",
     };
+  }
+
+  if (decision === "approve" || decision === "reactivate") {
+    await stampStartingCaps(admin, userId);
   }
 
   revalidatePath(USERS_PATH);
@@ -219,6 +283,7 @@ export async function setTrustedEditor(
         "That account's role is no longer what this list showed — it now shows where it stands.",
     };
   }
+  await stampStartingCaps(admin, userId);
 
   revalidatePath(USERS_PATH);
 }
@@ -235,7 +300,8 @@ export async function setAccountRole(userId: string, role: string): Promise<Acti
   await requireAdmin();
   if (!isAssignableRole(role)) return { error: "Choose a valid role." };
 
-  const { data, error } = await createAdminClient()
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("profiles")
     .update({ role })
     .eq("id", userId)
@@ -245,6 +311,7 @@ export async function setAccountRole(userId: string, role: string): Promise<Acti
   if ((data ?? []).length === 0) {
     return { error: "That account is an admin or no longer exists; its role was not changed." };
   }
+  await stampStartingCaps(admin, userId);
 
   revalidatePath(ACCOUNTS_CONTROL_PATH);
   revalidatePath(USERS_PATH);
@@ -273,6 +340,7 @@ export async function promoteToAdmin(userId: string): Promise<ActionResult> {
       error: "That account is no longer an active editor — this list now shows where it stands.",
     };
   }
+  await stampStartingCaps(admin, userId);
 
   revalidatePath(USERS_PATH);
 }
@@ -351,9 +419,12 @@ export async function setWeeklyCapOverride(
   }
 
   const admin = createAdminClient();
+  // null is "reset to the starting allowance", written as a number so the env
+  // never applies live to this account again.
+  const value = weeklyCapUsd ?? startingCaps(await roleOf(admin, userId)).weeklyUsd;
   const { data, error } = await admin
     .from("profiles")
-    .update({ weekly_cap_override_usd: weeklyCapUsd })
+    .update({ weekly_cap_override_usd: value })
     .eq("id", userId)
     .select("id");
 
@@ -440,9 +511,10 @@ export async function setDailyCapOverride(
   }
 
   const admin = createAdminClient();
+  const value = dailyCapUsd ?? startingCaps(await roleOf(admin, userId)).dailyUsd;
   const { data, error } = await admin
     .from("profiles")
-    .update({ daily_cap_override_usd: dailyCapUsd })
+    .update({ daily_cap_override_usd: value })
     .eq("id", userId)
     .select("id");
 
@@ -641,24 +713,23 @@ export async function setAllEditorsWeeklyCap(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("profiles")
-    .update({ weekly_cap_override_usd: weeklyCapUsd })
-    // Whichever editor tiers the scope names, never admins — see
-    // BULK_ALLOWANCE_SCOPE_ROLES (lib/allowance.ts), where 'admin' appears in
-    // no list at all. Named roles rather than `.neq("role", "admin")`
-    // because this writes to many rows at once and should say exactly whose
-    // allowance it is changing.
-    .in("role", roles as ProfileRole[])
-    // Deactivated accounts are archived: never read or written in bulk.
-    .neq("status", "deactivated")
-    .select("id");
+  // One write per role: a reset (null) gives each role its own starting value.
+  const updatedIds: string[] = [];
+  for (const role of roles) {
+    const value = weeklyCapUsd ?? startingCaps(role).weeklyUsd;
+    const { data, error } = await admin
+      .from("profiles")
+      .update({ weekly_cap_override_usd: value })
+      .eq("role", role)
+      // Deactivated accounts are archived: never read or written in bulk.
+      .neq("status", "deactivated")
+      .select("id");
 
-  if (error) {
-    throw new Error(`Failed to set the editor weekly allowance: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to set the editor weekly allowance: ${error.message}`);
+    }
+    updatedIds.push(...(data ?? []).map((row) => row.id));
   }
-
-  const updatedIds = (data ?? []).map((row) => row.id);
 
   // Same ZERO MEANS ZERO rule setWeeklyCapOverride documents, applied to
   // everyone this bulk write just touched — a team-wide zero that leaves
@@ -805,21 +876,26 @@ export async function setAllEditorsDailyCap(
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("profiles")
-    .update({ daily_cap_override_usd: dailyCapUsd })
-    .in("role", roles as ProfileRole[])
-    // Deactivated accounts are archived: never read or written in bulk.
-    .neq("status", "deactivated")
-    .select("id");
+  let updated = 0;
+  for (const role of roles) {
+    const value = dailyCapUsd ?? startingCaps(role).dailyUsd;
+    const { data, error } = await admin
+      .from("profiles")
+      .update({ daily_cap_override_usd: value })
+      .eq("role", role)
+      // Deactivated accounts are archived: never read or written in bulk.
+      .neq("status", "deactivated")
+      .select("id");
 
-  if (error) {
-    throw new Error(`Failed to set the editor daily guard: ${error.message}`);
+    if (error) {
+      throw new Error(`Failed to set the editor daily guard: ${error.message}`);
+    }
+    updated += (data ?? []).length;
   }
 
   revalidatePath(USERS_PATH);
   revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
-  return { updated: (data ?? []).length };
+  return { updated };
 }
 
 /**

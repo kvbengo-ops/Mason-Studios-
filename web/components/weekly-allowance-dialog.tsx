@@ -160,7 +160,7 @@ export function WeeklyAllowanceDialog({
           const weekly = await setWeeklyCapOverride(userId, weeklyCapUsd);
           if (weekly?.error) throw new Error(weekly.error);
         }
-        // The daily switch before the amount; "Clear overrides" hands it back to the default.
+        // The daily switch before the amount; "Reset to starting values" hands it back to the default.
         if (clearOverrides ? hasDailyCapSwitch : dailyOn !== dailyCapEnabled) {
           const daily = await setDailyCapEnabled(userId, clearOverrides ? null : dailyOn);
           if (daily?.error) throw new Error(daily.error);
@@ -173,7 +173,7 @@ export function WeeklyAllowanceDialog({
           const hourly = await setHourlyCapOverride(userId, hourlyCapUsd);
           if (hourly?.error) throw new Error(hourly.error);
         }
-        // Its own switch, saved only when flipped; "Clear overrides" leaves it alone.
+        // Its own switch, saved only when flipped; "Reset to starting values" leaves it alone.
         if (!clearOverrides && teamCapApplies === globalCapExempt) {
           const exempt = await setGlobalCapExempt(userId, !teamCapApplies);
           if (exempt?.error) throw new Error(exempt.error);
@@ -404,7 +404,7 @@ export function WeeklyAllowanceDialog({
               onClick={() => submit(null, null, null, true)}
               pending={isPending}
             >
-              Clear overrides
+              Reset to starting values
             </PendingButton>
           ) : null}
           <PendingButton onClick={handleSave} pending={isPending}>

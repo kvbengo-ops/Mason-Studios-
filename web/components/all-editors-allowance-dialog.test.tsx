@@ -226,7 +226,7 @@ describe("Spending limits", () => {
       dailyCapUsd: "mixed",
       hourlyCapUsd: null,
     });
-    await user.click(screen.getByRole("button", { name: "Use role defaults" }));
+    await user.click(screen.getByRole("button", { name: "Reset to starting values" }));
     await screen.findByText(/Selected accounts are back on role defaults/);
     expect(setAllEditorsWeeklyCap).toHaveBeenCalledWith(null, "all");
     expect(setAllEditorsDailyCap).toHaveBeenCalledWith(null, "all");
