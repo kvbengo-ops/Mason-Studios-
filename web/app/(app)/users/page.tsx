@@ -23,6 +23,9 @@ import {
   MAX_ACCOUNT_WEEKLY_CAP_USD,
 } from "@/lib/allowance";
 import { Badge } from "@/components/ui/badge";
+import { UserPresenceStrip } from "@/components/user-presence-strip";
+import { UserAvatar } from "@/components/user-avatar";
+import { AccountsControlLiveRefresh } from "@/components/accounts-control-live-refresh";
 import { DailyCapSwitch } from "@/components/daily-cap-switch";
 import { UserRowActions } from "@/components/user-row-actions";
 import { AccountStatusBadge } from "@/components/account-status-badge";
@@ -48,9 +51,8 @@ import { getUserActiveGrantsTotals, type ActiveGrantTotals } from "@/lib/db-aggr
 import { requiresAccountApproval } from "@/lib/account-approval";
 import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
 import { getImageUrl } from "@/lib/storage";
-import { ImageLightbox } from "@/components/image-lightbox";
 import { PresenceDot } from "@/components/presence-dot";
-import { lastSeenLabel } from "@/lib/presence";
+import { lastSeenLabel, PRESENCE_WINDOW_MS } from "@/lib/presence";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
 // resolveAccountCaps` — the lint config (`@typescript-eslint/consistent-
@@ -289,6 +291,7 @@ export default async function UsersPage({
   // head counts rather than one grouped read — PostgREST's `count: exact`
   // has no GROUP BY, and both are index-only counts on a column already
   // indexed for every other role filter on this page.
+  const presenceCutoff = new Date(new Date().getTime() - PRESENCE_WINDOW_MS).toISOString();
   const [
     { count: plainEditorCount },
     { count: trustedEditorCount },
@@ -296,6 +299,9 @@ export default async function UsersPage({
     { count: aiAnimatorCount },
     { count: followingDefaultCount },
     { count: archivedCount },
+    presenceTotal,
+    presenceOnline,
+    onlineProfiles,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -330,6 +336,18 @@ export default async function UsersPage({
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("status", "deactivated"),
+    supabase.from("profiles").select("id", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .gte("last_seen_at", presenceCutoff),
+    supabase
+      .from("profiles")
+      .select("id, username, email, avatar_storage_key")
+      .gte("last_seen_at", presenceCutoff)
+      .order("last_seen_at", { ascending: false })
+      .order("id", { ascending: true })
+      .limit(6),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -481,6 +499,20 @@ export default async function UsersPage({
     }
   }
 
+  const onlineUsers = await Promise.all(
+    (onlineProfiles.data ?? []).map(async (profile) => {
+      let avatarUrl = avatarUrlByUserId.get(profile.id);
+      if (!avatarUrl && profile.avatar_storage_key) {
+        try {
+          avatarUrl = await getImageUrl(profile.avatar_storage_key, "thumb", 3600);
+        } catch (error) {
+          console.error(`Failed to sign online avatar URL for /users row ${profile.id}`, error);
+        }
+      }
+      return { id: profile.id, username: profile.username, email: profile.email, avatarUrl };
+    }),
+  );
+
   // The true empty state: no search term in play, and there are no profiles
   // at all. Distinct from "no users match this search" below — collapsing
   // the two would make a working search feel like a broken page on the
@@ -498,6 +530,7 @@ export default async function UsersPage({
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <AccountsControlLiveRefresh />
       {/* Two groups, not one row of four things. The left is what this PAGE
           is — a title, how many accounts, how many per page. The right is
           SPEND POLICY: two controls that change behaviour for every editor
@@ -561,6 +594,12 @@ export default async function UsersPage({
           )}
         </div>
       </div>
+
+      <UserPresenceStrip
+        total={presenceTotal.error ? null : presenceTotal.count}
+        online={presenceOnline.error ? null : presenceOnline.count}
+        users={onlineUsers}
+      />
 
       {/* Live search, debounced 500ms — see components/live-search.tsx for
           the full reasoning (no API route, focus/cursor survival, the
@@ -739,32 +778,17 @@ export default async function UsersPage({
                     <TableRow key={user.id}>
                       <TableCell className="font-medium text-foreground">
                         <div className="flex items-center gap-3">
-                          {avatarUrlByUserId.get(user.id) ? (
-                            <span className="relative size-9 shrink-0 overflow-visible rounded-full border bg-muted">
-                              <ImageLightbox
-                                src={avatarUrlByUserId.get(user.id)!}
-                                alt={`${user.username || user.email}'s profile picture`}
-                                className="size-full rounded-full object-cover"
-                                showIcon={false}
-                              />
-                              <PresenceDot
-                                lastSeenAt={lastSeenByUserId.get(user.id)}
-                                className="absolute bottom-0 right-0 size-3 ring-2 ring-background"
-                                offlineClassName="bg-muted-foreground/50"
-                              />
-                            </span>
-                          ) : (
-                            <span className="relative flex size-9 shrink-0 items-center justify-center rounded-full border bg-muted text-sm text-muted-foreground">
-                              {user.username?.[0]?.toUpperCase() ||
-                                user.email?.[0]?.toUpperCase() ||
-                                "?"}
-                              <PresenceDot
-                                lastSeenAt={lastSeenByUserId.get(user.id)}
-                                className="absolute bottom-0 right-0 size-3 ring-2 ring-background"
-                                offlineClassName="bg-muted-foreground/50"
-                              />
-                            </span>
-                          )}
+                          <UserAvatar
+                            username={user.username}
+                            email={user.email}
+                            avatarUrl={avatarUrlByUserId.get(user.id)}
+                          >
+                            <PresenceDot
+                              lastSeenAt={lastSeenByUserId.get(user.id)}
+                              className="absolute bottom-0 right-0 size-3 ring-2 ring-background"
+                              offlineClassName="bg-muted-foreground/50"
+                            />
+                          </UserAvatar>
                           <span>{user.email}</span>
                         </div>
                       </TableCell>
