@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { WeeklyAllowanceDialog } from "@/components/weekly-allowance-dialog";
 import { DeactivateAccountDialog } from "@/components/deactivate-account-dialog";
 import { PromoteAdminDialog } from "@/components/promote-admin-dialog";
+import { BurnDrawer, type BurnDrawerAccount } from "@/components/burn-drawer";
 import { demoteAdmin, setAccountRole } from "@/actions/account";
 import { ASSIGNABLE_ROLES, type AssignableRole } from "@/lib/model-access";
 import type { ProfileRole } from "@/types/db";
@@ -45,6 +46,7 @@ export function UserRowActions({
   canDemote = false,
   /** Null when lib/spend did not load — the allowance item is hidden rather than offering a control that cannot validate its own input. */
   allowance,
+  burn = null,
 }: {
   userId: string;
   email: string;
@@ -66,7 +68,10 @@ export function UserRowActions({
     hasHourlyOverride: boolean;
     globalCapExempt?: boolean;
   } | null;
+  /** What the burn drawer's header needs; null leaves "View burn" out of the menu. */
+  burn?: Omit<BurnDrawerAccount, "userId" | "email" | "role"> | null;
 }): JSX.Element {
+  const [burnOpen, setBurnOpen] = useState(false);
   const [allowanceOpen, setAllowanceOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
   const [promoteAdminOpen, setPromoteAdminOpen] = useState(false);
@@ -118,6 +123,18 @@ export function UserRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          {burn ? (
+            <DropdownMenuItem
+              // Same preventDefault reason as Allowance below: the drawer is
+              // rendered outside the menu and must outlive it.
+              onSelect={(event) => {
+                event.preventDefault();
+                setBurnOpen(true);
+              }}
+            >
+              View burn
+            </DropdownMenuItem>
+          ) : null}
           {!allowanceOnly ? (
             <>
               {/* Every non-admin role but the current one (0131 added Hybrid Editor and
@@ -176,6 +193,14 @@ export function UserRowActions({
 
       {/* Rendered OUTSIDE the menu, controlled by this component: a Dialog
           nested inside DropdownMenuContent unmounts with the menu. */}
+      {burn && burnOpen ? (
+        <BurnDrawer
+          account={{ userId, email, role, ...burn }}
+          open={burnOpen}
+          onOpenChange={setBurnOpen}
+        />
+      ) : null}
+
       {allowance && allowanceOpen ? (
         <WeeklyAllowanceDialog
           userId={userId}

@@ -832,6 +832,15 @@ export default async function UsersPage({
                         }
                       : null;
 
+                  // What the row's "View burn" drawer shows in its header and
+                  // chart; the daily allowance only when this account's daily
+                  // limit is on.
+                  const burnDrawer = {
+                    weekSpentUsd: spendWindow?.spent_this_week_usd ?? 0,
+                    weekTotalUsd: effectiveWeeklyCapUsd,
+                    dailyAllowanceUsd: caps && rowDailyCapEnabled ? caps.dailyCapUsd : null,
+                  };
+
                   return (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium text-foreground">
@@ -928,6 +937,7 @@ export default async function UsersPage({
                               email={user.email}
                               role={user.role}
                               allowance={allowance}
+                              burn={burnDrawer}
                               allowanceOnly
                               canDemote={user.id !== viewer.id}
                             />
@@ -958,6 +968,7 @@ export default async function UsersPage({
                                    this row, and a limit editor that cannot
                                    validate its own input is worse than none. */
                                 allowance={allowance}
+                                burn={burnDrawer}
                               />
                             ) : (
                               <div className="flex items-center justify-end gap-2">
