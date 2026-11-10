@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type JSX, type ReactNode } from "react";
+import { useId, useMemo, useState, useSyncExternalStore, type JSX, type ReactNode } from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, Columns3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,37 @@ export interface ToggleableColumn {
   id: string;
   label: string;
   defaultHidden?: boolean;
+}
+
+// Same-tab writes don't fire the `storage` event, so toggles notify directly.
+const listeners = new Set<() => void>();
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+function readSaved(storageKey: string): string | null {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch {
+    return null; // Storage blocked: the defaults apply.
+  }
+}
+function parseSaved(saved: string | null, columns: readonly ToggleableColumn[]): string[] | null {
+  try {
+    const parsed: unknown = saved ? JSON.parse(saved) : null;
+    return Array.isArray(parsed)
+      ? parsed.filter((id): id is string => columns.some((c) => c.id === id))
+      : null;
+  } catch {
+    return null; // Corrupt: the defaults apply.
+  }
 }
 
 /**
@@ -29,29 +60,28 @@ export function TableColumnsMenu({
   children: ReactNode;
 }): JSX.Element {
   const scope = `cols-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const [hidden, setHidden] = useState<readonly string[]>(() =>
-    columns.filter((c) => c.defaultHidden).map((c) => c.id),
+  // The saved choice is read as an external store: null on the server and
+  // during hydration (so both render the defaults), the stored string after.
+  const saved = useSyncExternalStore(
+    subscribe,
+    () => readSaved(storageKey),
+    () => null,
   );
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(storageKey);
-      const parsed: unknown = saved ? JSON.parse(saved) : null;
-      if (Array.isArray(parsed)) {
-        setHidden(parsed.filter((id): id is string => columns.some((c) => c.id === id)));
-      }
-    } catch {
-      // Storage blocked or corrupt: keep the defaults.
-    }
-  }, [storageKey, columns]);
+  // This visit's choice, for when storage refuses the write.
+  const [override, setOverride] = useState<readonly string[] | null>(null);
+  const hidden = useMemo(
+    () => override ?? parseSaved(saved, columns) ?? columns.filter((c) => c.defaultHidden).map((c) => c.id),
+    [override, saved, columns],
+  );
 
   const toggle = (id: string, visible: boolean): void => {
     const next = visible ? hidden.filter((h) => h !== id) : [...hidden, id];
-    setHidden(next);
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(next));
+      notify();
     } catch {
       // Not persisted; still applied for this visit.
+      setOverride(next);
     }
   };
 
