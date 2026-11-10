@@ -9,7 +9,7 @@ import Link from "next/link";
 import { requireProjectReadable } from "@/actions/guard";
 import { approveFrames } from "@/actions/frames";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { signedUrl, getImageUrl } from "@/lib/storage";
 import { FrameGrid, type FrameGridScene } from "@/components/frame-grid";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -58,21 +58,10 @@ export default async function FramesPage({
       const storageKey = scene.ref_frame_asset_id
         ? storageKeyByAssetId.get(scene.ref_frame_asset_id)
         : undefined;
-      // Two signed URLs per frame, not one: `imageUrl` is what the grid
-      // actually paints (quality 80, WebP-negotiated and downscaled — see
-      // signedUrl's ImageTransform doc comment for the resize:"contain"
-      // gotcha this relies on), and `originalImageUrl` is the untransformed
-      // source the grid links out to so an operator can inspect a frame at
-      // full fidelity before rejecting it. This is a GATE screen (see this
-      // file's header comment) — an operator must never reject or approve a
-      // generation based on a compression artifact this page introduced, so
-      // the real bytes stay one click away, and quality stays 80 (no
-      // quality-70 trade like the library grids get — an operator is
-      // judging generation quality by eye here, not browsing avatars). Both
-      // resolve from the same signedUrl() memoization cache (keyed
-      // separately by transform), so this doesn't double the number of
-      // distinct Supabase calls across repeat renders, only on first load
-      // per key.
+      // Two signed URLs per frame, not one: `imageUrl` is the 1280px "medium"
+      // copy the grid paints, and `originalImageUrl` is the untouched source the
+      // grid links out to, so an operator judges a generation on its real bytes
+      // before rejecting it. This is a GATE screen (see this file's header).
       //
       // width:640 — the grid (components/frame-grid.tsx) is grid-cols-1
       // sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 inside app-layout's
@@ -85,7 +74,7 @@ export default async function FramesPage({
       // bytes for a difference that's hard to see on a card this size.
       const [imageUrl, originalImageUrl] = storageKey
         ? await Promise.all([
-            signedUrl(storageKey, undefined, { width: 640, resize: "contain", quality: 80 }),
+            getImageUrl(storageKey, "medium"),
             signedUrl(storageKey),
           ])
         : [null, null];

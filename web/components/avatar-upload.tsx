@@ -15,7 +15,7 @@ import { uploadAvatar, removeAvatar } from "@/actions/profile";
 export function AvatarUpload({
   avatarUrl,
 }: {
-  /** Signed URL for the current avatar (lib/storage.ts's signedUrl, transform: contain), or null if none is set. */
+  /** Signed URL for the current avatar (lib/storage.ts's getImageUrl, "thumb" copy), or null if none is set. */
   avatarUrl: string | null;
 }): JSX.Element {
   return (

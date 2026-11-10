@@ -48,79 +48,61 @@ const DEFAULT_SIGNED_URL_TTL_SECONDS = 3600;
 // directly into a `Cache-Control: max-age=<value>` response header).
 const STORAGE_OBJECT_CACHE_CONTROL_SECONDS = "31536000"; // 1 year.
 
-// Passed straight through to Supabase Storage's own image transformation
-// (Storage → Image Transformations; confirmed live on this project's Pro
-// plan against this exact bucket — see the display call sites that pass
-// this in). Mirrors @supabase/storage-js's own TransformOptions
-// (node_modules/@supabase/storage-js/dist/index.d.mts) but is declared
-// locally rather than imported from it: storage-js is only a transitive
-// dependency here (pulled in by @supabase/supabase-js, which this file's
-// admin client is typed against — see lib/supabase/server.ts — and which
-// does not re-export the type itself), not a direct one this repo's
-// package.json lists. Deliberately missing storage-js's `format` field: its
-// only non-default value is `'origin'` (force the original format), and
-// leaving `format` unset entirely is what makes Supabase negotiate WebP
-// against the browser's Accept header — the format swap is where nearly
-// all of this transform's savings actually come from, so no caller here
-// should ever set it.
+// Pre-sized display copies. Supabase bills on-the-fly image resizing per
+// distinct source image per cycle, so this app never asks for it:
+// every image upload below also writes WebP siblings next to the original
+// (`<key>.thumb.webp`, `<key>.medium.webp`), and display call sites sign those
+// through getImageUrl. The original is never touched: vendors and downloads
+// always get the exact bytes that were uploaded.
 //
-// A second gotcha, verified empirically against this bucket's live render
-// endpoint rather than trusted from storage-js's docstring (which says
-// resize "Defaults to cover" but doesn't say what happens when only one of
-// width/height is given): passing `width` alone with `resize` left unset
-// (equivalently, left at its 'cover' default) does NOT scale
-// proportionally — it resizes ONLY the width and leaves height at the
-// source's native pixel height, silently squashing the image. `resize:
-// "contain"` with `width` alone (no `height`) is the combination that
-// actually scales proportionally, computing height from the source's own
-// aspect ratio. Every display call site that passes `width` below MUST
-// also pass `resize: "contain"` for exactly this reason — omitting it
-// doesn't error, it just quietly distorts the image. (Supabase also never
-// upscales past the source's native resolution — requesting a `width`
-// larger than the original just returns the original size — so it's
-// always safe to pick a generous target width without checking the
-// source's real dimensions first.)
-export interface ImageTransform {
-  width?: number;
-  height?: number;
-  resize?: "cover" | "contain" | "fill";
-  quality?: number;
+//   thumb  400px wide: avatars (128px), every 320px grid tile, the 400px library grid
+//   medium 1280px wide: 640px frame/ref-frame tiles and the character/product screens
+//
+// Width only, aspect kept, never upscaled: the same "contain" shape the old
+// display URLs asked for. CSS sizes and crops them exactly as it did before.
+export type ImageSize = "thumb" | "medium";
+export const IMAGE_SIZE_WIDTHS: Record<ImageSize, number> = { thumb: 400, medium: 1280 };
+const IMAGE_SIZES = Object.keys(IMAGE_SIZE_WIDTHS) as ImageSize[];
+const RESIZED_WEBP_QUALITY = 80;
+const RESIZABLE_IMAGE_KEY = /\.(png|jpe?g|webp|gif)$/i;
+
+/** The storage key of `storageKey`'s pre-sized copy. */
+export function resizedImageKey(storageKey: string, size: ImageSize): string {
+  return `${storageKey}.${size}.webp`;
 }
 
-// Shared by every avatar display call site (app/(app)/profile/page.tsx,
-// app/(app)/layout.tsx's account menu) so they request signedUrl() with the
-// IDENTICAL transform object — same "contain, not the default cover" rule
-// this file's own header documents above, and required because
-// signedUrlCacheKey() below folds the transform's values into its cache
-// key: two call sites passing differently-shaped transform literals for the
-// same storageKey would simply miss each other's cache entry and pay for a
-// second createSignedUrl call, not corrupt anything, but there is no reason
-// to pay that cost twice for the same 128x128 avatar within one cache TTL.
-export const AVATAR_TRANSFORM: ImageTransform = { width: 128, height: 128, resize: "contain" };
-
-// The image extensions this file's own extFromContentType/extFromFilename
-// ever produce. Everything else stored under a different extension in this
-// bucket is video (.mp4 — see extFromContentType's video/mp4 case). Used
-// only by assertTransformableImage below.
-const TRANSFORMABLE_IMAGE_EXTENSIONS = new Set(["png", "webp", "gif", "jpg", "jpeg"]);
-
-// Guards signedUrl()'s `transform` parameter: Supabase's image-transform
-// endpoint decodes and re-encodes whatever bytes sit at the key, so pointing
-// it at an .mp4 would not fail cleanly — it would either error deep inside
-// Supabase's transformer or hand back something that looks like a URL but
-// breaks playback/export the moment a caller tries to use it. Failing loudly
-// here, at the one file that ever calls createSignedUrl, catches a
-// `transform` passed for the wrong key before it ever reaches a <video> tag
-// or ffmpeg.
-function assertTransformableImage(storageKey: string): void {
-  const ext = storageKey.split(".").pop()?.toLowerCase();
-  if (!ext || !TRANSFORMABLE_IMAGE_EXTENSIONS.has(ext)) {
-    throw new Error(
-      `signedUrl: a transform was requested for "${storageKey}", which this file does not ` +
-        `recognize as an image (expected one of: ${[...TRANSFORMABLE_IMAGE_EXTENSIONS].join(", ")}). ` +
-        "Supabase's image-transform endpoint only serves images — the most likely cause is a " +
-        "video key (.mp4) accidentally reaching a display call site.",
+/**
+ * Writes the thumb/medium siblings for an image just uploaded. Best effort: a
+ * failure is logged and the upload still succeeds, because getImageUrl falls
+ * back to the original when a sibling is missing (and the backfill script,
+ * web/scripts/backfill-thumbnails.ts, fills gaps later).
+ */
+async function writeResizedImages(storageKey: string, bytes: ArrayBuffer | Blob): Promise<void> {
+  if (!RESIZABLE_IMAGE_KEY.test(storageKey)) return;
+  try {
+    // Loaded on demand for the same reason lib/to-jpeg.ts does (#148).
+    const { default: sharp } = await import("sharp");
+    const input = Buffer.from(bytes instanceof Blob ? await bytes.arrayBuffer() : bytes);
+    const admin = createAdminClient();
+    await Promise.all(
+      IMAGE_SIZES.map(async (size) => {
+        const output = await sharp(input)
+          .rotate()
+          .resize({ width: IMAGE_SIZE_WIDTHS[size], withoutEnlargement: true })
+          .webp({ quality: RESIZED_WEBP_QUALITY })
+          .toBuffer();
+        const { error } = await admin.storage
+          .from(MEDIA_BUCKET)
+          .upload(resizedImageKey(storageKey, size), output, {
+            contentType: "image/webp",
+            cacheControl: STORAGE_OBJECT_CACHE_CONTROL_SECONDS,
+            upsert: true,
+          });
+        if (error) throw new Error(error.message);
+      }),
     );
+  } catch (err) {
+    console.warn(`writeResizedImages: no pre-sized copies for ${storageKey}`, err);
   }
 }
 
@@ -182,7 +164,6 @@ const MAX_SIGNED_URL_CACHE_ENTRIES = 2000;
 function signedUrlCacheKey(
   storageKey: string,
   expiresInSeconds: number,
-  transform: ImageTransform | undefined,
   download: string | boolean | undefined,
 ): string {
   // expiresIn is part of the key, not just storageKey, because different
@@ -195,25 +176,10 @@ function signedUrlCacheKey(
   // separator here: every storage key this file mints (see
   // buildStorageKey/buildLibraryStorageKey above) is a printable
   // slash-and-dot-shaped path, so this can't collide across different keys.
-  //
-  // transform is part of the key for the same reason, one level sharper: a
-  // display call site (transform set, quality 80) and a source-of-truth
-  // call site (no transform — fal conditioning input, video) can ask for
-  // the SAME storageKey at the SAME TTL. Without transform in the key,
-  // whichever of the two called signedUrl() first would silently hand its
-  // cached URL to the other — a lossy, recompressed image handed to fal as
-  // conditioning input, or an untransformed multi-MB PNG served where a
-  // transformed one was wanted. Serialized with fixed field order, not
-  // `JSON.stringify(transform)` (which would key on whatever order a
-  // caller happened to write its object literal in), so two calls that
-  // mean the same transform always produce the same cache key.
-  const transformFragment = transform
-    ? `\0t:${transform.width ?? ""},${transform.height ?? ""},${transform.resize ?? ""},${transform.quality ?? ""}`
-    : "";
   // Keep previews, attachments and different download filenames separate.
   // JSON preserves the distinction between true and a filename of "true".
   const downloadFragment = download ? `\0d:${JSON.stringify(download)}` : "";
-  return `${storageKey}\0${expiresInSeconds}${transformFragment}${downloadFragment}`;
+  return `${storageKey}\0${expiresInSeconds}${downloadFragment}`;
 }
 
 function isSignedUrlCacheEntryFresh(entry: SignedUrlCacheEntry, nowMs: number): boolean {
@@ -387,6 +353,7 @@ export async function uploadFromUrl(args: UploadFromUrlArgs): Promise<UploadResu
   if (error) {
     throw new Error(`uploadFromUrl: failed to upload to storage: ${error.message}`);
   }
+  await writeResizedImages(storageKey, buffer);
 
   return { storageKey };
 }
@@ -411,6 +378,7 @@ export async function uploadFile(args: UploadFileArgs): Promise<UploadResult> {
   if (error) {
     throw new Error(`uploadFile: failed to upload to storage: ${error.message}`);
   }
+  await writeResizedImages(storageKey, file);
 
   return { storageKey, bytes: file.size };
 }
@@ -449,6 +417,7 @@ export async function uploadLibraryFromUrl(args: { url: string }): Promise<Uploa
   if (error) {
     throw new Error(`uploadLibraryFromUrl: failed to upload to storage: ${error.message}`);
   }
+  await writeResizedImages(storageKey, buffer);
 
   return { storageKey };
 }
@@ -468,6 +437,7 @@ export async function uploadLibraryFile(args: { file: File }): Promise<UploadRes
   if (error) {
     throw new Error(`uploadLibraryFile: failed to upload to storage: ${error.message}`);
   }
+  await writeResizedImages(storageKey, file);
 
   return { storageKey, bytes: file.size };
 }
@@ -500,6 +470,7 @@ export async function uploadAvatarFile(args: {
   if (error) {
     throw new Error(`uploadAvatarFile: failed to upload to storage: ${error.message}`);
   }
+  await writeResizedImages(storageKey, file);
 
   return { storageKey, bytes: file.size };
 }
@@ -568,6 +539,17 @@ export async function copyStorageObject(fromKey: string, toKey: string): Promise
   if (error) {
     throw new Error(`copyStorageObject: failed to copy ${fromKey} to ${toKey}: ${error.message}`);
   }
+  // Carry the pre-sized copies along. Best effort: a source without them just
+  // leaves the copy falling back to its original (getImageUrl).
+  if (RESIZABLE_IMAGE_KEY.test(fromKey)) {
+    await Promise.allSettled(
+      IMAGE_SIZES.map((size) =>
+        admin.storage
+          .from(MEDIA_BUCKET)
+          .copy(resizedImageKey(fromKey, size), resizedImageKey(toKey, size)),
+      ),
+    );
+  }
 }
 
 /**
@@ -625,20 +607,8 @@ export async function removeStorageObjects(storageKeys: string[]): Promise<void>
  * `iat` claim), so without this memoization every navigation re-downloads
  * every asset from scratch.
  *
- * `transform` (see ImageTransform above) requests Supabase's Storage image
- * transformation on top of that. Pass it ONLY at a call site that renders
- * the result for a human to look at: it recompresses (and, left unset,
- * format-negotiates to WebP) the bytes the browser gets back, which is
- * exactly wrong for anything this app treats as a source of truth —
- * reference-image input to fal (actions/frames.ts, actions/character.ts)
- * must stay full-fidelity, and video (actions/deliver.ts, the archive
- * route) isn't an image the render endpoint can serve at all.
- * assertTransformableImage throws up front if `transform` is requested for
- * a key that isn't one of this file's image extensions, so a video reaching
- * this by mistake fails loudly here instead of quietly breaking export.
- *
  * `download` requests an attachment: true uses the stored filename, or a
- * string supplies a download filename. Omit `transform` for original bytes.
+ * string supplies a download filename.
  */
 export interface SignedUrlWithExpiry {
   url: string;
@@ -653,14 +623,9 @@ export interface SignedUrlWithExpiry {
 export async function signedUrlWithExpiry(
   storageKey: string,
   expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
-  transform?: ImageTransform,
   download?: string | boolean,
 ): Promise<SignedUrlWithExpiry> {
-  if (transform) {
-    assertTransformableImage(storageKey);
-  }
-
-  const cacheKey = signedUrlCacheKey(storageKey, expiresInSeconds, transform, download);
+  const cacheKey = signedUrlCacheKey(storageKey, expiresInSeconds, download);
   const now = Date.now();
 
   const cached = signedUrlCache.get(cacheKey);
@@ -673,13 +638,7 @@ export async function signedUrlWithExpiry(
   }
 
   const admin = createAdminClient();
-  const options =
-    transform || download !== undefined
-      ? {
-          ...(transform ? { transform } : {}),
-          ...(download !== undefined ? { download } : {}),
-        }
-      : undefined;
+  const options = download !== undefined ? { download } : undefined;
   const { data, error } = await admin.storage
     .from(MEDIA_BUCKET)
     .createSignedUrl(storageKey, expiresInSeconds, options);
@@ -688,10 +647,6 @@ export async function signedUrlWithExpiry(
     throw new Error(
       `signedUrl: failed to sign ${storageKey}: ${error?.message ?? "unknown error"}`,
     );
-  }
-
-  if (transform && !data.signedUrl.includes("/render/image/")) {
-    warnTransformDropped(storageKey);
   }
 
   if (signedUrlCache.size >= MAX_SIGNED_URL_CACHE_ENTRIES) {
@@ -705,29 +660,28 @@ export async function signedUrlWithExpiry(
 export async function signedUrl(
   storageKey: string,
   expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
-  transform?: ImageTransform,
   download?: string | boolean,
 ): Promise<string> {
-  const { url } = await signedUrlWithExpiry(storageKey, expiresInSeconds, transform, download);
+  const { url } = await signedUrlWithExpiry(storageKey, expiresInSeconds, download);
   return url;
 }
 
 /**
- * Says it once per process, not once per image.
- *
- * The picker signs every element in one render, so an unguarded warning
- * would print eighteen identical lines and teach the reader to scroll past
- * the whole class of message.
+ * Signed URL for an image's pre-sized copy (see IMAGE_SIZE_WIDTHS), for an
+ * <img> a human looks at. Falls back to the ORIGINAL when the copy doesn't
+ * exist yet (signing a missing key fails with "Object not found"), never to
+ * Supabase's on-the-fly resizing. Never use it for vendor input: that needs
+ * the original.
  */
-let transformDropWarned = false;
-function warnTransformDropped(storageKey: string): void {
-  if (transformDropWarned) return;
-  transformDropWarned = true;
-  console.warn(
-    `signedUrl: a transform was requested for "${storageKey}" and Storage returned an ` +
-      "untransformed object URL — this environment serves the ORIGINAL bytes for every " +
-      "thumbnail. Expected in local development (the local stack has no /render/image route); " +
-      "in production it means image transformations are off for this project.",
+export async function getImageUrl(
+  storageKey: string,
+  size: ImageSize,
+  expiresInSeconds: number = DEFAULT_SIGNED_URL_TTL_SECONDS,
+): Promise<string> {
+  if (!RESIZABLE_IMAGE_KEY.test(storageKey)) return signedUrl(storageKey, expiresInSeconds);
+  // ponytail: a missing copy costs one failed sign per render until the backfill runs.
+  return signedUrl(resizedImageKey(storageKey, size), expiresInSeconds).catch(() =>
+    signedUrl(storageKey, expiresInSeconds),
   );
 }
 

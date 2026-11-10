@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { requireProjectReadable } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { signedUrl, getImageUrl } from "@/lib/storage";
 import { buildSceneVersions } from "@/lib/scene-versions";
 import {
   mergeRenderSettings,
@@ -121,11 +121,7 @@ export default async function ScenePage({
       .maybeSingle();
 
     if (refFrameAsset) {
-      refFrameUrl = await signedUrl(refFrameAsset.storage_key, undefined, {
-        width: 640,
-        resize: "contain",
-        quality: 80,
-      });
+      refFrameUrl = await getImageUrl(refFrameAsset.storage_key, "medium");
     }
   }
 

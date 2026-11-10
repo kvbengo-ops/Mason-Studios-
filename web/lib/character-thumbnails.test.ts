@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signCharacterThumbnails } from "./character-thumbnails";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 
 vi.mock("@/lib/storage", () => ({
-  signedUrl: vi.fn(),
+  getImageUrl: vi.fn(),
 }));
 
 describe("signCharacterThumbnails", () => {
   afterEach(() => {
-    vi.mocked(signedUrl).mockReset();
+    vi.mocked(getImageUrl).mockReset();
   });
 
-  it("signs every row's thumbnail with the shared grid transform", async () => {
-    vi.mocked(signedUrl).mockImplementation(async (key) => `https://fake.test/${key}`);
+  it("signs every row's pre-sized thumbnail", async () => {
+    vi.mocked(getImageUrl).mockImplementation(async (key) => `https://fake.test/${key}`);
 
     const rows = [
       { id: "c1", storage_key: "library/c1.png" },
@@ -21,20 +21,16 @@ describe("signCharacterThumbnails", () => {
     const urls = await signCharacterThumbnails(rows, "test");
 
     expect(urls).toEqual(["https://fake.test/library/c1.png", "https://fake.test/library/c2.png"]);
-    expect(signedUrl).toHaveBeenCalledWith("library/c1.png", undefined, {
-      width: 400,
-      resize: "contain",
-      quality: 70,
-    });
+    expect(getImageUrl).toHaveBeenCalledWith("library/c1.png", "thumb");
   });
 
   // The exact bug this file exists to prevent: a single orphaned row's
-  // signedUrl() rejection used to take Promise.all's whole batch down with
+  // getImageUrl() rejection used to take Promise.all's whole batch down with
   // it, 500ing the entire page — /library's grid and every project's
   // Character step alike — over one bad row. allSettled must keep every
   // OTHER row's URL intact instead.
   it("degrades one rejected row to null without losing the others", async () => {
-    vi.mocked(signedUrl).mockImplementation(async (key) => {
+    vi.mocked(getImageUrl).mockImplementation(async (key) => {
       if (key === "library/bad.png") {
         throw new Error("signedUrl: failed to sign library/bad.png: not found");
       }
@@ -63,9 +59,9 @@ describe("signCharacterThumbnails", () => {
     warn.mockRestore();
   });
 
-  it("returns an empty array for an empty batch without calling signedUrl", async () => {
+  it("returns an empty array for an empty batch without calling getImageUrl", async () => {
     const urls = await signCharacterThumbnails([], "test");
     expect(urls).toEqual([]);
-    expect(signedUrl).not.toHaveBeenCalled();
+    expect(getImageUrl).not.toHaveBeenCalled();
   });
 });

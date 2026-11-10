@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import { redirect } from "next/navigation";
 import { requireProjectReadable, isAdmin } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl, type ImageSize } from "@/lib/storage";
 import { uploadCharacterRef, regenerateCharacter, removeCharacterRef } from "@/actions/character";
 import { saveCharacter } from "@/actions/setup";
 import {
@@ -154,8 +154,8 @@ export default async function CharacterPage({
     characterAsset?.created_at ?? null,
   );
 
-  const signOrNull = (key: string, width: number): Promise<string | null> =>
-    signedUrl(key, undefined, { width, resize: "contain", quality: 80 }).catch(
+  const signOrNull = (key: string, size: ImageSize): Promise<string | null> =>
+    getImageUrl(key, size).catch(
       (reason: unknown) => {
         console.warn(`character page: could not sign ${key}`, reason);
         return null;
@@ -167,7 +167,7 @@ export default async function CharacterPage({
   const [characterImageUrl, libraryImageUrls, { data: libraryUsageRows }] = await Promise.all([
     timer.step(
       "character_image_signing",
-      characterAsset ? signOrNull(characterAsset.storage_key, 640) : Promise.resolve(null),
+      characterAsset ? signOrNull(characterAsset.storage_key, "medium") : Promise.resolve(null),
     ),
     timer.step(
       "library_thumbnail_signing",

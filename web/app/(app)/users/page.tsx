@@ -43,7 +43,7 @@ import type { AccountCapProfile, AccountCaps } from "@/lib/spend";
 import { getUserActiveGrantsTotals, type ActiveGrantTotals } from "@/lib/db-aggregates";
 import { requiresAccountApproval } from "@/lib/account-approval";
 import { dateFormatter as dateTimeFormatter } from "@/lib/datetime";
-import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { ImageLightbox } from "@/components/image-lightbox";
 import { PresenceDot } from "@/components/presence-dot";
 import { lastSeenLabel } from "@/lib/presence";
@@ -427,7 +427,7 @@ export default async function UsersPage({
       (overridesData ?? []).map(async (row) => {
         if (!row.avatar_storage_key) return null;
         try {
-          return [row.id, await signedUrl(row.avatar_storage_key, 3600, AVATAR_TRANSFORM)] as const;
+          return [row.id, await getImageUrl(row.avatar_storage_key, "thumb", 3600)] as const;
         } catch (error) {
           console.error(`Failed to sign avatar URL for /users row ${row.id}`, error);
           return null;

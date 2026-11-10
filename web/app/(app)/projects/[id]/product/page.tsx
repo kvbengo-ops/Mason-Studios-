@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { requireProjectReadable } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl, type ImageSize } from "@/lib/storage";
 import {
   uploadProductRef,
   removeProductRef,
@@ -123,8 +123,8 @@ export default async function ProductPage({
 
   const productAssets = productAssetsRaw ?? [];
 
-  const signOrNull = (key: string, width: number): Promise<string | null> =>
-    signedUrl(key, undefined, { width, resize: "contain", quality: 80 }).catch(
+  const signOrNull = (key: string, size: ImageSize): Promise<string | null> =>
+    getImageUrl(key, size).catch(
       (reason: unknown) => {
         console.warn(`product page: could not sign ${key}`, reason);
         return null;
@@ -134,11 +134,11 @@ export default async function ProductPage({
   const [compositeImageUrl, productImageUrls] = await Promise.all([
     timer.step(
       "composite_image_signing",
-      compositeAsset ? signOrNull(compositeAsset.storage_key, 640) : Promise.resolve(null),
+      compositeAsset ? signOrNull(compositeAsset.storage_key, "medium") : Promise.resolve(null),
     ),
     timer.step(
       "product_image_signing",
-      Promise.all(productAssets.map((asset) => signOrNull(asset.storage_key, 400))),
+      Promise.all(productAssets.map((asset) => signOrNull(asset.storage_key, "thumb"))),
     ),
   ]);
 

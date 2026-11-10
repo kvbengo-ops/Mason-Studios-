@@ -25,7 +25,7 @@ import { ImageGeneratorConsole } from "@/components/image-generator-console";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
 import type { RenderBudgetFigures } from "@/lib/render-budget";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl, extFromFilename } from "@/lib/storage";
+import { signedUrl, extFromFilename, getImageUrl } from "@/lib/storage";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { geminiVoiceFor } from "@/lib/gemini-voices";
 import { videoAspectRatioFor } from "@/lib/kie/models";
@@ -95,21 +95,8 @@ function firstLine(text: string | null | undefined): string {
 // DELIVER_SIGNED_URL_TTL_SECONDS gives, well past the 1h default.
 const RESULT_SIGNED_URL_TTL_SECONDS = 3600;
 
-// Display-only transform for an Element's picker/hover-preview thumbnail —
-// never applied to a source-of-truth read (the copy actions/ugc.ts's
-// generateClip makes from an Element's asset always reads the UNTRANSFORMED
-// storage_key). `resize: "contain"`, not the default "cover", because a
-// `width`-only transform without it silently squashes the image — see
-// lib/storage.ts's ImageTransform doc comment.
-//
-// 320, NOT 96. The picker's grid tiles are about 150 CSS pixels wide and the
-// detail panel's preview is 176, which on a 2x display asks for 300 and 352
-// real pixels — so a 96px source was being upscaled three times over in the
-// one place an operator studies a reference to tell it from four others like
-// it. This is still about 1% of the 2 MB originals these are made from, and
-// Supabase bills transformations per origin image, not per size, so a wider
-// thumbnail costs nothing extra.
-const ELEMENT_THUMBNAIL_TRANSFORM = { width: 320, resize: "contain" as const, quality: 70 };
+// Element picker/hover previews use getImageUrl's "thumb" copy (lib/storage.ts),
+// never the source of truth: generateClip copies the ORIGINAL storage_key.
 
 // creditsForRetry — what "Try again" would have cost, priced off the
 // scene's own stored settings rather than the column's pickers — is GONE
@@ -782,16 +769,10 @@ export default async function UgcPage({
         // place that has to know which kinds exist" reasoning this file's
         // own isImageAsset comment gives just above.
         imageExt: extFromFilename(asset.storage_key, ""),
-        previewUrl: await signedUrl(
-          asset.storage_key,
-          RESULT_SIGNED_URL_TTL_SECONDS,
-          // NO TRANSFORM ON ANYTHING BUT A PICTURE. The thumbnail transform
-          // routes the URL through Supabase's image renderer, which decodes
-          // what it is given; handed an MP3 or an MP4 it does not return a
-          // smaller one, it fails. The file would then be unplayable in the
-          // panel AND unfetchable by kie, for a resize nobody asked for.
-          isImageAsset ? ELEMENT_THUMBNAIL_TRANSFORM : undefined,
-        ),
+        // Only a picture has a pre-sized copy; audio and video are signed as they are.
+        previewUrl: isImageAsset
+          ? await getImageUrl(asset.storage_key, "thumb", RESULT_SIGNED_URL_TTL_SECONDS)
+          : await signedUrl(asset.storage_key, RESULT_SIGNED_URL_TTL_SECONDS),
       });
     }
     // Auto-filed generated images after the operator's own references — see

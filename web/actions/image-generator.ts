@@ -225,7 +225,7 @@ export async function getPersonalImageDownloadUrl(assetId: string): Promise<stri
 
   // Sign on click, without the thumbnail transform. The preview URL may be
   // old; the download must request original bytes with attachment disposition.
-  return signedUrl(asset.storage_key, undefined, undefined, true);
+  return signedUrl(asset.storage_key, undefined, true);
 }
 
 /** What the image viewer's side panel shows. Either field null when not recorded. */

@@ -2,7 +2,7 @@
 // own grid and every project's Character-step picker (character/page.tsx),
 // the two surfaces that render the `characters` table as a thumbnail grid.
 //
-// signedUrl() (lib/storage.ts) THROWS when a storage_key no longer resolves
+// getImageUrl() (lib/storage.ts) THROWS when a storage_key no longer resolves
 // to a real object — deleted straight from the bucket, or any other drift
 // between the `characters` table and Storage. Signing a batch with
 // Promise.all rejects the WHOLE batch the instant any ONE input does, which
@@ -13,7 +13,7 @@
 // components/character-thumbnail.tsx renders as a placeholder card instead
 // of taking the page down.
 
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 
 export interface CharacterThumbnailSource {
   id: string;
@@ -21,12 +21,8 @@ export interface CharacterThumbnailSource {
 }
 
 // Both grids render this table at the same visual size (grid-cols-2
-// sm:grid-cols-3 inside a max-w-2xl wrapper) — see each call site's own
-// comment for the DPR/box-size arithmetic behind these exact numbers.
-// width alone (default resize:"cover") does not scale proportionally, it
-// silently squashes the image — resize:"contain" has to ride along with
-// width every time; see ImageTransform's doc comment in lib/storage.ts.
-const CHARACTER_THUMBNAIL_TRANSFORM = { width: 400, resize: "contain", quality: 70 } as const;
+// sm:grid-cols-3 inside a max-w-2xl wrapper), so both sign the 400px "thumb"
+// copy (getImageUrl, lib/storage.ts).
 
 /**
  * Signs every character's thumbnail in `rows`, degrading a single bad row
@@ -40,7 +36,7 @@ export async function signCharacterThumbnails(
   context: string,
 ): Promise<(string | null)[]> {
   const results = await Promise.allSettled(
-    rows.map((row) => signedUrl(row.storage_key, undefined, CHARACTER_THUMBNAIL_TRANSFORM)),
+    rows.map((row) => getImageUrl(row.storage_key, "thumb")),
   );
   return results.map((result, index) => {
     if (result.status === "fulfilled") {

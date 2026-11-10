@@ -1,15 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const signedUrl = vi.fn(
-  async (
-    storageKey: string,
-    _ttl?: number,
-    _transform?: { width: number; resize: string; quality: number },
-  ) => `https://signed.example/${storageKey}`,
+  async (storageKey: string, _size?: string) => `https://signed.example/${storageKey}`,
 );
 
 vi.mock("@/lib/storage", () => ({
-  signedUrl: (...args: Parameters<typeof signedUrl>): ReturnType<typeof signedUrl> =>
+  getImageUrl: (...args: Parameters<typeof signedUrl>): ReturnType<typeof signedUrl> =>
     signedUrl(...args),
 }));
 

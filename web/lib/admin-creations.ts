@@ -15,7 +15,7 @@ import {
 } from "@/lib/image-attempt";
 import { KIE_MODELS } from "@/lib/kie/models";
 import { getModel, imageModelLabelFor, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
-import { signedUrl } from "@/lib/storage";
+import { signedUrl, getImageUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -651,7 +651,7 @@ export async function loadEditorDeleted(userId: string): Promise<EditorDeletedDa
         try {
           const url =
             source.kind === "image"
-              ? await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS, { quality: 80 })
+              ? await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS)
               : await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS);
           thumbnailUrlByKey.set(key, url);
         } catch (err) {
@@ -663,10 +663,7 @@ export async function loadEditorDeleted(userId: string): Promise<EditorDeletedDa
       }),
     ...imageRows.map(async (row) => {
       try {
-        const url = await signedUrl(row.storage_key, SIGNED_URL_TTL_SECONDS, {
-          width: 320,
-          quality: 80,
-        });
+        const url = await getImageUrl(row.storage_key, "thumb", SIGNED_URL_TTL_SECONDS);
         thumbnailUrlByKey.set(`image:${row.id}`, url);
       } catch (err) {
         console.error(

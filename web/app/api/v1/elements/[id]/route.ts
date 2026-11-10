@@ -52,12 +52,7 @@ export async function GET(
       .maybeSingle();
     if (error) throw new Error(`Failed to read API element asset: ${error.message}`);
     if (!asset) return apiError("Element file was not found.", "not_found", 404);
-    const { url, expiresInSeconds } = await signedUrlWithExpiry(
-      asset.storage_key,
-      3600,
-      undefined,
-      true,
-    );
+    const { url, expiresInSeconds } = await signedUrlWithExpiry(asset.storage_key, 3600, true);
     return NextResponse.json({
       element: {
         id: element.id,

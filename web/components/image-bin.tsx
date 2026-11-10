@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { restorePersonalImage, purgePersonalImage } from "@/actions/image-bin";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { BinCard, type BinCardThumbnail } from "@/components/bin-card";
 import { ActionForm } from "@/components/action-form";
@@ -18,7 +18,7 @@ export async function ImageBin({ userId }: { userId: string }): Promise<JSX.Elem
   const images = await Promise.all((data ?? []).map(async (row) => {
     let thumbnail: BinCardThumbnail = { kind: "placeholder" };
     try {
-      thumbnail = { kind: "image", url: await signedUrl(row.storage_key, 3600, { width: 320, quality: 80 }) };
+      thumbnail = { kind: "image", url: await getImageUrl(row.storage_key, "thumb", 3600) };
     } catch (error) {
       console.error("Could not load Bin image thumbnail", error);
     }

@@ -6,9 +6,8 @@
 // module deliberately stops there: walking every kind of project asset to
 // find a third fallback would turn the directory into an unbounded asset scan.
 
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 
-const PROJECT_THUMBNAIL_TRANSFORM = { width: 320, resize: "contain", quality: 70 } as const;
 
 export interface ProjectThumbnailScene {
   id: string;
@@ -96,7 +95,7 @@ export function selectProjectThumbnailSources(
 /**
  * Signs a page's selected stills concurrently. One missing Storage object is
  * a placeholder for that card, never a reason for the entire directory to
- * fail. `signedUrl` owns the process-local key/transform cache, so duplicate
+ * fail. `signedUrl` owns the process-local key cache, so duplicate
  * source keys cost one signing request per server process rather than one per
  * card.
  */
@@ -104,7 +103,7 @@ export async function signProjectThumbnails(
   sources: readonly ProjectThumbnailSource[],
 ): Promise<Map<string, string | null>> {
   const results = await Promise.allSettled(
-    sources.map((source) => signedUrl(source.storageKey, undefined, PROJECT_THUMBNAIL_TRANSFORM)),
+    sources.map((source) => getImageUrl(source.storageKey, "thumb")),
   );
   const urls = new Map<string, string | null>();
 

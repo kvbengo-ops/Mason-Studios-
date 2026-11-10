@@ -1,15 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
 import type { ElementTag } from "@/lib/elements";
-import { extFromFilename, signedUrl } from "@/lib/storage";
+import { extFromFilename, signedUrl, getImageUrl } from "@/lib/storage";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { buildIlikeOrFilter } from "@/lib/search-term";
 
-// Both values match ugc/[id]/page.tsx, where they are module-private. Kept in
-// step by hand: a thumbnail that differs between the two consoles is a library
-// that looks like two libraries.
+// Matches ugc/[id]/page.tsx, where it is module-private. Kept in step by hand.
 const RESULT_SIGNED_URL_TTL_SECONDS = 3600;
-const ELEMENT_THUMBNAIL_TRANSFORM = { width: 320, resize: "contain" as const, quality: 70 };
 
 export type ElementLibraryFilter = "all" | "mine" | "images" | "audio" | "video";
 export interface ElementLibraryCursor {
@@ -66,11 +63,9 @@ export async function loadElementLibraryPage(
       userId: row.user_id,
       isShared: row.is_shared,
       assetKind: row.assets.kind,
-      previewUrl: await signedUrl(
-        row.assets.storage_key,
-        RESULT_SIGNED_URL_TTL_SECONDS,
-        IMAGE_ASSET_KINDS.has(row.assets.kind) ? ELEMENT_THUMBNAIL_TRANSFORM : undefined,
-      ),
+      previewUrl: IMAGE_ASSET_KINDS.has(row.assets.kind)
+        ? await getImageUrl(row.assets.storage_key, "thumb", RESULT_SIGNED_URL_TTL_SECONDS)
+        : await signedUrl(row.assets.storage_key, RESULT_SIGNED_URL_TTL_SECONDS),
     })),
   );
 
@@ -198,15 +193,10 @@ export async function loadElementTags(
       // videoLengthUnmeasured). /ugc's own loader always carried it; without
       // it here, /create refused every tagged video as "never measured".
       durationS: asset.duration_s,
-      previewUrl: await signedUrl(
-        asset.storage_key,
-        RESULT_SIGNED_URL_TTL_SECONDS,
-        // NO TRANSFORM ON ANYTHING BUT A PICTURE. The thumbnail transform
-        // routes the URL through Supabase's image renderer, which decodes what
-        // it is given; handed an MP3 or an MP4 it does not return a smaller
-        // one, it fails.
-        isImageAsset ? ELEMENT_THUMBNAIL_TRANSFORM : undefined,
-      ),
+      // Only a picture has a pre-sized copy; audio and video are signed as they are.
+      previewUrl: isImageAsset
+        ? await getImageUrl(asset.storage_key, "thumb", RESULT_SIGNED_URL_TTL_SECONDS)
+        : await signedUrl(asset.storage_key, RESULT_SIGNED_URL_TTL_SECONDS),
       // ONLY FOR THE LIBRARY PAGE. The @tag consumers show a hover preview and
       // nothing else, so minting two more signed URLs per element for them
       // would be two more createSignedUrl round trips per prompt render, for
@@ -228,7 +218,6 @@ export async function loadElementTags(
             downloadUrl: await signedUrl(
               asset.storage_key,
               RESULT_SIGNED_URL_TTL_SECONDS,
-              undefined,
               // THE FALLBACK ONLY: extFromFilename reads the real extension
               // off the key and lands here only when the key has none. Still
               // three-way rather than two, because "png" was what a video got

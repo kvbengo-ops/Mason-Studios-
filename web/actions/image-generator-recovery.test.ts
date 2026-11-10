@@ -20,7 +20,7 @@ import {
   sweepStaleImageReservations,
 } from "@/lib/runs";
 import { resolveImageAttemptCeilings } from "@/lib/spend";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { BILLING_UNKNOWN_PREFIX } from "@/lib/image-attempt";
 
 vi.mock("@/actions/guard", () => ({
@@ -75,6 +75,7 @@ vi.mock("@/lib/claude", () => ({
 
 vi.mock("@/lib/storage", () => ({
   signedUrl: vi.fn(async (key: string) => `https://signed.test/${key}?token=fresh`),
+  getImageUrl: vi.fn(async (key: string) => `https://signed.test/${key}?token=fresh`),
   uploadFromUrl: vi.fn(async () => ({ storageKey: "users/user-1/generated_image/new.png" })),
   removeStorageObjects: vi.fn(async () => undefined),
 }));
@@ -246,7 +247,7 @@ describe("loadPersonalImageAttempts", () => {
     const attempts = await loadPersonalImageAttempts();
 
     expect(attempts[0]!.status).toBe("completed");
-    expect(signedUrl).toHaveBeenCalledWith(ASSET_ROW.storage_key, undefined, expect.anything());
+    expect(getImageUrl).toHaveBeenCalledWith(ASSET_ROW.storage_key, "thumb");
     expect(attempts[0]!.image?.url).toContain("token=fresh");
   });
 

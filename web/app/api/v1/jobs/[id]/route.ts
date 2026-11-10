@@ -77,7 +77,7 @@ export async function GET(
       0,
     );
     const output = outputResult.data
-      ? await signedUrlWithExpiry(outputResult.data.storage_key, 3600, undefined, true).then(
+      ? await signedUrlWithExpiry(outputResult.data.storage_key, 3600, true).then(
           ({ url, expiresInSeconds }) => ({
             asset_id: outputResult.data!.id,
             download_url: url,

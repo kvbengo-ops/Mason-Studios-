@@ -2,7 +2,7 @@ import type { JSX } from "react";
 import Link from "next/link";
 import { requireUser } from "@/actions/guard";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
 import { canUseApiTokens } from "@/lib/api-auth";
 import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
@@ -47,7 +47,7 @@ export default async function ProfilePage(): Promise<JSX.Element> {
   const formatAllowance = (amountUsd: number): string => formatUsd(amountUsd);
 
   const avatarUrl = profile.avatar_storage_key
-    ? await signedUrl(profile.avatar_storage_key, 3600, AVATAR_TRANSFORM)
+    ? await getImageUrl(profile.avatar_storage_key, "thumb", 3600)
     : null;
 
   // Session client, not the admin client: allowance_grants_select and

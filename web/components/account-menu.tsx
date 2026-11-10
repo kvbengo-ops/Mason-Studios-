@@ -128,8 +128,7 @@ function AvatarFace({
   if (avatarUrl) {
     // No next/image, same reasoning avatar-upload.tsx's own comment gives:
     // a signed URL expires and is never a static/optimizable asset. object-
-    // cover crops into the `resize: "contain"` frame lib/storage.ts's
-    // AVATAR_TRANSFORM requests — identical trade avatar-upload.tsx already
+    // cover crops lib/storage.ts's 400px "thumb" copy into the circle — identical trade avatar-upload.tsx already
     // makes for the same image at profile-page size.
     return (
       <img

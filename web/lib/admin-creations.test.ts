@@ -13,6 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/storage", () => ({
   signedUrl: vi.fn(async (key: string) => `https://signed.example/${key}`),
+  getImageUrl: vi.fn(async (key: string) => `https://signed.example/${key}`),
 }));
 
 type Row = Record<string, unknown>;

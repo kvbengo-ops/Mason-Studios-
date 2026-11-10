@@ -102,7 +102,7 @@ async function getImageDownloadUrl(projectId: string, assetId: string): Promise<
 
   // Sign on click, without the thumbnail transform. The preview URL may be
   // old; the download must request original bytes with attachment disposition.
-  return signedUrl(asset.storage_key, undefined, undefined, true);
+  return signedUrl(asset.storage_key, undefined, true);
 }
 
 export default async function ImageGeneratorPage({

@@ -22,7 +22,7 @@ import { KIE_MODELS } from "@/lib/kie/models";
 import { COMPILER_MODELS, getModel, imageModelLabelFor, mergeRenderSettings } from "@/lib/models";
 import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/runway";
 import { getGlobalSpendSnapshot, type GlobalSpendCapSettings } from "@/lib/spend";
-import { extFromFilename, signedUrl } from "@/lib/storage";
+import { extFromFilename, signedUrl, getImageUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import type { ProfileRole, ProfileStatus } from "@/types/db";
 
@@ -512,7 +512,7 @@ export async function loadAccountsRunLog(
         return source.kind === "image"
           ? {
               kind: "image",
-              url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS, { quality: 80 }),
+              url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS),
             }
           : { kind: "video", url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS) };
       } catch (err) {
@@ -711,7 +711,7 @@ export async function loadAccountControlDeleted(
       try {
         const url =
           source.kind === "image"
-            ? await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS, { quality: 80 })
+            ? await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS)
             : await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS);
         signedUrlByKey.set(key, url);
       } catch (err) {
@@ -723,10 +723,7 @@ export async function loadAccountControlDeleted(
     }),
     ...imageRows.map(async (row) => {
       try {
-        const url = await signedUrl(row.storage_key, SIGNED_URL_TTL_SECONDS, {
-          width: 320,
-          quality: 80,
-        });
+        const url = await getImageUrl(row.storage_key, "thumb", SIGNED_URL_TTL_SECONDS);
         signedUrlByKey.set(`image:${row.id}`, url);
       } catch (err) {
         console.error(

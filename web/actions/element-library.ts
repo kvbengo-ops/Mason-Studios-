@@ -61,7 +61,6 @@ export async function getElementLibraryUrl(
   return signedUrl(
     asset.storage_key,
     undefined,
-    undefined,
     `${element.name}.${extFromFilename(asset.storage_key, fallbackExt)}`,
   );
 }

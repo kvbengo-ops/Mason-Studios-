@@ -336,7 +336,7 @@ export default async function BinPage(): Promise<JSX.Element> {
       try {
         const url =
           source.kind === "image"
-            ? await signedUrl(source.storageKey, BIN_SIGNED_URL_TTL_SECONDS, { quality: 80 })
+            ? await signedUrl(source.storageKey, BIN_SIGNED_URL_TTL_SECONDS)
             : await signedUrl(source.storageKey, BIN_SIGNED_URL_TTL_SECONDS);
         signedUrlByKey.set(key, url);
       } catch (err) {

@@ -195,21 +195,9 @@ export default async function DeliverPage({
       scenesWithClips.map(async (scene): Promise<ClipGridClip> => {
         const asset = clipAssetByScene.get(scene.id) as AssetRow;
         const posterAsset = posterAssetByScene.get(scene.id);
-        // quality 80, no width — same WebP-negotiation transform as
-        // frames/page.tsx and library/page.tsx: this is a display call
-        // site, never a source of truth, so recompressing is safe.
-        // Deliberately no `width` here, unlike those other display call
-        // sites: posters are minted by the worker's own ffmpeg pass at a
-        // fixed 360x640 and already tuned to land around ~15kB (see
-        // posterScale/posterQuality in worker/internal/media/media.go) —
-        // there's no oversized original to trim down here. The clip grid's
-        // video box (~280-360px CSS-wide across this app's breakpoints)
-        // already meets or exceeds that 360px source at any real device
-        // pixel ratio, and Supabase's transform never upscales past the
-        // source (see ImageTransform's doc comment in lib/storage.ts) — so
-        // a `width` here could only ever shrink the poster further below
-        // what the box already needs, making it measurably softer to save
-        // a few more kB off an asset that's already small.
+        // The poster's original: the worker's ffmpeg pass already mints it at
+        // a fixed 360x640, ~15kB (posterScale/posterQuality in
+        // worker/internal/media/media.go), so there is nothing to trim.
         // Resolves to undefined (never null/"") when there's no poster row
         // yet — see ClipGridClip.posterUrl for why that distinction matters.
         const activeVersion = (versionRows ?? []).find(
@@ -218,7 +206,7 @@ export default async function DeliverPage({
         const [videoUrl, posterUrl] = await Promise.all([
           signedUrl(asset.storage_key, DELIVER_SIGNED_URL_TTL_SECONDS),
           posterAsset
-            ? signedUrl(posterAsset.storage_key, DELIVER_SIGNED_URL_TTL_SECONDS, { quality: 80 })
+            ? signedUrl(posterAsset.storage_key, DELIVER_SIGNED_URL_TTL_SECONDS)
             : Promise.resolve(undefined),
         ]);
         return {
@@ -239,7 +227,7 @@ export default async function DeliverPage({
     // No `width` here either — same already-360x640-and-tiny reasoning as
     // the per-clip poster above.
     finalPosterAsset
-      ? signedUrl(finalPosterAsset.storage_key, DELIVER_SIGNED_URL_TTL_SECONDS, { quality: 80 })
+      ? signedUrl(finalPosterAsset.storage_key, DELIVER_SIGNED_URL_TTL_SECONDS)
       : Promise.resolve(null),
   ]);
 

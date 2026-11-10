@@ -1,4 +1,4 @@
-// The thumbnail transform, and the two hand-kept copies of it.
+// The element thumbnail, and the two hand-kept copies of it.
 //
 // WHAT THIS FILE EXISTS FOR. On 2026-09-09 the first real video ever uploaded
 // to production went through the whole pipeline correctly — stored, described
@@ -25,24 +25,18 @@ import { join } from "node:path";
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-/**
- * The four positional arguments signedUrl takes, spelled out so the
- * assertions below can index them: key, ttl, transform, download filename.
- * Typing this as (key: string) alone made every `calls[0][2]` a type error
- * while still passing at runtime — the mock has to know the shape it is
- * standing in for.
- */
+/** signedUrl's positional arguments: key, ttl, download filename. */
 const signedUrl = vi.fn(
-  async (
-    key: string,
-    _ttl?: number,
-    _transform?: { width: number; resize: string; quality: number },
-    _download?: string | boolean,
-  ) => `https://signed.example/${key}`,
+  async (key: string, _ttl?: number, _download?: string | boolean) =>
+    `https://signed.example/${key}`,
+);
+const getImageUrl = vi.fn(
+  async (key: string, _size: string, _ttl?: number) => `https://signed.example/${key}.thumb`,
 );
 
 vi.mock("@/lib/storage", () => ({
   signedUrl: (...args: Parameters<typeof signedUrl>) => signedUrl(...args),
+  getImageUrl: (...args: Parameters<typeof getImageUrl>) => getImageUrl(...args),
   extFromFilename: (key: string, fallback: string) => {
     const m = /\.([a-z0-9]+)$/i.exec(key);
     return m ? m[1] : fallback;
@@ -117,10 +111,11 @@ function element(id: string, name: string, category: string, assetId: string): R
 
 beforeEach(() => {
   signedUrl.mockClear();
+  getImageUrl.mockClear();
 });
 
-describe("only a picture is sent through the image transform", () => {
-  it("asks for no transform on a video", async () => {
+describe("only a picture gets the pre-sized thumbnail", () => {
+  it("signs a video as it is", async () => {
     await loadElementTags(
       fakeSupabase(
         [element("el-1", "new_video1", "video", "a-1")],
@@ -129,14 +124,11 @@ describe("only a picture is sent through the image transform", () => {
       "user-1",
     );
 
-    const transform = signedUrl.mock.calls[0]?.[2];
-    expect(
-      transform,
-      "asked Supabase's image renderer to resize an MP4 — this is the production error verbatim",
-    ).toBeUndefined();
+    expect(getImageUrl).not.toHaveBeenCalled();
+    expect(signedUrl.mock.calls[0]?.[0]).toBe("projects/p/video_ref/clip.mp4");
   });
 
-  it("asks for no transform on a voice clip", async () => {
+  it("signs a voice clip as it is", async () => {
     await loadElementTags(
       fakeSupabase(
         [element("el-1", "narrator", "audio", "a-1")],
@@ -145,13 +137,12 @@ describe("only a picture is sent through the image transform", () => {
       "user-1",
     );
 
-    expect(signedUrl.mock.calls[0]?.[2]).toBeUndefined();
+    expect(getImageUrl).not.toHaveBeenCalled();
   });
 
-  // THE OTHER HALF. Without this, deleting the transform entirely would pass
-  // both tests above — and the grid would silently start serving full-size
-  // originals as thumbnails.
-  it("still transforms an actual picture", async () => {
+  // THE OTHER HALF: without it, a grid serving full-size originals as
+  // thumbnails would pass both tests above.
+  it("uses the thumb copy for an actual picture", async () => {
     await loadElementTags(
       fakeSupabase(
         [element("el-1", "jen", "character", "a-1")],
@@ -160,15 +151,13 @@ describe("only a picture is sent through the image transform", () => {
       "user-1",
     );
 
-    expect(
-      signedUrl.mock.calls[0]?.[2],
-      "stopped transforming pictures — every thumbnail is now a full-size download",
-    ).toMatchObject({ width: 320, resize: "contain" });
+    expect(getImageUrl.mock.calls[0]?.slice(0, 2)).toEqual([
+      "projects/p/character_ref/jen.jpg",
+      "thumb",
+    ]);
   });
 
-  it("transforms a generated image, which is a picture under a different kind", async () => {
-    // generated_image is in IMAGE_ASSET_KINDS and is exactly the member an
-    // "is it character_ref?" shortcut would drop.
+  it("uses the thumb copy for a generated image, a picture under a different kind", async () => {
     await loadElementTags(
       fakeSupabase(
         [element("el-1", "shot", "product", "a-1")],
@@ -177,7 +166,7 @@ describe("only a picture is sent through the image transform", () => {
       "user-1",
     );
 
-    expect(signedUrl.mock.calls[0]?.[2]).toMatchObject({ width: 320 });
+    expect(getImageUrl.mock.calls[0]?.[1]).toBe("thumb");
   });
 });
 
@@ -248,8 +237,8 @@ describe("a download keeps the extension the file actually has", () => {
       null as any,
     );
 
-    const downloadCall = signedUrl.mock.calls.find((call) => typeof call[3] === "string");
-    expect(downloadCall?.[3], "a video downloaded as new_video1.png opens in nothing").toBe(
+    const downloadCall = signedUrl.mock.calls.find((call) => typeof call[2] === "string");
+    expect(downloadCall?.[2], "a video downloaded as new_video1.png opens in nothing").toBe(
       "new_video1.mp4",
     );
   });
@@ -276,7 +265,7 @@ describe("a download keeps the extension the file actually has", () => {
 describe("the hand-kept copy in ugc/[id]/page.tsx agrees", () => {
   const source = readFileSync(join(process.cwd(), "app/(app)/ugc/[id]/page.tsx"), "utf8");
 
-  it("decides the thumbnail transform from the allowlist", () => {
+  it("decides the thumbnail from the allowlist", () => {
     expect(
       source.includes("IMAGE_ASSET_KINDS.has(asset.kind)"),
       "the /ugc copy no longer reads IMAGE_ASSET_KINDS — if it went back to " +
@@ -285,7 +274,7 @@ describe("the hand-kept copy in ugc/[id]/page.tsx agrees", () => {
     ).toBe(true);
   });
 
-  it("never asks for a transform on the not-audio branch", () => {
+  it("never takes the thumbnail on the not-audio branch", () => {
     // The precise text of the bug, asserted as its own case so the failure
     // names the shape rather than merely the absence of a helper.
     expect(

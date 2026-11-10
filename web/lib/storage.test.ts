@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  getImageUrl,
   buildStorageKey,
   extFromContentType,
   extFromFilename,
@@ -97,22 +98,41 @@ describe("signedUrl", () => {
     vi.useRealTimers();
   });
 
-  it("says so when Storage answers a transform with the original bytes", async () => {
-    // THE FAILURE THIS CATCHES IS SILENT. Storage returns a
-    // `/render/image/sign/...` URL when transformations are available and a
-    // plain `/object/sign/...` one — the original, full-size bytes — when
-    // they are not, with no error either way. Verified against the local
-    // stack, which has no /render/image route: signing the same key with and
-    // without a transform returned byte-identical URLs. A picker asking for
-    // 320px thumbnails then downloads 7 MB PNGs and looks perfectly fine.
+  it("getImageUrl signs the pre-sized copy, never a transform", async () => {
     const admin = fakeAdmin();
     vi.mocked(createAdminClient).mockReturnValue(admin as never);
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    await signedUrl("projects/p/ref_frame/a.png", 3600, { width: 320 });
+    const key = `projects/p/ref_frame/${crypto.randomUUID()}.png`;
+    const url = await getImageUrl(key, "thumb", 3600);
 
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("untransformed object URL"));
-    warn.mockRestore();
+    expect(url).toContain(`${key}.thumb.webp`);
+    expect(admin.createSignedUrl).toHaveBeenCalledWith(`${key}.thumb.webp`, 3600, undefined);
+  });
+
+  it("getImageUrl falls back to the original when the copy is missing", async () => {
+    const admin = fakeAdmin();
+    admin.createSignedUrl.mockImplementationOnce(async () => ({
+      data: null,
+      error: { message: "Object not found" },
+    }) as never);
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p/ref_frame/${crypto.randomUUID()}.png`;
+    const url = await getImageUrl(key, "medium", 3600);
+
+    expect(url).toContain(`${key}?`);
+    expect(admin.createSignedUrl).toHaveBeenLastCalledWith(key, 3600, undefined);
+  });
+
+  it("getImageUrl signs a non-image key as it is", async () => {
+    const admin = fakeAdmin();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
+    await getImageUrl(key, "thumb");
+
+    expect(admin.createSignedUrl).toHaveBeenCalledTimes(1);
+    expect(admin.createSignedUrl).toHaveBeenCalledWith(key, 3600, undefined);
   });
 
   it("returns the identical URL for repeated calls within the freshness window", async () => {
@@ -153,64 +173,6 @@ describe("signedUrl", () => {
     await signedUrl(key, 1200);
 
     expect(admin.createSignedUrl).toHaveBeenCalledTimes(2);
-  });
-
-  // The scenario the task that added `transform` was explicitly worried
-  // about: a display call site (transform set) and a fal-input/manifest
-  // call site (no transform) reading the SAME storageKey at the SAME TTL.
-  // If transform weren't part of the cache key, whichever call landed first
-  // would silently hand its cached URL to the other.
-  it("does not share a cache entry between a transformed and an untransformed request for the same key", async () => {
-    const admin = fakeAdmin();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    const key = `test/${crypto.randomUUID()}.png`;
-    const untransformed = await signedUrl(key, 3600);
-    const transformed = await signedUrl(key, 3600, { quality: 80 });
-
-    expect(transformed).not.toBe(untransformed);
-    expect(admin.createSignedUrl).toHaveBeenCalledTimes(2);
-
-    // Repeating either request within the freshness window hits its own
-    // cache entry rather than re-signing or colliding with the other.
-    const untransformedAgain = await signedUrl(key, 3600);
-    const transformedAgain = await signedUrl(key, 3600, { quality: 80 });
-    expect(untransformedAgain).toBe(untransformed);
-    expect(transformedAgain).toBe(transformed);
-    expect(admin.createSignedUrl).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not share a cache entry across different transform options for the same key", async () => {
-    const admin = fakeAdmin();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    const key = `test/${crypto.randomUUID()}.png`;
-    await signedUrl(key, 3600, { quality: 80 });
-    await signedUrl(key, 3600, { quality: 60 });
-
-    expect(admin.createSignedUrl).toHaveBeenCalledTimes(2);
-  });
-
-  it("passes the transform through to createSignedUrl's options", async () => {
-    const admin = fakeAdmin();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    const key = `test/${crypto.randomUUID()}.png`;
-    await signedUrl(key, 3600, { quality: 80 });
-
-    expect(admin.createSignedUrl).toHaveBeenCalledWith(key, 3600, {
-      transform: { quality: 80 },
-    });
-  });
-
-  it("throws rather than transform a non-image key (e.g. a video)", async () => {
-    const admin = fakeAdmin();
-    vi.mocked(createAdminClient).mockReturnValue(admin as never);
-
-    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
-
-    await expect(signedUrl(key, 3600, { quality: 80 })).rejects.toThrow(/not.*image|image.*mp4/i);
-    expect(admin.createSignedUrl).not.toHaveBeenCalled();
   });
 
   it("signedUrlWithExpiry returns 3600 on fresh sign and accurate remaining seconds on cache hit", async () => {

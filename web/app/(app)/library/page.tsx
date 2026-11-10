@@ -22,7 +22,7 @@ import { fetchCharacterLibraryPage } from "@/lib/character-library-query";
 import { signCharacterThumbnails } from "@/lib/character-thumbnails";
 import { RenderTimer } from "@/lib/perf-log";
 
-// Grid sizing: see the width:400/resize:"contain"/quality:70 doc comment
+// Grid sizing: see the 400px thumbnail doc comment
 // further down for how these interact with this page's own max-w-2xl
 // wrapper. PEEK_COUNT is a glance-sized default — enough to confirm "yes,
 // the character I just added is in here" without signing the whole
@@ -112,7 +112,7 @@ export default async function LibraryPage({
   // on mobile (131*3=393) and full DPR2 on desktop (181*2=362) with a
   // little headroom, and quality 70 (not this file's usual 80) measures
   // meaningfully smaller at this thumbnail size with invisible artifacts —
-  // see lib/character-thumbnails.ts, which owns the exact transform and the
+  // see lib/character-thumbnails.ts, which owns the thumbnail size and the
   // Promise.allSettled degrade-to-placeholder handling this shares with the
   // Character Library grid on every project's Character step.
   const imageUrls = await timer.step("thumbnail_signing", signCharacterThumbnails(rows, "library"));

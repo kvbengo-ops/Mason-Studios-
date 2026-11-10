@@ -54,7 +54,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 const signedUrl = vi.fn(async () => "https://signed.example/character.png");
-vi.mock("@/lib/storage", () => ({ signedUrl: () => signedUrl() }));
+vi.mock("@/lib/storage", () => ({
+  signedUrl: () => signedUrl(),
+  getImageUrl: () => signedUrl(),
+}));
 
 /** The character_ref row this project has, or null for a project with none. */
 let characterAssetRow: { storage_key: string; created_at: string } | null = null;

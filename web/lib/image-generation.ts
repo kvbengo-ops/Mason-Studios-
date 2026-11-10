@@ -47,7 +47,7 @@ import {
   sweepStaleImageReservations,
 } from "@/lib/runs";
 import { createAdminClient } from "@/lib/supabase/server";
-import { removeStorageObjects, signedUrl, uploadFromUrl } from "@/lib/storage";
+import { removeStorageObjects, signedUrl, uploadFromUrl, getImageUrl } from "@/lib/storage";
 import { guardResult } from "@/lib/action-result";
 import { isImageAspectRatio } from "@/lib/image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, isImageResolution } from "@/lib/image-resolutions";
@@ -974,11 +974,7 @@ export async function toImageAttempt(
         // Thumbnail-sized, like the history list: this is a recovery card, not
         // the full preview. Signed here and now — the durable record is the
         // asset id, never the URL, which expires.
-        url: await signedUrl(asset.storage_key, undefined, {
-          width: 320,
-          resize: "contain",
-          quality: 80,
-        }),
+        url: await getImageUrl(asset.storage_key, "thumb"),
         createdAt: asset.created_at,
       };
     }

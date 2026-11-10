@@ -7,7 +7,7 @@ import Link from "next/link";
 import { requireProjectReadable } from "@/actions/guard";
 import { approveBrief } from "@/actions/brief";
 import { createClient } from "@/lib/supabase/server";
-import { signedUrl } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { SceneTable } from "@/components/scene-table";
 import {
   applySceneCostUsd,
@@ -69,22 +69,10 @@ export default async function BriefPage({
 
   let characterImageUrl: string | null = null;
   if (characterAsset) {
-    // 320, not the 640 this asked for while the box was max-w-xs: the box
-    // beside the description is w-40 (160px CSS at every viewport — it does
-    // not grow), so 160 * 2 covers a DPR2 desktop exactly and anything more
-    // is bytes nobody sees. resize:"contain" has to ride along with width —
-    // see ImageTransform's doc comment in lib/storage.ts: width alone
-    // (default resize:"cover") does not scale proportionally, it silently
-    // squashes the image. quality stays 80, not the grids' quality 70 —
-    // this is the identity photo the whole gate turns on. Display-only
-    // read; this asset's compile-time use as fal conditioning input goes
-    // through actions/frames.ts, which keeps calling signedUrl() with no
-    // transform.
-    characterImageUrl = await signedUrl(characterAsset.storage_key, undefined, {
-      width: 320,
-      resize: "contain",
-      quality: 80,
-    });
+    // The 400px "thumb" copy: the box beside the description is w-40 (160px
+    // CSS at every viewport), so it covers DPR2. Display-only; this asset's
+    // use as vendor conditioning input (actions/frames.ts) signs the original.
+    characterImageUrl = await getImageUrl(characterAsset.storage_key, "thumb");
   }
 
   // The same comparison the Character screen draws on the portrait itself.

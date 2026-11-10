@@ -4,7 +4,7 @@ import { requireUser, isAdmin, isApprover } from "@/actions/guard";
 import { SidebarShell } from "@/components/sidebar-shell";
 import { TopBar } from "@/components/top-bar";
 import { getSidebarBudget, getDecidableRequestCount } from "@/lib/sidebar-budget";
-import { signedUrl, AVATAR_TRANSFORM } from "@/lib/storage";
+import { getImageUrl } from "@/lib/storage";
 import { RenderTimer } from "@/lib/perf-log";
 import { getRecentNotifications, getUnreadNotificationCount } from "@/lib/notifications";
 import { HostedDbWarning } from "@/components/hosted-db-warning";
@@ -91,7 +91,7 @@ export default async function AppLayout({
     timer.step("unread_notifications", getUnreadNotificationCount(user.id)),
     timer.step("recent_notifications", getRecentNotifications(user.id)),
     // Same signed-url call profile/page.tsx makes for the same avatar —
-    // AVATAR_TRANSFORM (lib/storage.ts) is shared between the two call
+    // getImageUrl's "thumb" copy (lib/storage.ts) is shared between the two call
     // sites specifically so this and the profile page's own read land on
     // the same signedUrl() cache entry instead of paying for two
     // createSignedUrl calls per page load. A null avatar_storage_key (most
@@ -104,7 +104,7 @@ export default async function AppLayout({
           return null;
         }
         try {
-          return await signedUrl(profile.avatar_storage_key, 3600, AVATAR_TRANSFORM);
+          return await getImageUrl(profile.avatar_storage_key, "thumb", 3600);
         } catch (error) {
           console.error("Failed to sign avatar URL for sidebar account menu", error);
           return null;
