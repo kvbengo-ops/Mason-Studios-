@@ -623,9 +623,11 @@ export default async function AccountsControlPage({
   ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
   const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
+  // Archived (deactivated) accounts keep naming their runs, but leave the ranking.
+  const rankedAccounts = overview.accounts.filter((account) => account.status !== "deactivated");
   const selectedAccount =
     overview.accounts.find((account) => account.id === requestedUserId) ??
-    overview.accounts[0] ??
+    rankedAccounts[0] ??
     null;
 
   let inspectorContent: JSX.Element | null = null;
@@ -648,10 +650,7 @@ export default async function AccountsControlPage({
     0,
   );
   const pctOfMaxLine = (usd: number): number => (maxLineUsd > 0 ? (usd / maxLineUsd) * 100 : 0);
-  const maxAccountRangeUsd = Math.max(
-    ...overview.accounts.map((account) => account.rangeTotalUsd),
-    0,
-  );
+  const maxAccountRangeUsd = Math.max(...rankedAccounts.map((account) => account.rangeTotalUsd), 0);
   const runwayShort = isRunwayShort(overview.runwayEstimate);
   const kieEmpty = overview.kieBalanceUsd !== null && overview.kieBalanceUsd <= 0;
   const series = overview.dailySeries;
@@ -1006,7 +1005,7 @@ export default async function AccountsControlPage({
             title="Top accounts"
             meta={`Spend · ${windowDays} days`}
           >
-            {overview.accounts.length === 0 ? (
+            {rankedAccounts.length === 0 ? (
               <EmptyState>No accounts found.</EmptyState>
             ) : (
               <div className="-mx-5 sm:-mx-6">
@@ -1021,7 +1020,7 @@ export default async function AccountsControlPage({
                   </TableHeader>
                   <TableBody>
                     {/* ponytail: top 8 here, the full list lives on the Accounts view. */}
-                    {[...overview.accounts]
+                    {[...rankedAccounts]
                       .sort((a, b) => b.rangeTotalUsd - a.rangeTotalUsd)
                       .slice(0, 8)
                       .map((account) => (
@@ -1087,7 +1086,7 @@ export default async function AccountsControlPage({
         <ViewPanel
           id="accounts-control-accounts-heading"
           title="Accounts"
-          meta={`${overview.accounts.length} account${overview.accounts.length === 1 ? "" : "s"}`}
+          meta={`${rankedAccounts.length} account${rankedAccounts.length === 1 ? "" : "s"}`}
         >
           <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
             {/* ONE account picker: the per-account ranking is also the selector,
@@ -1097,14 +1096,14 @@ export default async function AccountsControlPage({
                 <span className="font-medium">Team directory</span>
                 <span>Spend · {windowDays} days</span>
               </div>
-              {overview.accounts.length === 0 ? (
+              {rankedAccounts.length === 0 ? (
                 <p className="px-3 py-6 text-sm text-muted-foreground">No accounts found.</p>
               ) : (
                 <nav
                   aria-label="Select account"
                   className="flex max-h-[22rem] flex-col gap-2 overflow-y-auto lg:max-h-[36rem]"
                 >
-                  {overview.accounts.map((account) => {
+                  {rankedAccounts.map((account) => {
                     const active = selectedAccount?.id === account.id;
                     const barPct =
                       maxAccountRangeUsd > 0

@@ -459,6 +459,18 @@ describe("setAllEditorsHourlyCap", () => {
   });
 });
 
+describe("bulk limits skip archived accounts", () => {
+  it("never writes a bulk weekly limit to a deactivated account", async () => {
+    vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
+    const builder = fakeBuilder({ data: [{ id: "ed-1" }], error: null });
+    vi.mocked(createAdminClient).mockReturnValue({ from: vi.fn(() => builder) } as never);
+
+    await setAllEditorsWeeklyCap(25);
+
+    expect(builder.neq).toHaveBeenCalledWith("status", "deactivated");
+  });
+});
+
 describe("setAllEditorsWeeklyCap", () => {
   it("targets every editor tier by name and reports how many it changed", async () => {
     vi.mocked(requireAdmin).mockResolvedValue({ user: ADMIN, profile: {} as never });
@@ -550,6 +562,7 @@ describe("getBulkSpendingLimits", () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      neq: vi.fn(() => query),
       in: vi.fn(() => query),
       order: vi.fn(() => query),
       range,

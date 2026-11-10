@@ -172,8 +172,10 @@ function buildUsersHref(
   page: number,
   sort: ParsedSort<SortColumn>,
   size: PageSize,
+  archived = false,
 ): string {
   const params = new URLSearchParams();
+  if (archived) params.set("archived", "1");
   if (q) params.set("q", q);
   if (page > 1) params.set("page", String(page));
   if (sort.column !== DEFAULT_SORT.column || sort.direction !== DEFAULT_SORT.direction) {
@@ -194,6 +196,7 @@ export default async function UsersPage({
     sort?: string | string[];
     dir?: string | string[];
     size?: string | string[];
+    archived?: string | string[];
   }>;
 }): Promise<JSX.Element> {
   const { user: viewer } = await requireAdmin();
@@ -206,6 +209,16 @@ export default async function UsersPage({
 
   const resolvedSearchParams = await searchParams;
   const q = sanitizeSearchTerm(resolvedSearchParams.q ?? "");
+  // Deactivated accounts are archived: hidden from the list, the bulk limit
+  // counts and Top accounts, shown only in this view. Nothing is deleted, so
+  // Reactivate still works and their spend history stays.
+  const archived = resolvedSearchParams.archived === "1";
+  const usersHref = (
+    hrefQ: string,
+    page: number,
+    hrefSort: ParsedSort<SortColumn>,
+    size: PageSize,
+  ): string => buildUsersHref(hrefQ, page, hrefSort, size, archived);
   const requestedPage = parsePage(resolvedSearchParams.page);
   const pageSize = parsePageSize(resolvedSearchParams.size);
   const { from, to } = pageRange(requestedPage, pageSize);
@@ -237,7 +250,10 @@ export default async function UsersPage({
       count: "exact",
     });
   const orFilter = buildIlikeOrFilter(["email", "username"], q);
-  const filteredQuery = orFilter ? baseQuery.or(orFilter) : baseQuery;
+  const viewQuery = archived
+    ? baseQuery.eq("status", "deactivated")
+    : baseQuery.neq("status", "deactivated");
+  const filteredQuery = orFilter ? viewQuery.or(orFilter) : viewQuery;
 
   // Secondary `.order("id")` tiebreaker: without it, rows tied on the
   // primary sort column (e.g. two users with the same role, or the same
@@ -275,20 +291,28 @@ export default async function UsersPage({
     { count: hybridEditorCount },
     { count: aiAnimatorCount },
     { count: followingDefaultCount },
+    { count: archivedCount },
   ] = await Promise.all([
-    supabase.from("profiles").select("id", { count: "exact", head: true }).eq("role", "editor"),
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .eq("role", "trusted_editor"),
+      .eq("role", "editor")
+      .neq("status", "deactivated"),
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .eq("role", "hybrid_editor"),
+      .eq("role", "trusted_editor")
+      .neq("status", "deactivated"),
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .eq("role", "ai_animator"),
+      .eq("role", "hybrid_editor")
+      .neq("status", "deactivated"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "ai_animator")
+      .neq("status", "deactivated"),
     // Every editor-tier account, which since 0078 is exactly the set the
     // installation default decides for — there is no per-account override
     // left to exempt anyone. Named in the disable dialog so an admin sees
@@ -296,7 +320,12 @@ export default async function UsersPage({
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all]),
+      .in("role", [...BULK_ALLOWANCE_SCOPE_ROLES.all])
+      .neq("status", "deactivated"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "deactivated"),
   ]);
   const totalPages = totalPageCount(totalCount, pageSize);
 
@@ -308,7 +337,7 @@ export default async function UsersPage({
   // selector itself never needs this path since it always links straight to
   // page 1 (PageSizeControl's buildHref below), and page 1 always exists.
   if (requestedPage > totalPages && totalCount > 0) {
-    redirect(buildUsersHref(q, totalPages, sort, pageSize));
+    redirect(usersHref(q, totalPages, sort, pageSize));
   }
 
   // "Spend to date" is all-time — see user_directory's own header
@@ -487,12 +516,15 @@ export default async function UsersPage({
               more than one page. */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <p className="text-sm text-muted-foreground">
-              {totalCount} {totalCount === 1 ? "user" : "users"}
+              {totalCount} {archived ? "archived" : totalCount === 1 ? "user" : "users"}
             </p>
-            <PageSizeControl
-              size={pageSize}
-              buildHref={(size) => buildUsersHref(q, 1, sort, size)}
-            />
+            <Link
+              href={buildUsersHref("", 1, sort, pageSize, !archived)}
+              className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+            >
+              {archived ? "Back to active accounts" : `Archived (${archivedCount ?? 0})`}
+            </Link>
+            <PageSizeControl size={pageSize} buildHref={(size) => usersHref(q, 1, sort, size)} />
           </div>
         </div>
 
@@ -542,17 +574,24 @@ export default async function UsersPage({
             ? { sort: sort.column, dir: sort.direction }
             : {}),
           ...(pageSize !== DEFAULT_PAGE_SIZE ? { size: String(pageSize) } : {}),
+          ...(archived ? { archived: "1" } : {}),
         }}
-        clearHref={q ? buildUsersHref("", 1, sort, pageSize) : null}
+        clearHref={q ? usersHref("", 1, sort, pageSize) : null}
       >
         {users.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-16 text-center">
             <p className="text-base font-medium text-foreground">
-              No users match &ldquo;{q}&rdquo;.
+              {q ? (
+                <>No users match &ldquo;{q}&rdquo;.</>
+              ) : archived ? (
+                "No archived accounts."
+              ) : (
+                "No users yet."
+              )}
             </p>
             <p className="text-sm text-muted-foreground">
               Try a different email or username, or{" "}
-              <Link href={buildUsersHref("", 1, sort, pageSize)} className="underline">
+              <Link href={usersHref("", 1, sort, pageSize)} className="underline">
                 clear the search
               </Link>
               .
@@ -573,48 +612,48 @@ export default async function UsersPage({
                     label="Email"
                     sort={sort}
                     defaultDirection="asc"
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="username"
                     label="Username"
                     sort={sort}
                     defaultDirection="asc"
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="role"
                     label="Role"
                     sort={sort}
                     defaultDirection="asc"
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="status"
                     label="Status"
                     sort={sort}
                     defaultDirection="asc"
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="joined"
                     label="Joined"
                     sort={sort}
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="projects"
                     label="Projects"
                     align="right"
                     sort={sort}
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   <SortableTableHead
                     column="spend"
                     label="Used to date"
                     align="right"
                     sort={sort}
-                    buildHref={(next) => buildUsersHref(q, 1, next, pageSize)}
+                    buildHref={(next) => usersHref(q, 1, next, pageSize)}
                   />
                   {/* Not sortable, unlike the columns above: these come from
                       a per-page join (profiles' overrides + account_spend_
@@ -879,12 +918,10 @@ export default async function UsersPage({
               page={requestedPage}
               totalPages={totalPages}
               previousHref={
-                requestedPage > 1 ? buildUsersHref(q, requestedPage - 1, sort, pageSize) : null
+                requestedPage > 1 ? usersHref(q, requestedPage - 1, sort, pageSize) : null
               }
               nextHref={
-                requestedPage < totalPages
-                  ? buildUsersHref(q, requestedPage + 1, sort, pageSize)
-                  : null
+                requestedPage < totalPages ? usersHref(q, requestedPage + 1, sort, pageSize) : null
               }
             />
           </>

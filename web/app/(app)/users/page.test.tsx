@@ -108,6 +108,7 @@ describe("UsersPage row actions", () => {
           select: vi.fn(() => builder),
           or: vi.fn(() => builder),
           eq: vi.fn(() => builder),
+          neq: vi.fn(() => builder),
           in: vi.fn(() => builder),
           not: vi.fn(() => builder),
           order: vi.fn(() => builder),

@@ -591,6 +591,8 @@ export async function getBulkSpendingLimits(
       .from("profiles")
       .select("role, weekly_cap_override_usd, daily_cap_override_usd, hourly_cap_override_usd")
       .in("role", roles)
+      // Deactivated accounts are archived: never read or written in bulk.
+      .neq("status", "deactivated")
       .order("id")
       .range(from, from + pageSize - 1);
     if (error || !data) throw new Error("Could not load saved spending limits.");
@@ -648,6 +650,8 @@ export async function setAllEditorsWeeklyCap(
     // because this writes to many rows at once and should say exactly whose
     // allowance it is changing.
     .in("role", roles as ProfileRole[])
+    // Deactivated accounts are archived: never read or written in bulk.
+    .neq("status", "deactivated")
     .select("id");
 
   if (error) {
@@ -805,6 +809,8 @@ export async function setAllEditorsDailyCap(
     .from("profiles")
     .update({ daily_cap_override_usd: dailyCapUsd })
     .in("role", roles as ProfileRole[])
+    // Deactivated accounts are archived: never read or written in bulk.
+    .neq("status", "deactivated")
     .select("id");
 
   if (error) {
@@ -841,6 +847,8 @@ export async function setAllEditorsHourlyCap(
     .from("profiles")
     .update({ hourly_cap_override_usd: hourlyCapUsd })
     .in("role", roles as ProfileRole[])
+    // Deactivated accounts are archived: never read or written in bulk.
+    .neq("status", "deactivated")
     .select("id");
 
   if (error) {
