@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 // A module-level external store — same shape as lib/theme-store.ts's
 // subscribe/notify pair, keyed by projectId because /ugc/[id]'s column and
 // strip are SIBLINGS under one Server Component page (app/(app)/ugc/[id]/
@@ -78,6 +80,20 @@ export function subscribe(projectId: string, listener: () => void): () => void {
 
 export function getSnapshot(projectId: string): GeneratePendingState | null {
   return state.get(projectId) ?? null;
+}
+
+/**
+ * True from the confirmed press until the new scene is on screen (or the
+ * safety timeout gives up). ugc-column.tsx disables Generate on it, so a
+ * second press can't queue a duplicate paid render in the gap between
+ * generateClip returning and the strip showing the scene.
+ */
+export function useIsGeneratePending(projectId: string): boolean {
+  return useSyncExternalStore(
+    (listener) => subscribe(projectId, listener),
+    () => state.has(projectId),
+    () => false,
+  );
 }
 
 /**

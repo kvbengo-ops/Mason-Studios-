@@ -104,9 +104,9 @@ describe("Image Generator background completion", () => {
       JSON.parse(window.localStorage.getItem("image-generator:draft:personal")!).imageCount,
     ).toBe(1);
   });
-  it("keeps Generate live while an image renders, and each press is its own image", async () => {
-    // The first render never settles: the second press must not wait for it,
-    // and must not reuse its key (that would hand back the first picture).
+  it("locks Generate while an image renders, so a second press can't buy a duplicate", async () => {
+    // The first render never settles: until it is drawn and on screen, Generate
+    // stays disabled.
     const action = vi.fn((_formData: FormData) => new Promise<never>(() => {}));
     render(
       <ImageAttemptPanel initialAttempts={[]} reconcileAction={vi.fn()}>
@@ -121,17 +121,18 @@ describe("Image Generator background completion", () => {
     );
     fireEvent.change(screen.getByLabelText("Prompt"), { target: { value: "A portrait" } });
 
-    for (let press = 1; press <= 2; press += 1) {
-      const generate = screen.getByRole("button", { name: "Generate" }) as HTMLButtonElement;
-      expect(generate.disabled).toBe(false);
-      fireEvent.click(generate);
-      fireEvent.click(screen.getByRole("button", { name: "Confirm generation" }));
-      await waitFor(() => expect(action).toHaveBeenCalledTimes(press));
-    }
+    const generate = screen.getByRole("button", { name: "Generate" }) as HTMLButtonElement;
+    expect(generate.disabled).toBe(false);
+    fireEvent.click(generate);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm generation" }));
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1));
 
-    const keys = action.mock.calls.map(([formData]) => formData.get("idempotencyKey"));
-    expect(new Set(keys).size).toBe(2);
-    expect(screen.getByRole("button", { name: "Generate" }).textContent).toContain("2 generating");
+    const locked = screen.getByRole("button", { name: "Generate" }) as HTMLButtonElement;
+    expect(locked.disabled).toBe(true);
+    expect(locked.textContent).toContain("1 generating");
+    fireEvent.submit(locked.closest("form")!);
+    expect(screen.queryByRole("button", { name: "Confirm generation" })).toBeNull();
+    expect(action).toHaveBeenCalledTimes(1);
   });
 
   it("generates four independently charged images from the same prompt", async () => {

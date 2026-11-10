@@ -17,12 +17,16 @@
 //    dependency array — the kind that reads as obviously fine and is not.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UgcColumn, type UgcOption } from "./ugc-column";
 import { generateClip, regenerateClip } from "@/actions/ugc";
 import type { ElementTag } from "@/lib/elements";
-import { __resetAllGeneratePendingForTests, getSnapshot } from "@/lib/ugc-generate-pending-store";
+import {
+  __resetAllGeneratePendingForTests,
+  clearGeneratePending,
+  getSnapshot,
+} from "@/lib/ugc-generate-pending-store";
 
 vi.mock("@/actions/ugc", () => ({
   generateClip: vi.fn(async () => undefined),
@@ -854,6 +858,24 @@ describe("UgcColumn — Generate confirms before it spends", () => {
 
     resolveGenerate({ sceneId: "scene-42" });
     await waitFor(() => expect(push).toHaveBeenCalledWith("/ugc/proj-1?scene=scene-42"));
+  });
+
+  it("keeps Generate locked after generateClip returns, until the scene is on screen", async () => {
+    // The gap this closes: generateClip has answered, the form is no longer
+    // pending, but the strip has not shown the new scene yet. A second press
+    // there would queue a duplicate paid render.
+    vi.mocked(generateClip).mockResolvedValueOnce({ sceneId: "scene-42" });
+    const { user, dialog } = await openConfirm();
+
+    await user.click(within(dialog).getByRole("button", { name: /^confirm/i }));
+    await waitFor(() => expect(push).toHaveBeenCalled());
+
+    const generate = screen.getByRole("button", { name: /^Generate ·/ }) as HTMLButtonElement;
+    expect(generate.disabled, "Generate reopened before the scene was visible").toBe(true);
+
+    // The strip's tile clears the store once the scene arrives.
+    act(() => clearGeneratePending("proj-1"));
+    expect(generate.disabled).toBe(false);
   });
 
   it("cancelling queues nothing", async () => {

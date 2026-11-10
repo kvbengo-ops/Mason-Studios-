@@ -166,13 +166,12 @@ export function ImageGeneratorForm({
   }
 
   const [refreshPending, startRefresh] = useTransition();
-  const pending = refreshPending;
-  // NO "still generating" lock. Every requested output gets its own key, so a
-  // new batch can start while earlier images draw. Spend caps check each one.
-  const disabledReason = unavailableReason;
-  // Images in flight from THIS page do not hold `pending`, so Generate stays
-  // pressable. The count on the button keeps each batch visible.
+  // Images in flight from THIS page lock Generate until they are drawn AND the
+  // refresh has put them on screen: no duplicate paid batch from a second press.
   const [inFlight, setInFlight] = useState(0);
+  const pending = refreshPending;
+  const generateLocked = pending || inFlight > 0;
+  const disabledReason = unavailableReason;
   const [prompt, setPrompt] = useState("");
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [referencePickerTab, setReferencePickerTab] = useState<"uploads" | "elements">("elements");
@@ -339,7 +338,7 @@ export function ImageGeneratorForm({
 
   function handleGenerate(confirmed = false): void {
     const trimmedPrompt = prompt.trim();
-    if (disabledReason || pending || !trimmedPrompt) return;
+    if (disabledReason || generateLocked || !trimmedPrompt) return;
     if (!confirmed) {
       setConfirmation(imageCount);
       return;
@@ -436,7 +435,7 @@ export function ImageGeneratorForm({
             </Button>
             <Button
               type="button"
-              disabled={pending || !!disabledReason}
+              disabled={generateLocked || !!disabledReason}
               onClick={() => {
                 setConfirmation(null);
                 handleGenerate(true);
@@ -773,7 +772,7 @@ export function ImageGeneratorForm({
                 <PendingButton
                   type="submit"
                   pending={pending}
-                  disabled={!!disabledReason || !prompt.trim()}
+                  disabled={generateLocked || !!disabledReason || !prompt.trim()}
                   aria-label={imageCount === 1 ? "Generate" : `Generate ${imageCount} images`}
                   aria-describedby={
                     disabledReason ? "image-generator-disabled" : "image-generator-cost"

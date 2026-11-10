@@ -74,6 +74,7 @@ import {
   beginGeneratePending,
   clearGeneratePending,
   resolveGeneratePending,
+  useIsGeneratePending,
 } from "@/lib/ugc-generate-pending-store";
 
 /** A per-second rate in dollars; the rate tables store kie credits (200 per $1). */
@@ -272,6 +273,9 @@ export function UgcColumn({
   // Where Generate queues the clip. Starts as the page's project; on /create
   // it is filled in at confirm time, once the named project exists.
   const [targetProjectId, setTargetProjectId] = useState(projectId);
+  // Locked from the confirmed press until the new scene shows in the strip:
+  // no second paid render while the first is not visible yet.
+  const generateLocked = useIsGeneratePending(targetProjectId);
   const router = useRouter();
   // The scene's own settings win over the route's default. options[0] is only
   // right for a NEW clip; for an existing one it is whatever happens to be
@@ -2286,6 +2290,7 @@ export function UgcColumn({
                         "h-auto min-h-12 w-auto shrink-0 flex-col gap-0.5 whitespace-nowrap rounded-lg bg-primary px-4 py-1 text-xs font-bold uppercase leading-tight text-primary-foreground hover:bg-primary/90",
                     )}
                     disabled={
+                      generateLocked ||
                       !prompt.trim() ||
                       readOnly ||
                       promptOverBy > 0 ||
