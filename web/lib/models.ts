@@ -38,6 +38,7 @@ import {
   NANO_BANANA_2_1_ID,
   GPT_IMAGE_2_6_ECONOMY_EDIT,
   GPT_IMAGE_2_6_ECONOMY_TEXT,
+  SEEDREAM_5_5_TEXT_ID,
 } from "./kie/image-input";
 import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
@@ -1468,11 +1469,13 @@ export interface ImageModelDescriptor {
   referenceDisabledReason?: string;
   /** Null keeps an unpriced model visible but unavailable. */
   costUsd: number | null;
+  /** Model-specific vendor cap, including required image safety instructions. */
+  maxPromptChars?: number;
   aspectRatios: readonly ImageAspectRatio[];
   /**
    * The pixel tiers kie offers for this model, from its docs, `1K` first.
    * Absent means kie documents none (google/nano-banana) and the picker shows
-   * no control. Seedream's 1K/2K are BytePlus pixel sizes (lib/byteplus-image.ts).
+   * no control. BytePlus Seedream 5.0 Pro uses pixel sizes; Kie Seedream uses `size`.
    */
   resolutions?: readonly ImageResolutionId[];
   /**
@@ -1520,6 +1523,23 @@ export interface ImageModelDescriptor {
 export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
   // Plain Nano Banana is no longer offered here (owner, 2026-11-10). Its kie ids stay in
   // lib/kie.ts: the frame and character flows still call generateImage without a model.
+  {
+    id: "seedream-5.5",
+    label: "Seedream 5.5 · Kie",
+    textToImageId: SEEDREAM_5_5_TEXT_ID,
+    // Kie charges separately for input images, but does not publish their rate
+    // here; keep edits disabled until their reservation estimate is known.
+    editId: null,
+    referenceDisabledReason:
+      "Seedream 5.5 reference edits are unavailable until Kie's input-image price is verified. Remove the references or choose another model.",
+    // Kie's published output rates: 3.6 credits at 1K/1.5K and 6.3 at 2K.
+    costUsd: 0.018,
+    maxPromptChars: 5_000,
+    observedSeconds: null,
+    aspectRatios: IMAGE_ASPECT_RATIOS,
+    resolutions: ["1K", "1.5K", "2K"],
+    resolutionCostsUsd: { "1.5K": 0.018, "2K": 0.0315 },
+  },
   {
     id: "seedream-5.0-pro",
     label: "Seedream 5.0 Pro",

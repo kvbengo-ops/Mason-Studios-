@@ -13,6 +13,7 @@ import type { AccountCapProfile } from "@/lib/spend";
 import {
   checkImageTask,
   generateImage,
+  imagePromptWithGuards,
   modelForImageArgs,
   ImageGenerationError,
   KieTaskPendingError,
@@ -496,6 +497,13 @@ export async function generateImageFor(
   if (imageModel.costUsd === null) {
     return {
       error: `${imageModel.label} is awaiting pricing verification and cannot generate yet.`,
+    };
+  }
+  const vendorPrompt = imagePromptWithGuards(resolved.prompt);
+  const maxPromptChars = imageModel.maxPromptChars ?? MAX_PROMPT_LENGTH;
+  if (vendorPrompt.length > maxPromptChars) {
+    return {
+      error: `${imageModel.label} allows up to ${maxPromptChars.toLocaleString("en-US")} prompt characters including the required image instructions. Shorten the prompt or a tagged element's description.`,
     };
   }
   const kieId = kieIdForImageModel(imageModel, refImageUrls.length > 0);

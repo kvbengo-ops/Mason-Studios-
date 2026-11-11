@@ -38,6 +38,9 @@ export const NANO_BANANA_2_ID = "nano-banana-2";
 /** Nano Banana 2.1 — https://docs.kie.ai/market/google/nanobanana-2-1. Same shape as 2: one id, image_input, max 10. */
 export const NANO_BANANA_2_1_ID = "nano-banana-2-1";
 
+/** Seedream 5.5 text-to-image uses a distinct model id and defaults to 2K. */
+export const SEEDREAM_5_5_TEXT_ID = "seedream/5-5-text-to-image";
+
 export function kieImageInput(
   model: string,
   prompt: string,
@@ -45,6 +48,9 @@ export function kieImageInput(
   refImageUrls: readonly string[] = [],
   resolution: ImageResolutionId = "1K",
 ): Record<string, unknown> {
+  if (model === SEEDREAM_5_5_TEXT_ID) {
+    return { prompt, aspect_ratio: aspectRatio, size: resolution };
+  }
   if (model === GPT_IMAGE_2_6_ECONOMY_TEXT || model === GPT_IMAGE_2_6_ECONOMY_EDIT) {
     if (resolution !== "1K") throw new Error("GPT Image 2.6 Economy offers 1K only.");
     if ((model === GPT_IMAGE_2_6_ECONOMY_EDIT) !== refImageUrls.length > 0) {

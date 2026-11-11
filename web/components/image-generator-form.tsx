@@ -174,7 +174,6 @@ export function ImageGeneratorForm({
   const generateLocked = pending || inFlight > 0;
   const disabledReason = unavailableReason;
   const [prompt, setPrompt] = useState("");
-  const promptTooLong = prompt.trim().length > MAX_PROMPT_CHARS;
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const [referencePickerTab, setReferencePickerTab] = useState<"uploads" | "elements">("elements");
   const taggedPictures = tagsInOrder(prompt)
@@ -194,6 +193,14 @@ export function ImageGeneratorForm({
   const [modelId, setModelId] = useState(models[0]!.id);
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>("9:16");
   const selectedModel = models.find((m) => m.id === modelId) ?? models[0]!;
+  // Leave room for lib/kie.ts's required no-text instruction within the vendor cap.
+  const promptLimit = Math.min(
+    MAX_PROMPT_CHARS,
+    selectedModel.maxPromptChars === undefined
+      ? MAX_PROMPT_CHARS
+      : selectedModel.maxPromptChars - 100,
+  );
+  const promptTooLong = prompt.trim().length > promptLimit;
   const selectedAspectRatio = selectedModel.aspectRatios.includes(aspectRatio)
     ? aspectRatio
     : selectedModel.aspectRatios[0]!;
@@ -562,7 +569,7 @@ export function ImageGeneratorForm({
                     onChange={updatePromptDraft}
                     elements={elements}
                     charCount={prompt.trim().length}
-                    maxChars={MAX_PROMPT_CHARS}
+                    maxChars={promptLimit}
                     placeholder="Describe the scene you imagine — subject, setting, light. Type @ for a saved reference."
                     // Height and colour only — NOT padding or font metrics. Those are
                     // shared with the highlight mirror drawn on top of this box,
