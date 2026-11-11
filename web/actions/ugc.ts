@@ -63,6 +63,7 @@ import {
 } from "@/lib/bin-thumbnails";
 import { estimateCost } from "@/lib/estimate";
 import { KLING_FRAME_EXTS } from "@/lib/elements";
+import { selectInChunks } from "@/lib/in-chunks";
 // The one place "picture, not video or audio" is already enumerated off
 // AssetKind — reused by both firstTaggedImageElementId and
 // attachSceneReferences below so a conditioning-frame allowlist and a
@@ -487,10 +488,10 @@ async function resolveElementTags(
   if (error || !data) return prompt;
 
   const assetIds = data.map((e) => e.asset_id).filter((id): id is string => Boolean(id));
-  const { data: assets } =
-    assetIds.length > 0
-      ? await admin.from("assets").select("id, kind").in("id", assetIds)
-      : { data: [] as { id: string; kind: string }[] };
+  // In chunks: one .in() with every id fails past ~575 elements (lib/in-chunks.ts).
+  const { data: assets } = await selectInChunks(assetIds, (chunk) =>
+    admin.from("assets").select("id, kind").in("id", chunk),
+  );
   const kindById = new Map((assets ?? []).map((a) => [a.id, a.kind]));
 
   const imageByName = new Map<string, string>();
