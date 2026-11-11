@@ -15,6 +15,10 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 1000;
+// Ids per `.in()` lookup. Those go in the GET URL: 600 uuids timed out and
+// 1,000 got 400 Bad Request from production (2026-11-12), so the export failed
+// once 14 days held more than ~300 image runs. 200 stays well under that.
+const IN_CHUNK = 200;
 const PREVIEW_TTL_SECONDS = 3600;
 const UTF8_BOM = "\uFEFF";
 
@@ -78,11 +82,11 @@ export async function GET(request: Request): Promise<Response> {
     ),
   ];
   const emails = new Map<string, string>();
-  for (let from = 0; from < userIds.length; from += PAGE_SIZE) {
+  for (let from = 0; from < userIds.length; from += IN_CHUNK) {
     const { data, error } = await supabase
       .from("profiles")
       .select("id, email")
-      .in("id", userIds.slice(from, from + PAGE_SIZE));
+      .in("id", userIds.slice(from, from + IN_CHUNK));
     if (error) {
       return NextResponse.json(
         { error: `Failed to load run emails: ${error.message}` },
@@ -98,11 +102,11 @@ export async function GET(request: Request): Promise<Response> {
   const times = videoRuns.map((run) => run.created_at).sort();
   const imageKeyByAssetId = new Map<string, string>();
   const clipKeyBySceneAndTime = new Map<string, string>();
-  for (let from = 0; from < imageAssetIds.length; from += PAGE_SIZE) {
+  for (let from = 0; from < imageAssetIds.length; from += IN_CHUNK) {
     const { data, error } = await supabase
       .from("assets")
       .select("id, storage_key")
-      .in("id", imageAssetIds.slice(from, from + PAGE_SIZE));
+      .in("id", imageAssetIds.slice(from, from + IN_CHUNK));
     if (error) {
       return NextResponse.json(
         { error: `Failed to load image previews: ${error.message}` },
@@ -111,12 +115,12 @@ export async function GET(request: Request): Promise<Response> {
     }
     for (const asset of data ?? []) imageKeyByAssetId.set(asset.id, asset.storage_key);
   }
-  for (let from = 0; from < sceneIds.length; from += PAGE_SIZE) {
+  for (let from = 0; from < sceneIds.length; from += IN_CHUNK) {
     const { data, error } = await supabase
       .from("assets")
       .select("scene_id, created_at, storage_key")
       .eq("kind", "clip")
-      .in("scene_id", sceneIds.slice(from, from + PAGE_SIZE))
+      .in("scene_id", sceneIds.slice(from, from + IN_CHUNK))
       .gte("created_at", times[0]!)
       .lte("created_at", times[times.length - 1]!);
     if (error) {
