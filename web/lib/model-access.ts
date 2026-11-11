@@ -20,7 +20,7 @@ export function isAssignableRole(value: unknown): value is AssignableRole {
 export const ROLE_LABELS: Readonly<Record<ProfileRole, string>> = {
   admin: "Admin",
   trusted_editor: "Trusted editor",
-  editor: "Editor",
+  editor: "Newly onboard",
   hybrid_editor: "Hybrid Editor",
   ai_animator: "AI Animator",
 };

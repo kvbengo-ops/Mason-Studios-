@@ -193,10 +193,10 @@ export default function SignupPage(): JSX.Element {
                   title="Admin access is granted by an existing admin — it can't be chosen at signup."
                   className="w-fit"
                 >
-                  Editor
+                  Newly onboard
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  New accounts start as Editor. Admin access is granted by an existing admin.
+                  New accounts start with the Newly onboard role. Admin access is granted by an existing admin.
                 </p>
               </div>
               <div className="grid gap-2">

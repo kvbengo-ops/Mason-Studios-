@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
 import { Bell } from "lucide-react";
 import { markNotificationRead } from "@/actions/notifications";
 import { AccountMenu } from "@/components/account-menu";
+import { CreateAnnouncementTicker } from "@/components/create-announcement-ticker";
 import { createClient } from "@/lib/supabase/client";
 import type { SidebarBudget } from "@/lib/sidebar-budget";
 import type { Notification } from "@/lib/notifications";
@@ -47,6 +49,7 @@ export function TopBar({
   isAdmin: boolean;
   budget: SidebarBudget | null;
 }): JSX.Element {
+  const pathname = usePathname();
   const [filter, setFilter] = useState<"all" | "activity" | "credits">("all");
   const [notificationCount, setNotificationCount] = useState(unreadNotificationCount);
   const [notifications, setNotifications] = useState(initialNotifications);
@@ -125,7 +128,9 @@ export function TopBar({
     .slice(0, 5);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border bg-sidebar/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80 sm:px-6">
+    <>
+      {pathname === "/create" ? <CreateAnnouncementTicker /> : null}
+      <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-sidebar-border bg-sidebar/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-sidebar/80 sm:px-6">
       <div className="flex items-center gap-3 md:hidden">
         <label
           htmlFor="sidebar-toggle"
@@ -251,6 +256,7 @@ export function TopBar({
           placement="topbar"
         />
       </div>
-    </header>
+      </header>
+    </>
   );
 }

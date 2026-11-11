@@ -3,27 +3,27 @@ import { Badge } from "@/components/ui/badge";
 import type { ProfileRole } from "@/types/db";
 import { ROLE_LABELS } from "@/lib/model-access";
 
-// Three values now (0031_account_allowances.sql added 'trusted_editor'),
-// two of them consequential in different ways: `admin` grants read access
-// to every project of every user (0002_rls.sql's projects_select policy),
-// so it should read as a fact worth noticing on a scanned list, not just
-// another lowercase word next to "editor". `trusted_editor` is a SPEND
-// tier only — is_admin() (0002_rls.sql) treats it exactly like 'editor',
-// see 0031's header for the full audit — so it earns its own label (an
-// admin scanning /users needs to tell who has the higher allowance) but
-// not the same visual weight as `admin`; it reuses the quiet `outline`
-// variant `editor` already has rather than borrowing admin's solid one,
-// which would misrepresent it as a visibility escalation it isn't.
-// hybrid_editor and ai_animator (0131) are spend + model-access tiers, not visibility
-// escalations, so they take the quiet variant too.
-const ROLE_VARIANT: Record<ProfileRole, "default" | "outline"> = {
-  admin: "default",
-  trusted_editor: "outline",
-  editor: "outline",
-  hybrid_editor: "outline",
-  ai_animator: "outline",
+// The chart tokens vary by theme, so each role keeps its own color in every palette.
+const ROLE_STYLE: Record<ProfileRole, { dot: string; badge: string }> = {
+  admin: { dot: "bg-primary-foreground", badge: "" },
+  editor: { dot: "bg-chart-1", badge: "border-chart-1/40 bg-chart-1/10 text-chart-1" },
+  trusted_editor: {
+    dot: "bg-chart-2",
+    badge: "border-chart-2/40 bg-chart-2/10 text-chart-2",
+  },
+  hybrid_editor: {
+    dot: "bg-chart-3",
+    badge: "border-chart-3/40 bg-chart-3/10 text-chart-3",
+  },
+  ai_animator: { dot: "bg-chart-4", badge: "border-chart-4/40 bg-chart-4/10 text-chart-4" },
 };
 
 export function RoleBadge({ role }: { role: ProfileRole }): JSX.Element {
-  return <Badge variant={ROLE_VARIANT[role]}>{ROLE_LABELS[role]}</Badge>;
+  const style = ROLE_STYLE[role];
+  return (
+    <Badge variant={role === "admin" ? "default" : "outline"} className={style.badge}>
+      <span aria-hidden="true" className={`size-1.5 rounded-full ${style.dot}`} />
+      {ROLE_LABELS[role]}
+    </Badge>
+  );
 }

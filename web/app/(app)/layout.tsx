@@ -4,6 +4,7 @@ import { requireUser, isAdmin, isApprover } from "@/actions/guard";
 import { SidebarShell } from "@/components/sidebar-shell";
 import { TopBar } from "@/components/top-bar";
 import { getSidebarBudget, getDecidableRequestCount } from "@/lib/sidebar-budget";
+import { ROLE_LABELS } from "@/lib/model-access";
 import { getImageUrl } from "@/lib/storage";
 import { RenderTimer } from "@/lib/perf-log";
 import { getRecentNotifications, getUnreadNotificationCount } from "@/lib/notifications";
@@ -124,11 +125,7 @@ export default async function AppLayout({
   ]);
   const sidebarCollapsed = sidebarCollapsedCookie.get("sidebar-collapsed")?.value === "1";
   const appBanner = readAppBannerConfig();
-  const roleLabel = profile.role
-    .replace("_", " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  const roleLabel = ROLE_LABELS[profile.role];
 
   timer.finish({ userId: user.id });
 
