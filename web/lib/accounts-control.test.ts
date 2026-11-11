@@ -30,20 +30,27 @@ describe("buildDailySpendSeries", () => {
     expect(oct31?.iterateUsd).toBe(0);
   });
 
-  it("buckets by the Asia/Manila day the caps reset on, not the UTC day", () => {
-    // 2026-11-01 01:00 in Manila is still 2026-10-31 in UTC.
-    const now = new Date("2026-10-31T17:00:00.000Z");
+  it("buckets by the 05:00 Manila spend day the caps reset on (0138)", () => {
+    // 2026-11-01 06:00 Manila (22:00 UTC Oct 31): spend day Nov 1 is open.
+    const now = new Date("2026-10-31T22:00:00.000Z");
     const series = buildDailySpendSeries(
       [
-        { created_at: "2026-10-31T16:30:00.000Z", cost_usd: 2, scene_id: "s" }, // Nov 1 00:30 Manila
-        { created_at: "2026-10-31T15:30:00.000Z", cost_usd: 1, scene_id: "s" }, // Oct 31 23:30 Manila
+        { created_at: "2026-10-31T21:30:00.000Z", cost_usd: 2, scene_id: "s" }, // Nov 1 05:30: Nov 1
+        { created_at: "2026-10-31T19:00:00.000Z", cost_usd: 1, scene_id: "s" }, // Nov 1 03:00: still Oct 31
+        { created_at: "2026-10-30T22:00:00.000Z", cost_usd: 4, scene_id: "s" }, // Oct 31 06:00: Oct 31
       ],
       7,
       now,
     );
     expect(series.at(-1)).toMatchObject({ date: "2026-11-01", label: "Nov 1", totalUsd: 2 });
-    expect(series.find((d) => d.date === "2026-10-31")?.totalUsd).toBe(1);
+    expect(series.find((d) => d.date === "2026-10-31")?.totalUsd).toBe(5);
     expect(series[0]?.date).toBe("2026-10-26");
+  });
+
+  it("before 05:00 the open spend day is still yesterday's", () => {
+    // 2026-11-12 04:00 Manila (20:00 UTC Nov 11).
+    const series = buildDailySpendSeries([], 7, new Date("2026-11-11T20:00:00.000Z"));
+    expect(series.at(-1)?.date).toBe("2026-11-11");
   });
 });
 

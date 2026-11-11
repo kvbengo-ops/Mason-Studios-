@@ -9,7 +9,25 @@ import {
   type ThumbnailSource,
 } from "@/lib/bin-thumbnails";
 import type { BinCardThumbnail } from "@/components/bin-card";
-import { manilaDayKey, manilaDayKeys, manilaWindowStartIso } from "@/lib/burn";
+import {
+  manilaDayKey,
+  manilaDayKeys,
+  manilaWindowStartIso as manilaMidnightWindowStartIso,
+} from "@/lib/burn";
+
+// A spend day runs 05:00 to 05:00 Manila (0138), the same boundary the caps and
+// the "Today" tile use, so the chart's last bar equals "Today". lib/burn keeps
+// midnight days because the Users burn rate is grouped by midnight in SQL.
+const SPEND_DAY_SHIFT_MS = 5 * 60 * 60 * 1000;
+const spendDayKey = (instant: Date): string =>
+  manilaDayKey(new Date(instant.getTime() - SPEND_DAY_SHIFT_MS));
+const spendDayKeys = (now: Date, days: number): string[] =>
+  manilaDayKeys(new Date(now.getTime() - SPEND_DAY_SHIFT_MS), days);
+/** 05:00 Manila on the first of the last `days` spend days. */
+export function manilaWindowStartIso(now: Date, days: number): string {
+  const midnight = manilaMidnightWindowStartIso(new Date(now.getTime() - SPEND_DAY_SHIFT_MS), days);
+  return new Date(Date.parse(midnight) + SPEND_DAY_SHIFT_MS).toISOString();
+}
 import {
   getSpendCategoryTotals,
   getSpendCategoryTotalsByUser,
@@ -188,7 +206,7 @@ export function buildDailySpendSeries(
   now: Date = new Date(),
 ): DailySpendPoint[] {
   const byDate = new Map<string, DailySpendPoint>();
-  for (const key of manilaDayKeys(now, windowDays)) {
+  for (const key of spendDayKeys(now, windowDays)) {
     byDate.set(key, {
       date: key,
       label: shortDayFormatter.format(new Date(`${key}T00:00:00Z`)),
@@ -200,7 +218,7 @@ export function buildDailySpendSeries(
 
   for (const run of runs) {
     if (typeof run.cost_usd !== "number" || run.cost_usd <= 0) continue;
-    const point = byDate.get(manilaDayKey(new Date(run.created_at)));
+    const point = byDate.get(spendDayKey(new Date(run.created_at)));
     if (!point) continue;
     if (run.scene_id !== null) {
       point.renderUsd += run.cost_usd;

@@ -55,6 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   loadAccountControlDeleted,
   loadAccountsControlOverview,
+  manilaWindowStartIso,
   loadMonthlySpendSeries,
   parseSpendGranularity,
   type SpendGranularity,
@@ -76,7 +77,7 @@ import { formatUsd } from "@/lib/format-usd";
 import { pageRange, parsePage, totalPageCount } from "@/lib/pagination";
 import { formatRunwayDays, isRunwayShort } from "@/lib/runway";
 import { extFromFilename, getImageUrl } from "@/lib/storage";
-import { manilaWindowStartIso } from "@/lib/burn";
+
 import { periodChange } from "@/lib/period-change";
 import { getDecidableRequestCount } from "@/lib/sidebar-budget";
 import { createClient } from "@/lib/supabase/server";
@@ -699,7 +700,7 @@ export default async function AccountsControlPage({
       <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiTile
           icon={BarChart3}
-          label="Today"
+          label="Today · since 5 AM"
           value={formatUsd(overview.todaySpendUsd)}
           sub={
             <ChangeLine
