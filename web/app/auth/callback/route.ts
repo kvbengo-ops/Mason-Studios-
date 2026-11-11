@@ -16,7 +16,7 @@ const DEFAULT_NEXT = "/create";
  * to an external site that mimics the login page. Only same-origin relative
  * paths are honoured; anything else falls back to the default.
  */
-function safeNext(candidate: string | null): string {
+export function safeNext(candidate: string | null): string {
   if (!candidate) return DEFAULT_NEXT;
 
   // Reject protocol-relative ("//evil.com") and backslash-smuggled variants

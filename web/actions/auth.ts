@@ -5,6 +5,8 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { checkSignupDomainAllowed } from "@/lib/signup-allowlist";
 import { loginFormSchema } from "@/lib/login-schema";
 import { signupFormSchema } from "@/lib/signup-schema";
+import { signupPasswordSchema } from "@/lib/signup-password";
+import type { ActionResult } from "@/lib/action-result";
 
 // Self-serve signup, added once the twenty-hand-provisioned-editors model
 // stopped being enough. Email ownership verification depends on Supabase's
@@ -310,4 +312,86 @@ export async function signOut(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export type PasswordResetRequestResult =
+  { error: string; field?: "email" } | { sent: true } | undefined;
+
+/**
+ * Requests a password reset email for the given address. Returns the same
+ * `{ sent: true }` result whether or not the account exists so the form never
+ * reveals which emails are registered.
+ */
+export async function requestPasswordReset(
+  formData: FormData,
+): Promise<PasswordResetRequestResult> {
+  const email = formData.get("email");
+  const parsed = loginFormSchema.shape.email.safeParse(typeof email === "string" ? email : "");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]!;
+    return { error: issue.message, field: "email" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/confirm?next=/reset-password`,
+  });
+
+  if (error) {
+    console.error("[forgot-password] resetPasswordForEmail failed", {
+      code: error.code,
+      status: error.status,
+      message: error.message,
+    });
+  }
+
+  return { sent: true };
+}
+
+/**
+ * Sets a new password from /reset-password after following a recovery email
+ * link. Checks the session user via supabase.auth.getUser() directly rather
+ * than requireUser() so a pending account can also reset its password, and
+ * refuses unless the session's `amr` claim contains `otp` (stamped by
+ * verifyOtp) or `recovery` so a stolen ordinary session cannot change a
+ * password without knowing the current one.
+ */
+export async function resetPassword(formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: "This reset link has expired. Request a new one." };
+  }
+
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const amr = claimsData?.claims.amr;
+  const isRecoverySession =
+    !claimsError &&
+    Array.isArray(amr) &&
+    amr.some((entry) => {
+      const method = typeof entry === "string" ? entry : entry.method;
+      return method === "otp" || method === "recovery";
+    });
+  if (!isRecoverySession) {
+    return { error: "This reset link has expired. Request a new one." };
+  }
+
+  const rawPassword = formData.get("password");
+  const rawConfirmPassword = formData.get("confirmPassword");
+  const parsed = signupPasswordSchema.safeParse({
+    password: typeof rawPassword === "string" ? rawPassword : "",
+    confirmPassword: typeof rawConfirmPassword === "string" ? rawConfirmPassword : "",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]!.message };
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error) {
+    return { error: error.message || "Could not update password. Try again." };
+  }
+
+  redirect("/create");
 }

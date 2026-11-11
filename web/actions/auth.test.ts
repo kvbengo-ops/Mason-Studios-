@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { signIn, signOut, signUp } from "./auth";
+import { requestPasswordReset, resetPassword, signIn, signOut, signUp } from "./auth";
 import { checkSignupDomainAllowed } from "@/lib/signup-allowlist";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type * as SignupAllowlistModule from "@/lib/signup-allowlist";
@@ -376,5 +376,102 @@ describe("signOut", () => {
 
     await expect(signOut()).rejects.toThrow("REDIRECT:/login");
     expect(signOutMock).toHaveBeenCalled();
+  });
+});
+
+describe("requestPasswordReset", () => {
+  it("returns the same { sent: true } result for a known and an unknown email", async () => {
+    const knownResetMock = vi.fn(async () => ({ data: {}, error: null }));
+    vi.mocked(createClient).mockResolvedValueOnce(
+      fakeSupabaseClient({ resetPasswordForEmail: knownResetMock }) as never,
+    );
+
+    const unknownResetMock = vi.fn(async () => ({
+      data: null,
+      error: { code: "user_not_found", status: 400, message: "User not found" },
+    }));
+    vi.mocked(createClient).mockResolvedValueOnce(
+      fakeSupabaseClient({ resetPasswordForEmail: unknownResetMock }) as never,
+    );
+
+    const knownFd = new FormData();
+    knownFd.set("email", "known@example.com");
+    const knownResult = await requestPasswordReset(knownFd);
+
+    const unknownFd = new FormData();
+    unknownFd.set("email", "unknown@example.com");
+    const unknownResult = await requestPasswordReset(unknownFd);
+
+    expect(knownResult).toEqual({ sent: true });
+    expect(unknownResult).toEqual(knownResult);
+    expect(knownResetMock).toHaveBeenCalledWith(
+      "known@example.com",
+      expect.objectContaining({
+        redirectTo: expect.stringContaining("/auth/confirm?next=/reset-password"),
+      }),
+    );
+    expect(unknownResetMock).toHaveBeenCalledWith(
+      "unknown@example.com",
+      expect.objectContaining({
+        redirectTo: expect.stringContaining("/auth/confirm?next=/reset-password"),
+      }),
+    );
+  });
+});
+
+describe("resetPassword", () => {
+  it("refuses a session without otp or recovery in amr and never calls updateUser", async () => {
+    const updateUserMock = vi.fn(async () => ({ error: null }));
+    const supabase = fakeSupabaseClient({
+      getUser: signedInUser(),
+      getClaims: vi.fn(async () => ({
+        data: {
+          claims: {
+            amr: [{ method: "password", timestamp: 1700000000 }],
+          },
+        },
+        error: null,
+      })),
+      updateUser: updateUserMock,
+    });
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const fd = new FormData();
+    fd.set("password", "newvalidpassword");
+    fd.set("confirmPassword", "newvalidpassword");
+
+    const result = await resetPassword(fd);
+
+    expect(result).toEqual({
+      error: "This reset link has expired. Request a new one.",
+    });
+    expect(updateUserMock).not.toHaveBeenCalled();
+  });
+
+  it("lets a pending account with an otp session reset its password", async () => {
+    const updateUserMock = vi.fn(async () => ({ error: null }));
+    const supabase = fakeSupabaseClient(
+      {
+        getUser: signedInUser(),
+        getClaims: vi.fn(async () => ({
+          data: {
+            claims: {
+              amr: [{ method: "otp", timestamp: 1700000000 }],
+            },
+          },
+          error: null,
+        })),
+        updateUser: updateUserMock,
+      },
+      { status: "pending" },
+    );
+    vi.mocked(createClient).mockResolvedValue(supabase as never);
+
+    const fd = new FormData();
+    fd.set("password", "newvalidpassword");
+    fd.set("confirmPassword", "newvalidpassword");
+
+    await expect(resetPassword(fd)).rejects.toThrow("REDIRECT:/create");
+    expect(updateUserMock).toHaveBeenCalledWith({ password: "newvalidpassword" });
   });
 });

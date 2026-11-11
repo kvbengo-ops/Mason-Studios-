@@ -64,3 +64,7 @@ enable_signup = true
 # than assuming it's off, since either can be flipped back without a code
 # change.
 enable_confirmations = false
+
+[auth.email.template.recovery]
+subject = "Reset your password"
+content_path = "./supabase/templates/recovery.html"
