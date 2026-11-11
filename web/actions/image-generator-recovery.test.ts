@@ -37,6 +37,9 @@ vi.mock("@/lib/kie", () => ({
   generateImage: vi.fn(),
   checkImageTask: vi.fn(),
   modelForImageArgs: vi.fn((args: { model?: string }) => args.model ?? "google/nano-banana"),
+  // generateImageFor checks the guarded prompt against the model's cap; the
+  // guard text itself is not under test here.
+  imagePromptWithGuards: vi.fn((prompt: string) => prompt),
   // A real class, declared INSIDE the factory. The action narrows on
   // `instanceof ImageGenerationError` and a plain object would silently take
   // the wrong branch — but a class declared at the top of this file cannot be
