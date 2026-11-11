@@ -26,6 +26,7 @@ import { getAccountBudgetSnapshot } from "@/lib/spend";
 import type { RenderBudgetFigures } from "@/lib/render-budget";
 import { createClient } from "@/lib/supabase/server";
 import { signedUrl, extFromFilename, getImageUrl } from "@/lib/storage";
+import { selectInChunks } from "@/lib/in-chunks";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { geminiVoiceFor } from "@/lib/gemini-voices";
 import { videoAspectRatioFor } from "@/lib/kie/models";
@@ -710,13 +711,13 @@ export default async function UgcPage({
       .order("created_at", { ascending: false });
 
     const assetIds = (elementRows ?? []).map((row) => row.asset_id);
-    const { data: elementAssetRows } =
-      assetIds.length > 0
-        ? await supabase
-            .from("assets")
-            .select("id, storage_key, kind, duration_s, deleted_at")
-            .in("id", assetIds)
-        : { data: [] };
+    // In chunks: one .in() with every id fails past ~575 elements (lib/in-chunks.ts).
+    const { data: elementAssetRows } = await selectInChunks(assetIds, (chunk) =>
+      supabase
+        .from("assets")
+        .select("id, storage_key, kind, duration_s, deleted_at")
+        .in("id", chunk),
+    );
     const assetByIdForElements = new Map((elementAssetRows ?? []).map((a) => [a.id, a]));
 
     // Sequential, not Promise.all: an operator's own saved-reference list is

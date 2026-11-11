@@ -4,6 +4,7 @@ import type { ElementTag } from "@/lib/elements";
 import { extFromFilename, signedUrl, getImageUrl } from "@/lib/storage";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { buildIlikeOrFilter } from "@/lib/search-term";
+import { selectInChunks } from "@/lib/in-chunks";
 
 // Matches ugc/[id]/page.tsx, where it is module-private. Kept in step by hand.
 const RESULT_SIGNED_URL_TTL_SECONDS = 3600;
@@ -151,13 +152,10 @@ export async function loadElementTags(
   const { data: rows } = await (ownerId === null ? query : query.eq("user_id", ownerId));
 
   const assetIds = (rows ?? []).map((row) => row.asset_id);
-  const { data: assetRows } =
-    assetIds.length > 0
-      ? await supabase
-          .from("assets")
-          .select("id, storage_key, kind, duration_s, deleted_at")
-          .in("id", assetIds)
-      : { data: [] };
+  // In chunks: one .in() with every id fails past ~575 elements (lib/in-chunks.ts).
+  const { data: assetRows } = await selectInChunks(assetIds, (chunk) =>
+    supabase.from("assets").select("id, storage_key, kind, duration_s, deleted_at").in("id", chunk),
+  );
   const assetById = new Map((assetRows ?? []).map((asset) => [asset.id, asset]));
 
   const elements: ElementTag[] = [];

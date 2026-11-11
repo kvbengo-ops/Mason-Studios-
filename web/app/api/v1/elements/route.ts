@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createApiElement } from "@/lib/api-elements";
 import { requireApiToken } from "@/lib/api-auth";
 import { apiError } from "@/lib/api-v1";
+import { selectInChunks } from "@/lib/in-chunks";
 import { StagedUploadError } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/server";
 
@@ -31,10 +32,10 @@ export async function GET(request: Request): Promise<Response> {
     }
 
     const assetIds = [...new Set(rows.map((row) => row.asset_id))];
-    const { data: assets, error: assetsError } =
-      assetIds.length > 0
-        ? await admin.from("assets").select("id, kind, duration_s").in("id", assetIds)
-        : { data: [], error: null };
+    // In chunks: one .in() with every id fails past ~575 elements (lib/in-chunks.ts).
+    const { data: assets, error: assetsError } = await selectInChunks(assetIds, (chunk) =>
+      admin.from("assets").select("id, kind, duration_s").in("id", chunk),
+    );
     if (assetsError) throw new Error(`Failed to read API element assets: ${assetsError.message}`);
     const assetById = new Map((assets ?? []).map((asset) => [asset.id, asset]));
 

@@ -11,6 +11,7 @@ import {
   tagsInOrder,
 } from "@/lib/element-tags";
 import { KLING_FRAME_EXTS } from "@/lib/elements";
+import { selectInChunks } from "@/lib/in-chunks";
 import { geminiOmniVideoInputPaid } from "@/lib/kie/rates";
 import { getModel } from "@/lib/models";
 import { supportsPromptOnlyVideo } from "@/lib/prompt-only-video";
@@ -237,18 +238,15 @@ export async function resolveApiReferences(args: {
 
   // Load assets for all owned elements.
   const assetIds = [...new Set(ownedElements.map((e) => e.asset_id).filter(Boolean))];
-  const { data: assetRows, error: assetsError } =
-    assetIds.length > 0
-      ? await admin.from("assets").select("id, kind, storage_key, duration_s").in("id", assetIds)
-      : {
-          data: [] as {
-            id: string;
-            kind: AssetKind;
-            storage_key: string;
-            duration_s: number | null;
-          }[],
-          error: null,
-        };
+  // In chunks: one .in() with every id fails past ~575 elements (lib/in-chunks.ts).
+  const { data: assetRows, error: assetsError } = await selectInChunks<{
+    id: string;
+    kind: AssetKind;
+    storage_key: string;
+    duration_s: number | null;
+  }>(assetIds, (chunk) =>
+    admin.from("assets").select("id, kind, storage_key, duration_s").in("id", chunk),
+  );
 
   if (assetsError) {
     throw new Error(`Failed to read element assets: ${assetsError.message}`);
