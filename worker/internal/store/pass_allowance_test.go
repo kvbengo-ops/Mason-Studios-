@@ -344,11 +344,11 @@ func TestPassAllowanceDerivesManilaWeeklyExpiry(t *testing.T) {
 		}
 	}
 
-	// Monday 00:00 Manila is 16:00 Sunday UTC. Pinning the wall-clock time as
-	// well as the instant catches a boundary that drifted to a day-start in the
-	// wrong zone, which comparing two timestamps alone would not.
-	if h, m := want.UTC().Hour(), want.UTC().Minute(); h != 16 || m != 0 {
-		t.Errorf("Manila week end is %02d:%02d UTC, want 16:00 (Monday 00:00 +08)", h, m)
+	// Monday 05:00 Manila (0138) is 21:00 Sunday UTC. Pinning the wall-clock
+	// time as well as the instant catches a boundary that drifted to a day-start
+	// in the wrong zone, which comparing two timestamps alone would not.
+	if h, m := want.UTC().Hour(), want.UTC().Minute(); h != 21 || m != 0 {
+		t.Errorf("Manila week end is %02d:%02d UTC, want 21:00 (Monday 05:00 +08)", h, m)
 	}
 	if wd := want.In(time.FixedZone("PHT", 8*3600)).Weekday(); wd != time.Monday {
 		t.Errorf("Manila week end falls on %s, want Monday", wd)
