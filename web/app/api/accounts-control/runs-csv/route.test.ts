@@ -103,7 +103,9 @@ describe("GET /api/accounts-control/runs-csv", () => {
     const csv = await response.text();
     expect(response.status).toBe(200);
     expect(runPageRequests).toBe(2);
-    expect(window).toHaveLength(2);
+    // Every page is read with the same [start, end) window: one gte + one lt each.
+    expect(window).toHaveLength(2 * runPageRequests);
+    expect(window.slice(2)).toEqual(window.slice(0, 2));
     expect(new Date(window[0]!).getTime()).toBeLessThan(new Date(window[1]!).getTime());
     expect(csv.startsWith("preview,user_email,provider,model,cost_usd,details\r\n")).toBe(true);
     expect(csv.match(/,alice@example\.com,kie,bytedance\/seedance-2-5,0\.56,/g)).toHaveLength(1001);
