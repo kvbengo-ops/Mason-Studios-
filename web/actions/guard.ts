@@ -32,6 +32,19 @@ export class RateLimitError extends Error {
   }
 }
 
+// One /auth/v1/user round trip per request. The layout and the page (or action)
+// both pass through requireUser, so without this every request paid for it
+// twice. Only the identity is cached, not the profile read: a Server Action
+// re-renders the page in the same request, and a cached profile there would
+// show the pre-mutation row (username, role, status).
+const getSessionUser = cache(async () => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+});
+
 /**
  * Counts this request against the user's Server Action limit, once per
  * request (cache) however many guards it passes through. Page loads are not
@@ -95,9 +108,7 @@ export async function requireUser({ rateLimit = true }: { rateLimit?: boolean } 
 }> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getSessionUser();
 
   if (!user) {
     redirect("/login");
