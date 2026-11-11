@@ -110,11 +110,13 @@ select pass_allowance(
 // against the same clock the function used, not against this test process's
 // idea of "now" — but through an INDEPENDENT expression, so a wrong expression
 // inside pass_allowance is not compared against a copy of itself.
+// Weeks reset Monday 05:00 Manila since 0138.
 func manilaWeekEnd(ctx context.Context, t *testing.T, s *Store) time.Time {
 	t.Helper()
 	var end time.Time
 	if err := s.pool.QueryRow(ctx, `
-select (date_trunc('week', now() at time zone 'Asia/Manila') at time zone 'Asia/Manila')
+select ((date_trunc('week', (now() at time zone 'Asia/Manila') - interval '5 hours')
+         + interval '5 hours') at time zone 'Asia/Manila')
        + interval '7 days'`).Scan(&end); err != nil {
 		t.Fatalf("compute manila week end: %v", err)
 	}
