@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ImageAttempt } from "@/actions/image-generator";
 import { ImageAttemptPanel } from "./image-attempt-panel";
 import { ImageGeneratorHistory } from "./image-generator-history";
@@ -140,5 +140,41 @@ describe("ImageGeneratorHistory", () => {
         else delete (HTMLImageElement.prototype as unknown as Record<string, unknown>)[name];
       }
     }
+  });
+
+  it("moves several selected images to Bin from select mode", async () => {
+    const deleteAction = vi.fn(async (_assetId: string) => undefined);
+    const reload = vi.fn();
+    vi.stubGlobal("location", { ...window.location, reload });
+    const image = (id: string) => ({
+      assetId: id,
+      url: `https://x/${id}.png`,
+      createdAt: "2026-10-30T00:00:00Z",
+    });
+    render(
+      <ImageAttemptPanel initialAttempts={[]} reconcileAction={vi.fn()}>
+        <ImageGeneratorHistory
+          initialPage={{ images: [image("a1"), image("a2"), image("a3")], nextCursor: null }}
+          loadMoreAction={vi.fn()}
+          downloadAction={vi.fn()}
+          deleteAction={deleteAction}
+          detailsAction={vi.fn()}
+          elements={[]}
+        />
+      </ImageAttemptPanel>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Select images" }));
+    const tiles = screen.getAllByRole("button", { name: /^Select image from/ });
+    fireEvent.click(tiles[0]!);
+    fireEvent.click(tiles[2]!);
+    expect(screen.getByText("2 selected")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move 2 to Bin" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm: move 2 to Bin" }));
+
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+    expect(deleteAction.mock.calls.map(([id]) => id)).toEqual(["a1", "a3"]);
+    vi.unstubAllGlobals();
   });
 });

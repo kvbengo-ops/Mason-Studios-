@@ -15,6 +15,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  ListChecks,
 } from "lucide-react";
 import { shareClipLink } from "@/actions/clip-actions";
 import { deleteClipScene, deleteClipVersion, regenerateClip } from "@/actions/ugc";
@@ -255,8 +256,14 @@ function BulkBinBar({
   if (!selecting) {
     return (
       <div className="flex justify-end px-1 pb-2">
-        <button type="button" onClick={onStart} className={PANEL_BUTTON}>
-          Select
+        <button
+          type="button"
+          onClick={onStart}
+          aria-label="Select clips"
+          title="Select"
+          className={cn(PANEL_BUTTON, "w-10 px-0")}
+        >
+          <ListChecks aria-hidden="true" className="size-4" />
         </button>
       </div>
     );

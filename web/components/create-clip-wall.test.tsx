@@ -112,7 +112,7 @@ describe("CreateClipWall", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select clips" }));
     fireEvent.click(screen.getByRole("button", { name: /Select clip: Take a1/ }));
     fireEvent.click(screen.getByRole("button", { name: /Select clip: Take b1/ }));
     expect(screen.getByText("2 selected")).toBeTruthy();

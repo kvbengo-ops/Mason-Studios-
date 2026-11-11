@@ -18,7 +18,7 @@
 // has no hover state, and controls that need one would be unreachable there.
 
 import { useState } from "react";
-import { Copy, Download, FileText, Info, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Copy, Download, FileText, Info, ListChecks, Plus, RotateCcw, Trash2 } from "lucide-react";
 import type { JSX } from "react";
 import type { GeneratedImage, GeneratedImageDetails } from "@/actions/image-generator";
 import { PendingButton } from "@/components/pending-button";
@@ -379,6 +379,9 @@ function ImageTile({
   detailsAction,
   elements,
   fresh = false,
+  selecting = false,
+  selected = false,
+  onToggle,
 }: {
   image: GeneratedImage;
   downloadAction: (assetId: string) => Promise<string>;
@@ -387,6 +390,10 @@ function ImageTile({
   elements: readonly ElementTag[];
   /** Just finished on this page: show the placeholder until the thumbnail loads. */
   fresh?: boolean;
+  /** Select mode: the tile toggles instead of opening, and its controls hide. */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
 }): JSX.Element {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [details, setDetails] = useState<GeneratedImageDetails | undefined>(undefined);
@@ -430,6 +437,31 @@ function ImageTile({
           />
         )}
       />
+
+      {selecting ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-pressed={selected}
+          aria-label={`${selected ? "Deselect" : "Select"} image from ${dateTimeFormatter.format(new Date(image.createdAt))}`}
+          className={cn(
+            "absolute inset-0 z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            selected && "ring-4 ring-inset ring-primary",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "absolute left-2 top-2 grid size-6 place-items-center rounded-md border-2 text-xs font-bold",
+              selected
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-white/80 bg-black/30",
+            )}
+          >
+            {selected ? "✓" : ""}
+          </span>
+        </button>
+      ) : null}
 
       {fresh && !thumbSize ? (
         <div className="pointer-events-none absolute inset-0 bg-background/70 backdrop-blur-[2px]">
@@ -543,6 +575,42 @@ export function ImageGeneratorHistory({
   // Keep the first page in props so a server refresh also refreshes its signed
   // thumbnail URLs. The page remounts this component if those first rows change.
   const images = [...initialPage.images, ...olderImages];
+  // Select mode: tiles toggle, and the toolbar moves the selection to Bin
+  // (restorable for 3 days, like deleting one).
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const { pending: moving, run: runMove } = useAsyncAction();
+  const stopSelecting = (): void => {
+    setSelecting(false);
+    setSelected(new Set());
+    setConfirming(false);
+  };
+  const toggle = (assetId: string): void =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(assetId)) next.delete(assetId);
+      else next.add(assetId);
+      return next;
+    });
+  function moveToBin(): void {
+    if (!deleteAction) return;
+    const ids = [...selected];
+    runMove(async () => {
+      let failed = 0;
+      for (const id of ids) {
+        try {
+          await deleteAction(id);
+        } catch {
+          failed++;
+        }
+      }
+      // Same as deleting one image: reload so the first page's server-rendered
+      // tiles drop the moved images too.
+      if (failed > 0) window.alert(`${failed} could not be moved to Bin. The rest were.`);
+      window.location.reload();
+    });
+  }
   // One placeholder per image still drawing, first on the wall, so a press is
   // visible at once and several can run side by side. Read from the Runs
   // panel's attempts, so it survives leaving the page and coming back.
@@ -588,6 +656,76 @@ export function ImageGeneratorHistory({
         Image history
       </h2>
 
+      {deleteAction && images.length > 0 ? (
+        selecting ? (
+          <div
+            role="toolbar"
+            aria-label="Selected images"
+            className="sticky top-0 z-20 mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3 py-2 backdrop-blur"
+          >
+            <span className="text-sm font-medium tabular-nums" aria-live="polite">
+              {selected.size} selected
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={moving}
+              onClick={() => setSelected(new Set(images.map((image) => image.assetId)))}
+            >
+              Select all
+            </Button>
+            {selected.size > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={moving}
+                onClick={() => setSelected(new Set())}
+              >
+                Clear
+              </Button>
+            ) : null}
+            <span className="flex-1" />
+            <PendingButton
+              type="button"
+              variant="outline"
+              size="sm"
+              pending={moving}
+              disabled={selected.size === 0}
+              onClick={() => (confirming ? moveToBin() : setConfirming(true))}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              {confirming
+                ? `Confirm: move ${selected.size} to Bin`
+                : `Move ${selected.size} to Bin`}
+            </PendingButton>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={moving}
+              onClick={stopSelecting}
+            >
+              Cancel
+            </Button>
+          </div>
+        ) : (
+          <div className="flex justify-end px-1 pb-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Select images"
+              title="Select"
+              onClick={() => setSelecting(true)}
+            >
+              <ListChecks aria-hidden="true" className="size-4" />
+            </Button>
+          </div>
+        )
+      ) : null}
+
       {images.length === 0 && rendering.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-24 text-center">
           <p className="text-base font-medium text-foreground">Nothing generated yet</p>
@@ -624,6 +762,9 @@ export function ImageGeneratorHistory({
               detailsAction={detailsAction}
               elements={elements}
               fresh={fresh.has(image.assetId)}
+              selecting={selecting}
+              selected={selected.has(image.assetId)}
+              onToggle={() => toggle(image.assetId)}
             />
           ))}
         </ul>
