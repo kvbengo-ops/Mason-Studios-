@@ -135,7 +135,7 @@ flowchart TD
   spend in the trailing hour. A blank value clears the override.
 - **Per-user daily guard:** optional setting in `app_settings.user_daily_cap_enabled`, off by
   default. Role amounts stay in `render.yaml`, with per-account overrides on `profiles`.
-- **Weekly allowance:** required for each account; approved grants add to this limit only.
+- **Weekly allowance:** required for each account; an approved grant adds to it until Manila midnight.
 
 The account-funds check is skipped when its read is unavailable; an unknown balance does
 not block work. The global setting falls back to the enabled $100 daily default if its
@@ -163,7 +163,7 @@ sequenceDiagram
 
 Three rules that are deliberate, not incidental:
 
-1. **A grant raises the weekly ceiling only.** It cannot raise a daily, hourly, or global cap; if one of those is exhausted, a grant will not unblock the account.
+1. **A grant is for today** (owner, 2026-11-11). It raises the daily and the weekly ceiling by its amount until the next Manila midnight, then the account is back on its normal caps. What it paid for still counts as this week's spend. It cannot raise the hourly or global cap; if one of those is exhausted, a grant will not unblock the account.
 2. **Every grant expires.** A permanent raise is a role change, and should be made as one.
 3. **Nothing is added to a balance**, because there is no balance. The grant changes the
    number the check compares against, for as long as it lives.

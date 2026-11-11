@@ -55,7 +55,7 @@ export function DecideAllowanceRequestDialog({
   reason: string | null;
   /** lib/allowance.ts's defaultGrantAmountUsd(requestedUsd), computed server-side. */
   defaultGrantAmountUsd: number;
-  /** lib/spend.ts's endOfManilaWeekIso(), computed server-side — the default grant expiry. */
+  /** lib/spend.ts's endOfManilaDayIso(), computed server-side — the default grant expiry. */
   defaultExpiresAtIso: string;
   /** lib/spend.ts's WEEKLY_CAP_USD, resolved server-side by the page. null for an admin - no ceiling applies. */
   peerMaxGrantUsd: number | null;

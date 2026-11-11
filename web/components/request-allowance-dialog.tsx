@@ -63,7 +63,8 @@ export function requestAllowanceDescription(
   switch (state) {
     case "normal":
       return (
-        "You've used this week's allowance. Ask an admin to raise it — they can grant a " +
+        "You've used your allowance. Ask an admin for more — a grant raises today's limit " +
+        "until midnight Asia/Manila, then you're back to your normal cap. They can grant a " +
         "different amount than what you request, so this is a starting point, not a promise."
       );
     case "headroom":
@@ -72,28 +73,15 @@ export function requestAllowanceDescription(
         "left this week. You can still ask, and an admin can approve ahead of time — useful if " +
         "you know a big render is coming."
       );
-    case "blocked-daily":
-      return (
-        "Requesting more won't unblock you right now — your daily burst guard is what's " +
-        "stopping you, and it resets at midnight Asia/Manila. A weekly grant doesn't change " +
-        "today's limit. Still worth asking if you'll need more next week."
-      );
     case "blocked-global":
       return (
         `Requesting more won't unblock you right now — the team's shared ${globalCapPeriod} cap is what's ` +
-        `stopping you, not your own usage. A weekly grant doesn't change that. It resets ${globalCapPeriod === "weekly" ? "on Monday" : "at midnight Asia/Manila"}. ` +
-        "Still worth asking if you'll need more next week."
+        `stopping you, not your own usage. A grant doesn't change that. It resets ${globalCapPeriod === "weekly" ? "on Monday" : "at midnight Asia/Manila"}.`
       );
     case "blocked-hourly":
       return (
         "Requesting more won't unblock you right now — your rolling-hour cap is stopping you. " +
-        "Earlier spend frees up as it ages past 60 minutes; a weekly grant doesn't change it."
-      );
-    case "blocked-both":
-      return (
-        `Requesting more won't unblock you right now — both your daily burst guard and the ` +
-        `team's shared ${globalCapPeriod} cap are stopping you, and a weekly grant changes neither. Still ` +
-        "worth asking if you'll need more next week."
+        "Earlier spend frees up as it ages past 60 minutes; a grant doesn't change it."
       );
   }
 }
@@ -109,7 +97,7 @@ export function RequestAllowanceDialog({
   /** Controlled by account-menu.tsx — see this file's header for why. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** lib/spend.ts's allowanceDialogState() — which of the five messages above to show. */
+  /** lib/spend.ts's allowanceDialogState() — which of the four messages above to show. */
   state: AllowanceDialogState;
   /** Only used by the "headroom" message; harmless to pass in every other state. */
   weeklyRemainingUsd: number;

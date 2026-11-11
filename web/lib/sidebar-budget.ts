@@ -75,9 +75,9 @@ export interface SidebarBudget {
   passedOutUsd: number;
   /** Whether the per-user daily burst guard is enforced and should be displayed. */
   dailyCapEnabled?: boolean;
-  /** resolveAccountCaps(profile).dailyCapUsd minus today's spend. Can be negative. */
+  /** spend.effectiveDailyCapUsd (daily cap plus active grants) minus today's spend. Can be negative. */
   remainingUsd: number;
-  /** resolveAccountCaps(profile).dailyCapUsd — the daily burst guard remainingUsd is measured against. */
+  /** spend.effectiveDailyCapUsd — the daily burst guard, grants included, remainingUsd is measured against. */
   capUsd: number;
   /** Today's spend — lib/spend.ts's AccountBudgetSnapshot.dailyUsedUsd, threaded through so the avatar menu can show the arithmetic (Part 2 of the task that added this field), not just the answer. */
   dailyUsedUsd: number;
@@ -232,7 +232,8 @@ export async function getSidebarBudget(
     const dailyCapEnabled = spend.dailyCapAppliesTo(profile, await spend.getUserDailyCapEnabled());
     const heldUsd = inFlight.byUserUsd.get(userId) ?? 0;
     const effectiveWeeklyCapUsd = caps.weeklyCapUsd + row.activeGrantsUsd;
-    const dailyRemainingUsd = caps.dailyCapUsd - row.dailySpentUsd - heldUsd;
+    const dailyCapUsd = spend.effectiveDailyCapUsd(caps, effectiveWeeklyCapUsd);
+    const dailyRemainingUsd = dailyCapUsd - row.dailySpentUsd - heldUsd;
     const weeklyRemainingUsd = effectiveWeeklyCapUsd - row.weeklySpentUsd - heldUsd;
     // The team's own headroom (shown to admins) vs. whether it can block THIS
     // account (an exempt account, 0133, is never blocked by it).
@@ -277,7 +278,7 @@ export async function getSidebarBudget(
       passedOutUsd: grants.passedOutUsd,
       dailyCapEnabled,
       remainingUsd: dailyRemainingUsd,
-      capUsd: caps.dailyCapUsd,
+      capUsd: dailyCapUsd,
       dailyUsedUsd: row.dailySpentUsd,
       remainingWeeklyUsd: weeklyRemainingUsd,
       weeklyCapUsd: effectiveWeeklyCapUsd,

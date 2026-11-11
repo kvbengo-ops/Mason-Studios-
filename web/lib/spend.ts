@@ -734,6 +734,25 @@ export function endOfManilaWeekIso(now: Date = new Date()): string {
 }
 
 /**
+ * Next Manila midnight. The default `expires_at` of an approved allowance request
+ * (owner, 2026-11-11): a grant is for TODAY, raising both the daily and the weekly
+ * ceiling until midnight. What it paid for still counts as this week's spend.
+ */
+export function endOfManilaDayIso(now: Date = new Date()): string {
+  return new Date(new Date(startOfManilaDayIso(now)).getTime() + DAY_MS).toISOString();
+}
+
+/**
+ * The daily ceiling with active grants on top: a grant raises the daily figure by the
+ * same amount it raises the weekly one (effectiveWeeklyCapUsd - caps.weeklyCapUsd), and
+ * the daily figure is still never looser than the weekly one it guards.
+ */
+export function effectiveDailyCapUsd(caps: AccountCaps, effectiveWeeklyCapUsd: number): number {
+  const grantsUsd = Math.max(0, effectiveWeeklyCapUsd - caps.weeklyCapUsd);
+  return Math.min(caps.dailyCapUsd + grantsUsd, effectiveWeeklyCapUsd);
+}
+
+/**
  * Sums `runs.cost_usd` for every run belonging to a project owned by
  * `userId`, created since the start of the current Manila day, via
  * `user_spend_usd` (0031_account_allowances.sql) — aggregated in SQL, not
@@ -1280,8 +1299,11 @@ export async function getRemainingBudget(
   userId: string,
   profile: AccountCapProfile,
 ): Promise<number> {
-  const spent = await getDailySpend(userId);
-  return resolveAccountCaps(profile).dailyCapUsd - spent;
+  const [spent, effectiveWeeklyCapUsd] = await Promise.all([
+    getDailySpend(userId),
+    getEffectiveWeeklyCapUsd(userId, profile),
+  ]);
+  return effectiveDailyCapUsd(resolveAccountCaps(profile), effectiveWeeklyCapUsd) - spent;
 }
 
 /**
@@ -1370,9 +1392,11 @@ export function grantWouldUnblock(remaining: {
   hourlyRemainingUsd?: number | null;
   dailyCapEnabled?: boolean;
 }): boolean {
+  // A grant raises the daily AND the weekly ceiling (effectiveDailyCapUsd), so it helps
+  // when either is what binds — never the hourly cap or the team's global one.
+  const dailyExhausted = remaining.dailyCapEnabled !== false && remaining.dailyRemainingUsd <= 0;
   return (
-    remaining.weeklyRemainingUsd <= 0 &&
-    (remaining.dailyCapEnabled === false || remaining.dailyRemainingUsd > 0) &&
+    (remaining.weeklyRemainingUsd <= 0 || dailyExhausted) &&
     (remaining.hourlyRemainingUsd == null || remaining.hourlyRemainingUsd > 0) &&
     remaining.globalRemainingUsd > 0
   );
@@ -1382,32 +1406,21 @@ export function grantWouldUnblock(remaining: {
  * Which explanation the sidebar's "Request more" dialog should show — that
  * dialog is now rendered UNCONDITIONALLY (see components/sidebar-
  * budget.tsx's header: gating the control itself on grantWouldUnblock was
- * the bug, not the underlying rule), so this only decides which of five
+ * the bug, not the underlying rule), so this only decides which of four
  * honest messages it shows, never whether it shows at all.
  *
- * Six outcomes, not the bindingSpendCap/grantWouldUnblock outcomes already
- * give, because "which cap binds right now" (bindingSpendCap, global ->
- * weekly -> daily priority) and "would a grant help" (grantWouldUnblock)
- * both collapse cases this dialog needs to keep separate — an editor
- * blocked by BOTH the daily guard and the global cap needs to hear about
- * both, not just whichever one bindingSpendCap's priority order happens to
- * name first.
- *
- *   - "normal"   — weekly is the ONLY thing exhausted (grantWouldUnblock's
- *                  own condition, exactly). The ordinary request flow.
+ *   - "normal"   — the daily or weekly allowance is exhausted and nothing a
+ *                  grant cannot lift is (grantWouldUnblock's condition). The
+ *                  ordinary request flow.
  *   - "headroom" — nothing is exhausted yet. Still worth allowing — an
  *                  admin can grant ahead of a big render — but the dialog
  *                  has to say so plainly instead of implying they're stuck.
- *   - "blocked-daily" / "blocked-global" / "blocked-hourly" / "blocked-both" — the daily
- *     burst guard and/or the global team cap is what's actually refusing
- *     renders right now, REGARDLESS of weekly's own state. A weekly grant
- *     never touches either ceiling (getEffectiveWeeklyCapUsd only raises
- *     the weekly figure — see its own doc comment), so telling the truth
- *     here — "this won't unblock you right now" — is what makes it safe to
- *     offer the control unconditionally instead of hiding it.
+ *   - "blocked-global" / "blocked-hourly" — the team's global cap or the
+ *     account's rolling-hour cap is refusing renders. A grant raises only the
+ *     daily and weekly ceilings (effectiveDailyCapUsd), so the dialog says
+ *     plainly that it won't unblock them right now.
  */
-export type AllowanceDialogState =
-  "normal" | "headroom" | "blocked-daily" | "blocked-global" | "blocked-hourly" | "blocked-both";
+export type AllowanceDialogState = "normal" | "headroom" | "blocked-global" | "blocked-hourly";
 
 export function allowanceDialogState(remaining: {
   globalRemainingUsd: number;
@@ -1420,11 +1433,9 @@ export function allowanceDialogState(remaining: {
   const dailyExhausted = remaining.dailyCapEnabled !== false && remaining.dailyRemainingUsd <= 0;
   const globalExhausted = remaining.globalRemainingUsd <= 0;
   const hourlyExhausted = remaining.hourlyRemainingUsd != null && remaining.hourlyRemainingUsd <= 0;
-  if (dailyExhausted && globalExhausted) return "blocked-both";
-  if (dailyExhausted) return "blocked-daily";
   if (globalExhausted) return "blocked-global";
   if (hourlyExhausted) return "blocked-hourly";
-  return remaining.weeklyRemainingUsd <= 0 ? "normal" : "headroom";
+  return remaining.weeklyRemainingUsd <= 0 || dailyExhausted ? "normal" : "headroom";
 }
 
 /**
@@ -1457,7 +1468,7 @@ export function allowanceDialogState(remaining: {
 export interface AccountBudgetSnapshot {
   /** app_settings.user_daily_cap_enabled. False means the daily figures below are informational only. */
   dailyCapEnabled: boolean;
-  /** resolveAccountCaps(profile).dailyCapUsd minus today's spend. Can be negative. */
+  /** effectiveDailyCapUsd (daily cap plus active grants) minus today's spend. Can be negative. */
   dailyRemainingUsd: number;
   dailyCapUsd: number;
   /** Today's spend (getDailySpend) — the "used" half of the daily breakdown (Part 2 of the task that added this field: dailyCapUsd - dailyUsedUsd === dailyRemainingUsd, by construction). */
@@ -1572,7 +1583,8 @@ export async function getAccountBudgetSnapshot(
   // the render gate's headroom, the confirm dialog's overage warning) quotes
   // budget the next enqueue will refuse.
   const heldUsd = inFlight.byUserUsd.get(userId) ?? 0;
-  const dailyRemainingUsd = caps.dailyCapUsd - dailySpentUsd - heldUsd;
+  const dailyCapUsd = effectiveDailyCapUsd(caps, effectiveWeeklyCapUsd);
+  const dailyRemainingUsd = dailyCapUsd - dailySpentUsd - heldUsd;
   const weeklyRemainingUsd = effectiveWeeklyCapUsd - weeklySpentUsd - heldUsd;
   const globalRemainingUsd =
     globalSpend.settings.enabled && globalCapAppliesTo(profile)
@@ -1592,7 +1604,7 @@ export async function getAccountBudgetSnapshot(
   return {
     dailyCapEnabled,
     dailyRemainingUsd,
-    dailyCapUsd: caps.dailyCapUsd,
+    dailyCapUsd,
     dailyUsedUsd: dailySpentUsd,
     weeklyRemainingUsd,
     weeklyCapUsd: effectiveWeeklyCapUsd,
@@ -1761,7 +1773,13 @@ export async function assertWithinSpendCaps(
   if (!dailyCapAppliesTo(profile, await getUserDailyCapEnabled())) return undefined;
 
   const spentTodayUsd = (await getDailySpend(userId)) + inFlightForUserUsd;
-  return guardResult(() => assertCapNotExceeded(spentTodayUsd, estimatedUsd, caps.dailyCapUsd));
+  return guardResult(() =>
+    assertCapNotExceeded(
+      spentTodayUsd,
+      estimatedUsd,
+      effectiveDailyCapUsd(caps, effectiveWeeklyCapUsd),
+    ),
+  );
 }
 
 export type QueueScenesOutcome =
@@ -1864,7 +1882,7 @@ export async function queueScenesIfWithinCaps(params: {
     p_global_cap_enabled: globalSpendCap.enabled && globalCapAppliesTo(profile),
     p_global_cap_period: globalSpendCap.period,
     p_weekly_cap_usd: effectiveWeeklyCapUsd,
-    p_daily_cap_usd: caps.dailyCapUsd,
+    p_daily_cap_usd: effectiveDailyCapUsd(caps, effectiveWeeklyCapUsd),
     p_daily_cap_enabled: dailyCapAppliesTo(profile, dailyCapEnabled),
     p_hourly_cap_usd: profile.hourly_cap_override_usd ?? null,
     p_api_token_id: params.apiTokenId ?? null,
@@ -2001,8 +2019,7 @@ export async function resolveImageAttemptCeilings(
 
   const caps = resolveAccountCaps(profile);
   // getEffectiveWeeklyCapUsd, not caps.weeklyCapUsd — folds in this account's
-  // active allowance_grants. A grant raises the WEEKLY ceiling only, never the
-  // daily one, which is why the daily value below is left alone.
+  // active allowance_grants, which raise the daily ceiling by the same amount.
   const [effectiveWeeklyCapUsd, dailyCapEnabled, globalSpendCap] = await Promise.all([
     getEffectiveWeeklyCapUsd(userId, profile),
     getUserDailyCapEnabled(),
@@ -2027,7 +2044,7 @@ export async function resolveImageAttemptCeilings(
         ? null
         : reduce(profile.hourly_cap_override_usd, inFlightForUserUsd),
     weeklyCapUsd: reduce(effectiveWeeklyCapUsd, inFlightForUserUsd),
-    dailyCapUsd: reduce(caps.dailyCapUsd, inFlightForUserUsd),
+    dailyCapUsd: reduce(effectiveDailyCapUsd(caps, effectiveWeeklyCapUsd), inFlightForUserUsd),
     dailyCapEnabled: dailyCapAppliesTo(profile, dailyCapEnabled),
   };
 }

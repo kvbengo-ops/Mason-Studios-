@@ -244,7 +244,7 @@ export default async function AllowancesPage({
   const requests = (data ?? []) as AllowanceRequestDirectoryRow[];
 
   // The default grant expiry is the SAME for every pending row on this page
-  // (the end of the current Manila week — lib/spend.ts's endOfManilaWeekIso)
+  // (the next Manila midnight — lib/spend.ts's endOfManilaDayIso)
   // regardless of when each request was filed, so it's computed once here
   // rather than per row. lib/spend.ts is imported dynamically, same
   // fail-soft reasoning as /users and the sidebar (this file's own header):
@@ -279,7 +279,7 @@ export default async function AllowancesPage({
   let peerMaxGrantUsd: number | null = null;
   try {
     const spend = await import("@/lib/spend");
-    defaultExpiresAtIso = spend.endOfManilaWeekIso();
+    defaultExpiresAtIso = spend.endOfManilaDayIso();
     resolveAccountCaps = spend.resolveAccountCaps;
     peerMaxGrantUsd = adminViewer ? null : spend.TRUSTED_WEEKLY_CAP_USD;
     if (adminViewer) {

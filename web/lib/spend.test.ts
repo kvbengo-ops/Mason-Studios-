@@ -17,6 +17,8 @@ import {
   allowanceDialogState,
   bindingSpendCap,
   dailyCapForRole,
+  effectiveDailyCapUsd,
+  endOfManilaDayIso,
   endOfManilaWeekIso,
   grantWouldUnblock,
   parseCapEnvUsd,
@@ -521,6 +523,28 @@ describe("assertKieBalanceCoversEstimate", () => {
   });
 });
 
+describe("endOfManilaDayIso", () => {
+  it("is the next Manila midnight", () => {
+    // 2024-03-13 13:00 Manila -> 2024-03-14 00:00 Manila (16:00Z the day before).
+    expect(endOfManilaDayIso(new Date("2024-03-13T05:00:00.000Z"))).toBe(
+      "2024-03-13T16:00:00.000Z",
+    );
+    // 23:30 Manila still ends at the coming midnight, not the one after.
+    expect(endOfManilaDayIso(new Date("2024-03-13T15:30:00.000Z"))).toBe(
+      "2024-03-13T16:00:00.000Z",
+    );
+  });
+});
+
+describe("effectiveDailyCapUsd", () => {
+  it("adds active grants to the daily cap, never above the grant-inclusive weekly one", () => {
+    const caps = { dailyCapUsd: 5, weeklyCapUsd: 25 };
+    expect(effectiveDailyCapUsd(caps, 25)).toBe(5);
+    expect(effectiveDailyCapUsd(caps, 35)).toBe(15);
+    expect(effectiveDailyCapUsd({ dailyCapUsd: 25, weeklyCapUsd: 25 }, 30)).toBe(30);
+  });
+});
+
 describe("endOfManilaWeekIso", () => {
   it("is exactly one week (168h) after startOfManilaWeekIso for the same instant", () => {
     const now = new Date("2024-03-13T05:00:00.000Z");
@@ -617,10 +641,10 @@ describe("grantWouldUnblock", () => {
     ).toBe(true);
   });
 
-  it("is false when weekly AND daily are both exhausted — the bait-and-switch this function exists to prevent", () => {
+  it("is true when weekly AND daily are both exhausted — a grant raises both ceilings", () => {
     expect(
       grantWouldUnblock({ globalRemainingUsd: 10, weeklyRemainingUsd: 0, dailyRemainingUsd: 0 }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("is false when weekly AND global are both exhausted — a grant never touches the team-wide cap either", () => {
@@ -629,10 +653,10 @@ describe("grantWouldUnblock", () => {
     ).toBe(false);
   });
 
-  it("is false when only the daily guard is exhausted — weekly still has headroom, so there's nothing to request more of", () => {
+  it("is true when only the daily guard is exhausted — a grant raises today's limit", () => {
     expect(
       grantWouldUnblock({ globalRemainingUsd: 10, weeklyRemainingUsd: 5, dailyRemainingUsd: 0 }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("is false when only the global cap is exhausted", () => {
@@ -646,8 +670,8 @@ describe("grantWouldUnblock", () => {
       grantWouldUnblock({ globalRemainingUsd: -1, weeklyRemainingUsd: 0, dailyRemainingUsd: 2 }),
     ).toBe(false);
     expect(
-      grantWouldUnblock({ globalRemainingUsd: 10, weeklyRemainingUsd: 0, dailyRemainingUsd: -1 }),
-    ).toBe(false);
+      grantWouldUnblock({ globalRemainingUsd: 10, weeklyRemainingUsd: 5, dailyRemainingUsd: -1 }),
+    ).toBe(true);
   });
 });
 
@@ -673,10 +697,10 @@ describe("allowanceDialogState", () => {
     ).toBe("headroom");
   });
 
-  it('is "blocked-daily" when the daily guard is exhausted, even though weekly still has room', () => {
+  it("is 'normal' when the daily guard is exhausted — a grant raises today's limit", () => {
     expect(
       allowanceDialogState({ globalRemainingUsd: 10, weeklyRemainingUsd: 5, dailyRemainingUsd: 0 }),
-    ).toBe("blocked-daily");
+    ).toBe("normal");
   });
 
   it('is "blocked-global" when the team cap is exhausted, even though weekly still has room', () => {
@@ -685,16 +709,16 @@ describe("allowanceDialogState", () => {
     ).toBe("blocked-global");
   });
 
-  it('is "blocked-daily", NOT "normal", when weekly AND daily are both exhausted — the exact case grantWouldUnblock/bindingSpendCap disagree about', () => {
+  it('is "normal" when weekly AND daily are both exhausted', () => {
     expect(
       allowanceDialogState({ globalRemainingUsd: 10, weeklyRemainingUsd: 0, dailyRemainingUsd: 0 }),
-    ).toBe("blocked-daily");
+    ).toBe("normal");
   });
 
-  it('is "blocked-both" when the daily guard AND the global cap are both exhausted', () => {
+  it('is "blocked-global" when the daily guard AND the global cap are both exhausted', () => {
     expect(
       allowanceDialogState({ globalRemainingUsd: 0, weeklyRemainingUsd: 5, dailyRemainingUsd: 0 }),
-    ).toBe("blocked-both");
+    ).toBe("blocked-global");
   });
 
   it("treats a negative remaining (already over, not just at 0) as exhausted, same convention as bindingSpendCap/grantWouldUnblock", () => {
@@ -704,7 +728,7 @@ describe("allowanceDialogState", () => {
         weeklyRemainingUsd: 5,
         dailyRemainingUsd: -1,
       }),
-    ).toBe("blocked-daily");
+    ).toBe("normal");
   });
 });
 
@@ -814,20 +838,13 @@ describe("getEffectiveWeeklyCapUsd / getRemainingWeeklyBudget / getRemainingBudg
     expect(await getRemainingWeeklyBudget("u1", editorProfile)).toBe(EDITOR_WEEKLY_USD + 5 - 8);
   });
 
-  it("getRemainingBudget (the DAILY figure) is completely unaffected by active grants — a grant never raises the daily burst guard", async () => {
-    const rpc = vi.fn((fnName: string) =>
-      Promise.resolve({ data: fnName === "user_spend_usd" ? 3 : 999, error: null }),
-    );
-    const { createAdminClient } = await import("@/lib/supabase/server");
-    vi.mocked(createAdminClient).mockReturnValue({ rpc } as unknown as SupabaseClient<Database>);
+  it("getRemainingBudget (the DAILY figure) includes active grants — a grant raises today's limit too", async () => {
+    await mockAdminRpc({ user_spend_usd: 3, user_active_grants_usd: 5 });
     const { getRemainingBudget } = await import("./spend");
 
-    expect(await getRemainingBudget("u1", editorProfile)).toBe(EDITOR_DAILY_USD - 3);
-    // The proof, not just the arithmetic: getRemainingBudget never even
-    // asks for the grants sum — allowance_grants is simply irrelevant to
-    // this window, which is what "a grant raises the weekly allowance
-    // only" (decision 1 of the allowance-request workflow) means in code.
-    expect(rpc).not.toHaveBeenCalledWith("user_active_grants_usd", expect.anything());
+    expect(await getRemainingBudget("u1", editorProfile)).toBe(
+      Math.min(EDITOR_DAILY_USD + 5, EDITOR_WEEKLY_USD + 5) - 3,
+    );
   });
 });
 

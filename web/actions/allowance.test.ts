@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { requestAllowance, cancelAllowanceRequest, decideAllowanceRequest } from "./allowance";
 import { requireUser, requireApprover } from "@/actions/guard";
-import { TRUSTED_WEEKLY_CAP_USD, endOfManilaWeekIso } from "@/lib/spend";
+import { TRUSTED_WEEKLY_CAP_USD, endOfManilaDayIso } from "@/lib/spend";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 
 // Same fakes-over-the-two-boundaries approach as actions/project.test.ts:
@@ -532,7 +532,7 @@ describe("decideAllowanceRequest — peer approval", () => {
     expect(result).toBeUndefined();
     expect(rpc).toHaveBeenCalledWith(
       "decide_allowance_request",
-      expect.objectContaining({ grant_expires_at: endOfManilaWeekIso() }),
+      expect.objectContaining({ grant_expires_at: endOfManilaDayIso() }),
     );
   });
 
