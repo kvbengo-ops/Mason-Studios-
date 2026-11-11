@@ -139,7 +139,11 @@ export function ImageGeneratorForm({
       };
     }
 
+    // generate() runs from the submit handler, never during render; the
+    // compiler's purity check cannot see that once it analyses this component.
+    // eslint-disable-next-line react-hooks/purity
     const deadline = Date.now() + HANDOFF_WAIT_LIMIT_MS;
+    // eslint-disable-next-line react-hooks/purity
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, HANDOFF_POLL_MS));
       let attempt: ImageAttempt;
