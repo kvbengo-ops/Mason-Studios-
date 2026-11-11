@@ -67,12 +67,7 @@ import { getImageUrl } from "@/lib/storage";
 import { PresenceDot } from "@/components/presence-dot";
 import { lastSeenLabel } from "@/lib/presence";
 import { BurnCell, type UserBurn } from "@/components/burn-cell";
-import {
-  computeBurn,
-  manilaDayKeys,
-  manilaWindowStartIso,
-  weekSpentFromDays,
-} from "@/lib/burn";
+import { computeBurn, manilaDayKeys, manilaWindowStartIso, weekSpentFromDays } from "@/lib/burn";
 import { getDailySpendByUser, getTeamDailySpend } from "@/lib/burn-data";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
@@ -84,6 +79,7 @@ import { getDailySpendByUser, getTeamDailySpend } from "@/lib/burn-data";
 // loaded via a dynamic import() at runtime, in the fetch block below, for
 // exactly that reason (see that block's own comment).
 type ResolveAccountCapsFn = (profile: AccountCapProfile) => AccountCaps;
+type EffectiveDailyCapFn = (caps: AccountCaps, effectiveWeeklyCapUsd: number) => number;
 
 // This page used to be read-only on purpose, on the grounds that a control
 // here — changing a role, deactivating an account, deleting one, sending an
@@ -532,6 +528,7 @@ export default async function UsersPage({
   // shows "—" rather than taking the page down.
   let dailySpendByUserId = new Map<string, number[]>();
   let resolveAccountCaps: ResolveAccountCapsFn | null = null;
+  let getEffectiveDailyCap: EffectiveDailyCapFn | null = null;
   // The largest weekly allowance any role gets, and therefore the ceiling on
   // a per-account override (weeklyCapOverrideError, lib/allowance.ts). Read
   // through the same dynamic import as resolveAccountCaps below and for the
@@ -600,6 +597,7 @@ export default async function UsersPage({
     try {
       const spend = await import("@/lib/spend");
       resolveAccountCaps = spend.resolveAccountCaps;
+      getEffectiveDailyCap = spend.effectiveDailyCapUsd;
       maxWeeklyCapUsd = MAX_ACCOUNT_WEEKLY_CAP_USD;
       maxDailyCapUsd = MAX_ACCOUNT_DAILY_CAP_USD;
       dailyCapEnabled = await spend.getUserDailyCapEnabled();
@@ -748,11 +746,16 @@ export default async function UsersPage({
 
       {/* Each tile is a link that filters the table below to those accounts
           (?filter=); clicking the active one clears it. */}
-      <section aria-label="Team overview" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section
+        aria-label="Team overview"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <KpiTile
           label="Online now"
           icon={CircleUserRound}
-          value={team ? `${team.onlineAccounts.length} of ${team.activeAccounts.length}` : "Unavailable"}
+          value={
+            team ? `${team.onlineAccounts.length} of ${team.activeAccounts.length}` : "Unavailable"
+          }
           sub="Active in the last 2 minutes"
           href={tileHref("online")}
           active={filter === "online"}
@@ -776,9 +779,7 @@ export default async function UsersPage({
           label="Spent this week"
           icon={Wallet}
           value={weekToDate ? formatUsd(weekToDate.currentUsd) : "Unavailable"}
-          sub={
-            <ChangeLine change={weekToDate?.change ?? null} vs="same days last week" />
-          }
+          sub={<ChangeLine change={weekToDate?.change ?? null} vs="same days last week" />}
           href={tileHref("spent-week")}
           active={filter === "spent-week"}
         >
@@ -809,7 +810,10 @@ export default async function UsersPage({
       </section>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <section aria-labelledby="team-burn-heading" className={cn(PANEL, "p-5 sm:p-6 lg:col-span-3")}>
+        <section
+          aria-labelledby="team-burn-heading"
+          className={cn(PANEL, "p-5 sm:p-6 lg:col-span-3")}
+        >
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
             <div>
               <h2 id="team-burn-heading" className="text-sm font-semibold text-foreground">
@@ -835,17 +839,26 @@ export default async function UsersPage({
             <p className="text-sm text-muted-foreground">Team spend is temporarily unavailable.</p>
           )}
         </section>
-        <section aria-labelledby="role-spend-heading" className={cn(PANEL, "p-5 sm:p-6 lg:col-span-2")}>
+        <section
+          aria-labelledby="role-spend-heading"
+          className={cn(PANEL, "p-5 sm:p-6 lg:col-span-2")}
+        >
           <h2 id="role-spend-heading" className="text-sm font-semibold text-foreground">
             Spend by role
           </h2>
           <p className="mb-4 text-xs text-muted-foreground">This week (Manila, from Monday)</p>
           {roleSlices === null ? (
-            <p className="text-sm text-muted-foreground">Spend by role is temporarily unavailable.</p>
+            <p className="text-sm text-muted-foreground">
+              Spend by role is temporarily unavailable.
+            </p>
           ) : roleSlices.length === 0 ? (
             <p className="text-sm text-muted-foreground">No spend yet this week.</p>
           ) : (
-            <DonutChart ariaLabel="Spend by role this week" slices={roleSlices} centreSub="this week" />
+            <DonutChart
+              ariaLabel="Spend by role this week"
+              slices={roleSlices}
+              centreSub="this week"
+            />
           )}
         </section>
       </div>
@@ -1032,6 +1045,10 @@ export default async function UsersPage({
                   const effectiveWeeklyCapUsd = caps
                     ? caps.weeklyCapUsd + activeGrants.totalUsd
                     : null;
+                  const effectiveDailyCapUsd =
+                    caps && effectiveWeeklyCapUsd !== null && getEffectiveDailyCap
+                      ? getEffectiveDailyCap(caps, effectiveWeeklyCapUsd)
+                      : null;
 
                   // Burn: this account's last 7 Manila days, and the pace those
                   // days imply against the weekly total shown in the next
@@ -1066,7 +1083,7 @@ export default async function UsersPage({
                           hasDailyCapSwitch: override?.daily_cap_enabled != null,
                           hasOverride: override?.weekly_cap_override_usd != null,
                           maxWeeklyCapUsd,
-                          effectiveDailyCapUsd: caps.dailyCapUsd,
+                          effectiveDailyCapUsd: effectiveDailyCapUsd ?? caps.dailyCapUsd,
                           hasDailyOverride: override?.daily_cap_override_usd != null,
                           maxDailyCapUsd,
                           effectiveHourlyCapUsd: override?.hourly_cap_override_usd ?? null,
@@ -1082,7 +1099,10 @@ export default async function UsersPage({
                   const burnDrawer = {
                     weekSpentUsd: spendWindow?.spent_this_week_usd ?? 0,
                     weekTotalUsd: effectiveWeeklyCapUsd,
-                    dailyAllowanceUsd: caps && rowDailyCapEnabled ? caps.dailyCapUsd : null,
+                    dailyAllowanceUsd:
+                      rowDailyCapEnabled && effectiveDailyCapUsd !== null
+                        ? effectiveDailyCapUsd
+                        : null,
                   };
 
                   return (
@@ -1126,7 +1146,10 @@ export default async function UsersPage({
                       <TableCell data-col="status">
                         <AccountStatusBadge role={user.role} status={user.status} />
                       </TableCell>
-                      <TableCell data-col="joined" className="whitespace-nowrap text-muted-foreground">
+                      <TableCell
+                        data-col="joined"
+                        className="whitespace-nowrap text-muted-foreground"
+                      >
                         {dateTimeFormatter.format(new Date(user.created_at))}
                       </TableCell>
                       <TableCell numeric data-col="projects">
@@ -1141,7 +1164,7 @@ export default async function UsersPage({
                       <TableCell numeric data-col="today" className="text-muted-foreground">
                         {caps && spendWindow
                           ? rowDailyCapEnabled
-                            ? `${formatUsd(spendWindow.spent_today_usd)} / ${formatUsd(caps.dailyCapUsd)}`
+                            ? `${formatUsd(spendWindow.spent_today_usd)} / ${formatUsd(effectiveDailyCapUsd ?? caps.dailyCapUsd)}`
                             : formatUsd(spendWindow.spent_today_usd)
                           : "—"}
                       </TableCell>
