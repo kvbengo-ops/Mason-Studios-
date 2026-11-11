@@ -35,6 +35,9 @@ import type { JSX } from "react";
 import { ImageBin } from "@/components/image-bin";
 import { DownloadIcon, Trash2 } from "lucide-react";
 import { isAdmin, requireUser } from "@/actions/guard";
+import { BIN_BULK_FORM_ID, BinBulkBar } from "@/components/bin-bulk-bar";
+import { Button } from "@/components/ui/button";
+import { manilaDayKey } from "@/lib/burn";
 import { createClient } from "@/lib/supabase/server";
 import { extFromFilename, signedUrl } from "@/lib/storage";
 import { asAttachment } from "@/lib/download-url";
@@ -158,10 +161,41 @@ interface ProjectGroup {
   latestDeletedAtMs: number;
 }
 
-export default async function BinPage(): Promise<JSX.Element> {
+type BinTypeFilter = "all" | "images" | "scenes" | "versions";
+type BinDeletedFilter = "any" | "today" | "yesterday" | "older";
+
+const one = (value: string | string[] | undefined): string =>
+  (Array.isArray(value) ? value[0] : value) ?? "";
+
+export default async function BinPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    account?: string | string[];
+    type?: string | string[];
+    project?: string | string[];
+    deleted?: string | string[];
+  }>;
+}): Promise<JSX.Element> {
   const { user, profile } = await requireUser();
   const viewerIsAdmin = isAdmin(profile);
   await reapExpiredBinEntries();
+
+  // Filters, all from the URL so a filtered view can be linked and refreshed.
+  // Account is admin only: everyone else only ever sees their own entries.
+  const params = await searchParams;
+  const typeParam = one(params.type);
+  const typeFilter: BinTypeFilter =
+    typeParam === "images" || typeParam === "scenes" || typeParam === "versions"
+      ? typeParam
+      : "all";
+  const deletedParam = one(params.deleted);
+  const deletedFilter: BinDeletedFilter =
+    deletedParam === "today" || deletedParam === "yesterday" || deletedParam === "older"
+      ? deletedParam
+      : "any";
+  const accountFilter = viewerIsAdmin ? one(params.account) : "";
+  const projectFilter = one(params.project);
 
   const supabase = await createClient();
   const nowMs = new Date().getTime();
@@ -418,6 +452,43 @@ export default async function BinPage(): Promise<JSX.Element> {
     };
   }
 
+  const todayKey = manilaDayKey(new Date(nowMs));
+  const yesterdayKey = manilaDayKey(new Date(nowMs - 24 * 60 * 60 * 1000));
+  const keep = (entry: {
+    userId: string | null;
+    projectId: string | null;
+    deletedAtMs: number;
+  }): boolean => {
+    if (accountFilter && entry.userId !== accountFilter) return false;
+    if (projectFilter && (entry.projectId ?? "unresolved") !== projectFilter) return false;
+    if (deletedFilter !== "any") {
+      const day = manilaDayKey(new Date(entry.deletedAtMs));
+      if (deletedFilter === "today" && day !== todayKey) return false;
+      if (deletedFilter === "yesterday" && day !== yesterdayKey) return false;
+      if (deletedFilter === "older" && (day === todayKey || day === yesterdayKey)) return false;
+    }
+    return true;
+  };
+  // Filter options come from everything in Bin, so a choice never vanishes
+  // from its own dropdown once picked.
+  const accountOptions = viewerIsAdmin
+    ? Array.from(ownerLabelByUserId.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+    : [];
+  const projectOptions = Array.from(
+    new Map(
+      [...preparedScenes, ...preparedVersions].map((entry) => [
+        entry.projectId ?? "unresolved",
+        (entry.projectId && projectTitleById.get(entry.projectId)) || "Deleted project",
+      ]),
+    ).entries(),
+  ).sort((a, b) => a[1].localeCompare(b[1]));
+  const shownScenes =
+    typeFilter === "all" || typeFilter === "scenes" ? preparedScenes.filter(keep) : [];
+  const shownVersions =
+    typeFilter === "all" || typeFilter === "versions" ? preparedVersions.filter(keep) : [];
+  const filtersActive =
+    typeFilter !== "all" || deletedFilter !== "any" || accountFilter !== "" || projectFilter !== "";
+
   const UNRESOLVED_PROJECT_LABEL = "Deleted project";
   const groups = new Map<string, ProjectGroup>();
 
@@ -437,7 +508,7 @@ export default async function BinPage(): Promise<JSX.Element> {
     return group;
   }
 
-  for (const scene of preparedScenes) {
+  for (const scene of shownScenes) {
     const group = groupFor(scene.projectId);
     group.latestDeletedAtMs = Math.max(group.latestDeletedAtMs, scene.deletedAtMs);
     const media = resolveSceneMedia(scene);
@@ -460,7 +531,7 @@ export default async function BinPage(): Promise<JSX.Element> {
     });
   }
 
-  for (const version of preparedVersions) {
+  for (const version of shownVersions) {
     const group = groupFor(version.projectId);
     group.latestDeletedAtMs = Math.max(group.latestDeletedAtMs, version.deletedAtMs);
     const media = resolveVersionMedia(version);
@@ -501,7 +572,105 @@ export default async function BinPage(): Promise<JSX.Element> {
         </p>
       </div>
 
-      <ImageBin userId={user.id} />
+      <form
+        method="get"
+        aria-label="Filter Bin"
+        className="flex flex-wrap items-end gap-3 rounded-lg border bg-card px-3 py-3"
+      >
+        {viewerIsAdmin ? (
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Account
+            <select
+              name="account"
+              defaultValue={accountFilter}
+              className="h-9 min-w-48 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+            >
+              <option className="bg-popover text-popover-foreground" value="">
+                All accounts
+              </option>
+              {accountOptions.map(([id, label]) => (
+                <option className="bg-popover text-popover-foreground" key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Type
+          <select
+            name="type"
+            defaultValue={typeFilter}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+          >
+            <option className="bg-popover text-popover-foreground" value="all">
+              All types
+            </option>
+            <option className="bg-popover text-popover-foreground" value="images">
+              Generated images
+            </option>
+            <option className="bg-popover text-popover-foreground" value="scenes">
+              Scenes
+            </option>
+            <option className="bg-popover text-popover-foreground" value="versions">
+              Versions
+            </option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Project
+          <select
+            name="project"
+            defaultValue={projectFilter}
+            className="h-9 min-w-40 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+          >
+            <option className="bg-popover text-popover-foreground" value="">
+              All projects
+            </option>
+            {projectOptions.map(([id, title]) => (
+              <option className="bg-popover text-popover-foreground" key={id} value={id}>
+                {title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          Deleted
+          <select
+            name="deleted"
+            defaultValue={deletedFilter}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+          >
+            <option className="bg-popover text-popover-foreground" value="any">
+              Any time
+            </option>
+            <option className="bg-popover text-popover-foreground" value="today">
+              Today
+            </option>
+            <option className="bg-popover text-popover-foreground" value="yesterday">
+              Yesterday
+            </option>
+            <option className="bg-popover text-popover-foreground" value="older">
+              2+ days ago (expiring soon)
+            </option>
+          </select>
+        </label>
+        <Button type="submit" size="sm" variant="outline">
+          Apply
+        </Button>
+        {filtersActive ? (
+          <a
+            href="/bin"
+            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Clear filters
+          </a>
+        ) : null}
+      </form>
+
+      {viewerIsAdmin ? <BinBulkBar shown={shownScenes.length + shownVersions.length} /> : null}
+
+      {typeFilter === "all" || typeFilter === "images" ? <ImageBin userId={user.id} /> : null}
 
       {orderedGroups.length === 0 ? (
         // A real, calm empty state — this page is one click away in the
@@ -509,7 +678,11 @@ export default async function BinPage(): Promise<JSX.Element> {
         // recently, which is good news, not a page that failed to load.
         <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-16 text-center">
           <Trash2 aria-hidden="true" className="size-8 text-muted-foreground" />
-          <p className="text-sm font-medium">No scenes or clip versions in Bin</p>
+          <p className="text-sm font-medium">
+            {filtersActive
+              ? "Nothing in Bin matches these filters"
+              : "No scenes or clip versions in Bin"}
+          </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             Delete a scene or a clip version from any project and it stays here for 3 days so you
             can restore it before it is permanently deleted.
@@ -548,6 +721,18 @@ export default async function BinPage(): Promise<JSX.Element> {
                         thumbnail={scene.thumbnail}
                         actions={
                           <>
+                            {viewerIsAdmin ? (
+                              <label className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-2 text-xs font-medium">
+                                <input
+                                  type="checkbox"
+                                  form={BIN_BULK_FORM_ID}
+                                  name="scene"
+                                  value={scene.sceneId}
+                                  className="size-3.5 accent-primary"
+                                />
+                                Select
+                              </label>
+                            ) : null}
                             {scene.isOwner ? (
                               <ActionForm
                                 action={restoreScene}
@@ -614,6 +799,18 @@ export default async function BinPage(): Promise<JSX.Element> {
                         thumbnail={version.thumbnail}
                         actions={
                           <>
+                            {viewerIsAdmin ? (
+                              <label className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input px-2 text-xs font-medium">
+                                <input
+                                  type="checkbox"
+                                  form={BIN_BULK_FORM_ID}
+                                  name="version"
+                                  value={version.versionId}
+                                  className="size-3.5 accent-primary"
+                                />
+                                Select
+                              </label>
+                            ) : null}
                             {version.isOwner ? (
                               <ActionForm
                                 action={restoreClipVersion}

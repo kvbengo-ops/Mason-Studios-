@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { deleteClipScene, deleteClipVersion } from "@/actions/ugc";
 import { CreateClipWall, type WallItem } from "./create-clip-wall";
 
 vi.mock("@/actions/clip-actions", () => ({ shareClipLink: vi.fn() }));
@@ -91,5 +92,38 @@ describe("CreateClipWall", () => {
     fireEvent.loadedMetadata(video);
 
     expect(await screen.findByText("2.0 Mbps")).toBeTruthy();
+  });
+
+  it("moves selected takes to Bin: a whole scene as a scene, a partial one take by take", async () => {
+    vi.mocked(deleteClipScene).mockResolvedValue(undefined as never);
+    vi.mocked(deleteClipVersion).mockResolvedValue(undefined as never);
+    const take = (key: string, sceneId: string): WallItem => ({
+      ...clip,
+      key,
+      versionId: key,
+      sceneId,
+      prompt: `Take ${key}`,
+      deleteMode: "version",
+    });
+    render(
+      <CreateClipWall
+        items={[take("a1", "scene-a"), take("b1", "scene-b"), take("b2", "scene-b")]}
+        projects={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: /Select clip: Take a1/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Select clip: Take b1/ }));
+    expect(screen.getByText("2 selected")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move 2 to Bin" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm: move 2 to Bin" }));
+
+    await waitFor(() => expect(deleteClipScene).toHaveBeenCalledTimes(1));
+    // scene-a's only take is selected, so the scene goes; scene-b keeps b2.
+    expect(vi.mocked(deleteClipScene).mock.calls[0]![0].get("sceneId")).toBe("scene-a");
+    expect(deleteClipVersion).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(deleteClipVersion).mock.calls[0]![0].get("versionId")).toBe("b1");
   });
 });

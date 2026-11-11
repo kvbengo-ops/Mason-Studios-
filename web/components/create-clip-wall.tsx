@@ -24,6 +24,7 @@ import {
   type ClipProjectOption,
 } from "@/components/clip-tile-dialogs";
 import { CreationLoading } from "@/components/creation-loading";
+import { PendingButton } from "@/components/pending-button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatAverageBitrate } from "@/lib/average-bitrate";
 import { dateTimeFormatter } from "@/lib/datetime";
@@ -92,6 +93,24 @@ export function CreateClipWall({
 }): JSX.Element {
   const [openKey, setOpenKey] = useState<string | null>(initialVersionId ?? null);
   const open = items.find((item) => item.kind === "clip" && item.key === openKey) ?? null;
+  // Select mode: tiles toggle instead of opening, and the toolbar moves the
+  // selected takes to Bin (restorable for 3 days, like deleting one).
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const deletable = items.filter(
+    (item): item is WallItem & { kind: "clip" } => item.kind === "clip" && item.deleteMode !== null,
+  );
+  const toggle = (key: string): void =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const stopSelecting = (): void => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
 
   if (items.length === 0) {
     return (
@@ -106,6 +125,17 @@ export function CreateClipWall({
 
   return (
     <>
+      {deletable.length > 0 ? (
+        <BulkBinBar
+          selecting={selecting}
+          selected={deletable.filter((item) => selected.has(item.key))}
+          allItems={items}
+          onStart={() => setSelecting(true)}
+          onSelectAll={() => setSelected(new Set(deletable.map((item) => item.key)))}
+          onClear={() => setSelected(new Set())}
+          onDone={stopSelecting}
+        />
+      ) : null}
       <ul className={WALL_CLASS}>
         {items.map((item) =>
           item.kind === "clip" ? (
@@ -114,6 +144,9 @@ export function CreateClipWall({
               item={item}
               projects={projects}
               onOpen={() => setOpenKey(item.key)}
+              selecting={selecting && item.deleteMode !== null}
+              selected={selected.has(item.key)}
+              onToggle={() => toggle(item.key)}
             />
           ) : (
             <li
@@ -150,14 +183,132 @@ export function CreateClipWall({
   );
 }
 
+/**
+ * Select mode's toolbar. Moving to Bin reuses the one-take actions: a scene
+ * whose every take is selected goes as a scene (deleteClipScene), otherwise
+ * each selected take goes as a version, so the last take is never left as an
+ * orphaned version delete.
+ */
+function BulkBinBar({
+  selecting,
+  selected,
+  allItems,
+  onStart,
+  onSelectAll,
+  onClear,
+  onDone,
+}: {
+  selecting: boolean;
+  selected: readonly (WallItem & { kind: "clip" })[];
+  allItems: readonly WallItem[];
+  onStart: () => void;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onDone: () => void;
+}): JSX.Element {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [confirming, setConfirming] = useState(false);
+
+  function moveToBin(): void {
+    start(async () => {
+      const takesPerScene = new Map<string, number>();
+      for (const item of allItems) {
+        if (item.kind === "clip") {
+          takesPerScene.set(item.sceneId, (takesPerScene.get(item.sceneId) ?? 0) + 1);
+        }
+      }
+      const byScene = new Map<string, (WallItem & { kind: "clip" })[]>();
+      for (const item of selected) {
+        byScene.set(item.sceneId, [...(byScene.get(item.sceneId) ?? []), item]);
+      }
+      let failed = 0;
+      for (const [sceneId, takes] of byScene) {
+        const wholeScene = takes.length >= (takesPerScene.get(sceneId) ?? 0);
+        const jobs = wholeScene ? [null] : takes;
+        for (const take of jobs) {
+          try {
+            const formData = new FormData();
+            formData.set("sceneId", sceneId);
+            if (take) formData.set("versionId", take.versionId);
+            const result = take
+              ? await deleteClipVersion(formData)
+              : await deleteClipScene(formData);
+            if (result?.error) failed++;
+          } catch (error) {
+            unstable_rethrow(error);
+            failed++;
+          }
+        }
+      }
+      const moved = selected.length;
+      if (failed > 0) toast.error(`${failed} could not be moved to Bin. The rest were.`);
+      else toast(`${moved} moved to Bin. Restore them from Bin within 3 days.`);
+      setConfirming(false);
+      onDone();
+      router.refresh();
+    });
+  }
+
+  if (!selecting) {
+    return (
+      <div className="flex justify-end px-1 pb-2">
+        <button type="button" onClick={onStart} className={PANEL_BUTTON}>
+          Select
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="toolbar"
+      aria-label="Selected clips"
+      className="sticky top-0 z-20 mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/95 px-3 py-2 backdrop-blur"
+    >
+      <span className="text-sm font-medium tabular-nums" aria-live="polite">
+        {selected.length} selected
+      </span>
+      <button type="button" onClick={onSelectAll} disabled={pending} className={PANEL_BUTTON}>
+        Select all
+      </button>
+      {selected.length > 0 ? (
+        <button type="button" onClick={onClear} disabled={pending} className={PANEL_BUTTON}>
+          Clear
+        </button>
+      ) : null}
+      <span className="flex-1" />
+      <PendingButton
+        type="button"
+        variant="outline"
+        pending={pending}
+        disabled={selected.length === 0}
+        onClick={() => (confirming ? moveToBin() : setConfirming(true))}
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+      >
+        {confirming ? `Confirm: move ${selected.length} to Bin` : `Move ${selected.length} to Bin`}
+      </PendingButton>
+      <button type="button" onClick={onDone} disabled={pending} className={PANEL_BUTTON}>
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function ClipTile({
   item,
   projects,
   onOpen,
+  selecting = false,
+  selected = false,
+  onToggle,
 }: {
   item: WallItem & { kind: "clip" };
   projects: readonly ClipProjectOption[];
   onOpen: () => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
 }) {
   // The clip's own shape, once its metadata is in — same idea as the image wall.
   const [ratio, setRatio] = useState<number | null>(null);
@@ -192,10 +343,24 @@ function ClipTile({
         video.currentTime = 0.1;
       }}
     >
+      {selecting ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute left-2 top-2 z-10 grid size-6 place-items-center rounded-md border-2 text-xs font-bold",
+            selected
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-white/80 bg-black/30",
+          )}
+        >
+          {selected ? "✓" : ""}
+        </span>
+      ) : null}
       <button
         type="button"
-        onClick={onOpen}
-        aria-label={`Open clip: ${item.prompt.slice(0, 60)}`}
+        onClick={selecting ? onToggle : onOpen}
+        aria-pressed={selecting ? selected : undefined}
+        aria-label={`${selecting ? (selected ? "Deselect" : "Select") : "Open"} clip: ${item.prompt.slice(0, 60)}`}
         className="block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         {/* #t=0.1 makes the browser paint a frame instead of black. */}
