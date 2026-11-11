@@ -203,7 +203,7 @@ describe("renderCapRefusalMessage", () => {
       budget({ globalRemainingUsd: 1, globalCapPeriod: "weekly" }),
     );
     expect(globalMessage).toMatch(/global weekly cap/i);
-    expect(globalMessage).toMatch(/Monday/i);
+    expect(globalMessage).toMatch(/5:00 AM Monday Manila time/i);
     expect(
       renderCapRefusalMessage("hourly", 2, budget({ hourlyRemainingUsd: 1, hourlyCapUsd: 10 })),
     ).toMatch(/hourly cap/i);

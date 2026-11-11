@@ -286,25 +286,24 @@ describe("global spend cap defaults", () => {
 // week boundaries are Asia/Manila (fixed UTC+8, no DST), not UTC, and the
 // week is a calendar week resetting Monday, not a rolling 7 days.
 describe("startOfManilaDayIso", () => {
-  it("computes Manila midnight for an ordinary mid-day instant", () => {
+  it("computes the 05:00 Manila reset for an ordinary mid-day instant", () => {
     // 2024-03-10T07:00:00Z is 2024-03-10T15:00 in Manila (UTC+8).
     expect(startOfManilaDayIso(new Date("2024-03-10T07:00:00.000Z"))).toBe(
-      "2024-03-09T16:00:00.000Z", // 2024-03-10T00:00 Manila
+      "2024-03-09T21:00:00.000Z", // 2024-03-10T05:00 Manila
     );
   });
 
-  it("does not flip to the next Manila day one millisecond early", () => {
-    // 2024-03-09T15:59:59.999Z is 2024-03-09T23:59:59.999 Manila — still
-    // the same Manila day as the boundary test below.
-    expect(startOfManilaDayIso(new Date("2024-03-09T15:59:59.999Z"))).toBe(
-      "2024-03-08T16:00:00.000Z",
+  it("does not flip to the next Manila day before 05:00", () => {
+    // 2024-03-09T20:59:59.999Z is 2024-03-10T04:59:59.999 Manila, before reset.
+    expect(startOfManilaDayIso(new Date("2024-03-09T20:59:59.999Z"))).toBe(
+      "2024-03-08T21:00:00.000Z",
     );
   });
 
-  it("flips to the next Manila day exactly at the Manila midnight boundary", () => {
-    // 2024-03-09T16:00:00.000Z is exactly 2024-03-10T00:00:00.000 Manila.
-    expect(startOfManilaDayIso(new Date("2024-03-09T16:00:00.000Z"))).toBe(
-      "2024-03-09T16:00:00.000Z",
+  it("flips to the next Manila day exactly at 05:00", () => {
+    // 2024-03-09T21:00:00.000Z is exactly 2024-03-10T05:00 Manila.
+    expect(startOfManilaDayIso(new Date("2024-03-09T21:00:00.000Z"))).toBe(
+      "2024-03-09T21:00:00.000Z",
     );
   });
 
@@ -314,20 +313,20 @@ describe("startOfManilaDayIso", () => {
   // earlier, not 1 hour ago at UTC midnight.
   it("does not use a UTC day boundary", () => {
     // 2024-03-10T01:00:00Z is 2024-03-10T09:00 Manila — well into the
-    // Manila day that started at 2024-03-09T16:00:00Z (UTC), NOT the UTC
+    // Manila reset period that started at 2024-03-09T21:00:00Z (UTC), not UTC
     // day that started at 2024-03-10T00:00:00Z.
     expect(startOfManilaDayIso(new Date("2024-03-10T01:00:00.000Z"))).toBe(
-      "2024-03-09T16:00:00.000Z",
+      "2024-03-09T21:00:00.000Z",
     );
   });
 });
 
 describe("startOfManilaWeekIso", () => {
-  it("returns Manila midnight on the most recent Monday for a mid-week instant", () => {
+  it("returns Monday 05:00 Manila for a mid-week instant", () => {
     // 2024-03-13 is a Wednesday. The most recent Monday is 2024-03-11;
-    // Manila midnight that day is 2024-03-10T16:00:00Z (UTC).
+    // Monday 05:00 Manila is 2024-03-10T21:00:00Z (UTC).
     expect(startOfManilaWeekIso(new Date("2024-03-13T05:00:00.000Z"))).toBe(
-      "2024-03-10T16:00:00.000Z",
+      "2024-03-10T21:00:00.000Z",
     );
   });
 
@@ -336,21 +335,27 @@ describe("startOfManilaWeekIso", () => {
     // 2024-03-11 — a rolling-7-days window would have already dropped most
     // of that Monday's spend by Sunday; a calendar week has not.
     expect(startOfManilaWeekIso(new Date("2024-03-17T10:00:00.000Z"))).toBe(
-      "2024-03-10T16:00:00.000Z",
+      "2024-03-10T21:00:00.000Z",
     );
   });
 
-  it("rolls over to the new week exactly at Monday 00:00 Manila", () => {
-    // 2024-03-17T16:00:00.000Z is exactly 2024-03-18T00:00 Manila — Monday.
-    expect(startOfManilaWeekIso(new Date("2024-03-17T16:00:00.000Z"))).toBe(
-      "2024-03-17T16:00:00.000Z",
+  it("rolls over to the new week exactly at Monday 05:00 Manila", () => {
+    // 2024-03-17T21:00:00.000Z is exactly Monday 05:00 Manila.
+    expect(startOfManilaWeekIso(new Date("2024-03-17T21:00:00.000Z"))).toBe(
+      "2024-03-17T21:00:00.000Z",
     );
   });
 
-  it("an instant already on a Monday returns that same Monday's Manila midnight", () => {
+  it("keeps Monday before 05:00 in the previous week", () => {
+    expect(startOfManilaWeekIso(new Date("2024-03-17T20:59:59.999Z"))).toBe(
+      "2024-03-10T21:00:00.000Z",
+    );
+  });
+
+  it("an instant already in Monday's reset period returns that Monday's boundary", () => {
     // 2024-03-11 is itself a Monday.
     expect(startOfManilaWeekIso(new Date("2024-03-11T05:00:00.000Z"))).toBe(
-      "2024-03-10T16:00:00.000Z",
+      "2024-03-10T21:00:00.000Z",
     );
   });
 });
@@ -386,7 +391,7 @@ describe("assertCapNotExceeded (daily burst guard)", () => {
   // Monday) or "the team is over" (not about me at all) without knowing
   // which function threw it.
   it("names the failure as a personal, daily burst guard — remedy is 'tomorrow'", () => {
-    expect(() => assertCapNotExceeded(1.5, 1, 2)).toThrow(/wait until tomorrow/i);
+    expect(() => assertCapNotExceeded(1.5, 1, 2)).toThrow(/5:00 AM Manila time/i);
   });
 });
 
@@ -404,7 +409,7 @@ describe("assertWeeklyCapNotExceeded — the never-had-one case", () => {
   });
 
   it("keeps the ordinary exhausted-allowance message for an account that HAS one", () => {
-    expect(() => assertWeeklyCapNotExceeded(9, 2, 10)).toThrow(/wait until Monday/);
+    expect(() => assertWeeklyCapNotExceeded(9, 2, 10)).toThrow(/5:00 AM Monday Manila time/);
   });
 });
 
@@ -433,7 +438,7 @@ describe("assertWeeklyCapNotExceeded (weekly allowance)", () => {
   // conflating the two would send someone to retry a request that keeps
   // failing for up to six more days.
   it("names the failure as the weekly allowance — remedy is 'Monday', not 'tomorrow'", () => {
-    expect(() => assertWeeklyCapNotExceeded(4.5, 1, 5)).toThrow(/wait until monday/i);
+    expect(() => assertWeeklyCapNotExceeded(4.5, 1, 5)).toThrow(/5:00 AM Monday Manila time/i);
   });
 });
 
@@ -473,7 +478,7 @@ describe("assertGlobalCapNotExceeded", () => {
 
   it("uses the weekly window and Monday reset when selected", () => {
     expect(() => assertGlobalCapNotExceeded(90, 19.2, 100, "weekly")).toThrow(/global weekly cap/i);
-    expect(() => assertGlobalCapNotExceeded(90, 19.2, 100, "weekly")).toThrow(/wait until Monday/i);
+    expect(() => assertGlobalCapNotExceeded(90, 19.2, 100, "weekly")).toThrow(/5:00 AM Monday Manila time/i);
   });
 });
 
@@ -524,14 +529,14 @@ describe("assertKieBalanceCoversEstimate", () => {
 });
 
 describe("endOfManilaDayIso", () => {
-  it("is the next Manila midnight", () => {
-    // 2024-03-13 13:00 Manila -> 2024-03-14 00:00 Manila (16:00Z the day before).
+  it("is the next 05:00 Manila reset", () => {
+    // 2024-03-13 13:00 Manila -> 2024-03-14 05:00 Manila.
     expect(endOfManilaDayIso(new Date("2024-03-13T05:00:00.000Z"))).toBe(
-      "2024-03-13T16:00:00.000Z",
+      "2024-03-13T21:00:00.000Z",
     );
-    // 23:30 Manila still ends at the coming midnight, not the one after.
+    // 23:30 Manila still ends at the next 05:00, not the one after.
     expect(endOfManilaDayIso(new Date("2024-03-13T15:30:00.000Z"))).toBe(
-      "2024-03-13T16:00:00.000Z",
+      "2024-03-13T21:00:00.000Z",
     );
   });
 });
@@ -553,20 +558,20 @@ describe("endOfManilaWeekIso", () => {
     expect(end - start).toBe(7 * 24 * 60 * 60 * 1000);
   });
 
-  it("lands on the FOLLOWING Monday 00:00 Manila for a mid-week instant", () => {
+  it("lands on the FOLLOWING Monday 05:00 Manila for a mid-week instant", () => {
     // Same fixture as startOfManilaWeekIso's own suite: 2024-03-13 is a
     // Wednesday in the week starting Monday 2024-03-11. The next Monday,
-    // 2024-03-18, is Manila midnight at 2024-03-17T16:00:00Z (UTC).
+    // 2024-03-18 05:00 Manila is 2024-03-17T21:00:00Z (UTC).
     expect(endOfManilaWeekIso(new Date("2024-03-13T05:00:00.000Z"))).toBe(
-      "2024-03-17T16:00:00.000Z",
+      "2024-03-17T21:00:00.000Z",
     );
   });
 
   it("an instant exactly at this week's end returns the NEXT week's end, not the same instant twice", () => {
-    // 2024-03-17T16:00:00.000Z is itself Monday 00:00 Manila — the start of
+    // 2024-03-17T21:00:00.000Z is Monday 05:00 Manila — the start of
     // a new week, so its "end" is a further week out.
-    expect(endOfManilaWeekIso(new Date("2024-03-17T16:00:00.000Z"))).toBe(
-      "2024-03-24T16:00:00.000Z",
+    expect(endOfManilaWeekIso(new Date("2024-03-17T21:00:00.000Z"))).toBe(
+      "2024-03-24T21:00:00.000Z",
     );
   });
 });

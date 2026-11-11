@@ -5,7 +5,7 @@
 //
 // The daily burst guard is a feature a team OPTS INTO. It ships off, because
 // the editors asked not to be stopped mid-job by a ceiling that made them
-// wait until tomorrow to finish work they were already inside their weekly
+// wait until the 05:00 Manila reset to finish work they were already inside their weekly
 // allowance to do. This is where a team that decides it wants one turns it
 // on — from the app, by an admin, rather than by editing render.yaml and
 // waiting for a redeploy, which is what USER_DAILY_CAP_ENABLED required.
@@ -110,7 +110,7 @@ export function DailyCapSwitch({
                 : `${followingDefaultCount} accounts follow this setting`}{" "}
               and will lose their daily ceiling. Their weekly allowance and the team&apos;s daily
               cap still apply, so nobody can spend more overall — but one editor can spend a
-              week&apos;s worth in an afternoon and then be stopped until Monday. Accounts set
+              week&apos;s worth in an afternoon and then be stopped until Monday at 5:00 AM. Accounts set
               individually keep whatever was chosen for them.
             </DialogDescription>
           </DialogHeader>

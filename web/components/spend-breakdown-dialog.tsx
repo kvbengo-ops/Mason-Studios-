@@ -2,7 +2,7 @@
 import { formatUsd } from "@/lib/format-usd";
 
 // Click the allowance box → the caller's own spending, run by run. Defaults to
-// this allowance week (Monday 00:00 Manila, the window the box counts), so the
+// this allowance week (Monday 05:00 Manila, the window the box counts), so the
 // total shown first is exactly what the box has used.
 
 import type { JSX, ReactNode } from "react";

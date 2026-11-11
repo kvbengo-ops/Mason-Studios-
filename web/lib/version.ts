@@ -12,11 +12,11 @@
 export const BUILD_SHA = (process.env.RENDER_GIT_COMMIT ?? "dev").slice(0, 7);
 
 // The highest migration file in supabase/migrations/ as of this writing —
-// 0135_spend_burn_rate.sql. (The RPC this value is
+// 0138_credit_resets_at_5am.sql. (The RPC this value is
 // compared against is defined separately, in 0046_applied_schema_version.sql; this
 // constant tracks the highest migration, not that RPC's own migration, and
 // the two only coincided on the day 0046 landed.) Maintained by
 // version.test.ts's drift guard, which reads the migrations directory
 // directly and fails CI the moment this constant and the repo disagree —
 // bump this by hand whenever a new migration is added.
-export const EXPECTED_DB_VERSION = "0137";
+export const EXPECTED_DB_VERSION = "0138";

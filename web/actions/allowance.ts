@@ -133,7 +133,7 @@ export async function cancelAllowanceRequest(id: string): Promise<ActionResult> 
 export interface DecideAllowanceRequestOptions {
   /** Defaults to defaultGrantAmountUsd(request.requested_usd) — see lib/allowance.ts. Ignored for a denial. */
   grantAmountUsd?: number;
-  /** ISO timestamp. Defaults to endOfManilaDayIso() — the next Manila midnight: a grant is for today (owner, 2026-11-11). Ignored for a denial. */
+  /** ISO timestamp. Defaults to endOfManilaDayIso() — the next 05:00 Manila reset. Ignored for a denial. */
   expiresAt?: string;
   note?: string | null;
 }
@@ -274,7 +274,7 @@ export async function decideAllowanceRequest(
       // validated. Nothing to validate means nothing to keep in sync with the
       // client, and the dialog hides the picker for a peer for the same
       // reason — a control that cannot change the outcome is a trap. Every
-      // peer grant expires at the next Manila midnight, which is also the
+      // peer grant expires at the next 05:00 Manila reset, which is also the
       // default an admin gets, so this narrows the choice rather than
       // inventing a new rule. grantExpiryError is not called: this value
       // is computed here, not received, and endOfManilaDayIso() is always

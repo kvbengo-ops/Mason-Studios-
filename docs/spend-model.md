@@ -44,14 +44,14 @@ One arrow carries dollars. Everything else in this system is arithmetic.
 | How it goes up    | Fund kie                      | An approver approves a grant                  |
 | How it goes down  | kie bills a render            | **Never. It is a ceiling, not a stock.**      |
 | How it runs out   | The account is actually empty | The sum of that user's `runs` rows crosses it |
-| How it comes back | Someone funds kie             | **By itself, every Monday**                   |
+| How it comes back | Someone funds kie             | **By itself, daily at 05:00 and weekly Monday at 05:00 Manila time** |
 
 An editor shown a 2,000-credit weekly allowance does not _have_ 2,000 credits. It is the
-display form of a $10 limit. We add up what they already spent since Monday and refuse the
-next render if it would cross the line.
+display form of a $10 limit. We add up what they already spent since Monday at 05:00 Manila
+time and refuse the next render if it would cross the line.
 
-When Monday comes, nothing is topped up and nothing is credited. The sum simply starts
-counting from a new Monday, so the headroom reappears on its own.
+At 05:00 Manila time, nothing is topped up and nothing is credited. The sum starts counting
+from the new daily period; on Monday, the weekly sum also starts over, so headroom reappears.
 
 ---
 
@@ -135,7 +135,7 @@ flowchart TD
   spend in the trailing hour. A blank value clears the override.
 - **Per-user daily guard:** optional setting in `app_settings.user_daily_cap_enabled`, off by
   default. Role amounts stay in `render.yaml`, with per-account overrides on `profiles`.
-- **Weekly allowance:** required for each account; an approved grant adds to it until Manila midnight.
+- **Weekly allowance:** required for each account; an approved grant adds to it until the next 05:00 Manila reset.
 
 The account-funds check is skipped when its read is unavailable; an unknown balance does
 not block work. The global setting falls back to the enabled $100 daily default if its
@@ -163,7 +163,7 @@ sequenceDiagram
 
 Three rules that are deliberate, not incidental:
 
-1. **A grant is for today** (owner, 2026-11-11). It raises the daily and the weekly ceiling by its amount until the next Manila midnight, then the account is back on its normal caps. What it paid for still counts as this week's spend. It cannot raise the hourly or global cap; if one of those is exhausted, a grant will not unblock the account.
+1. **A grant is for today** (owner, 2026-11-11). It raises the daily and weekly ceiling by its amount until the next 05:00 Manila reset, then the account is back on its normal caps. What it paid for still counts as this week's spend. It cannot raise the hourly or global cap; if one of those is exhausted, a grant will not unblock the account.
 2. **Every grant expires.** A permanent raise is a role change, and should be made as one.
 3. **Nothing is added to a balance**, because there is no balance. The grant changes the
    number the check compares against, for as long as it lives.

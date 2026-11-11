@@ -2298,7 +2298,7 @@ export type Database = {
       // There is NO headroom argument and NO expiry argument, and both
       // absences are deliberate — the function computes the sender's spendable
       // allowance itself under a per-sender lock, and derives the expiry as the
-      // next Asia/Manila Monday, which it returns. The only parameters left are
+      // next Monday 05:00 Asia/Manila, which it returns. The only parameters left are
       // the two figures SQL cannot produce: the weekly base cap (a render.yaml
       // env var) and the in-flight render estimate (priced in lib/models.ts).
       pass_allowance: {
@@ -2310,7 +2310,7 @@ export type Database = {
           p_held_usd: number;
           p_note: string | null;
         };
-        /** The expiry it wrote: the next Asia/Manila Monday, as an ISO string. */
+        /** The expiry it wrote: next Monday 05:00 Asia/Manila, as an ISO string. */
         Returns: string;
       };
       // Every account the caller may pass credits to: active editors and

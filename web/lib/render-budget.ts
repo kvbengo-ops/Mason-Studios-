@@ -147,7 +147,10 @@ export function renderCapRefusalMessage(
   const overageUsd = budgetOverageUsd(costUsd, remainingUsd);
   if (cap === "global") {
     const periodLabel = budget.globalCapPeriod === "weekly" ? "this week" : "today";
-    const reset = budget.globalCapPeriod === "weekly" ? "Monday" : "tomorrow";
+    const reset =
+      budget.globalCapPeriod === "weekly"
+        ? "5:00 AM Monday Manila time"
+        : "5:00 AM Manila time tomorrow";
     return (
       `This render is $${overageUsd.toFixed(2)} over what the team has left ${periodLabel} ` +
       `(global ${budget.globalCapPeriod ?? "daily"} cap $${capUsd.toFixed(2)}). This is not about your own usage — wait until ` +
@@ -157,7 +160,7 @@ export function renderCapRefusalMessage(
   if (cap === "weekly") {
     return (
       `This render is $${overageUsd.toFixed(2)} over what you have left this week ` +
-      `($${capUsd.toFixed(2)} weekly allowance). Wait until Monday, lower the resolution, ` +
+      `($${capUsd.toFixed(2)} weekly allowance). Wait until 5:00 AM Monday Manila time, lower the resolution, ` +
       "render fewer scenes, or ask an admin to raise your weekly allowance."
     );
   }
@@ -170,7 +173,7 @@ export function renderCapRefusalMessage(
   }
   return (
     `This render is $${overageUsd.toFixed(2)} over what you have left today ` +
-    `(daily cap $${capUsd.toFixed(2)}). Wait until tomorrow, lower the resolution, or render ` +
+    `(daily cap $${capUsd.toFixed(2)}). Wait until 5:00 AM Manila time tomorrow, lower the resolution, or render ` +
     "fewer scenes."
   );
 }

@@ -337,7 +337,7 @@ function imagePathFor(owner: ImageDestination): string {
 const BLOCKED_MESSAGES = {
   global: "The company-wide image budget is used up.",
   weekly: "You have reached your weekly allowance. Request more from the sidebar to keep going.",
-  daily: "You have reached today's limit. It resets at midnight Manila time.",
+  daily: "You have reached today's limit. It resets at 5:00 AM Manila time.",
   hourly:
     "You have reached your hourly image limit. Earlier spend will free up over the next hour.",
 } as const;
@@ -607,8 +607,8 @@ export async function generateImageFor(
   if (reservation.outcome === "blocked") {
     const globalReset =
       ceilings.globalCapPeriod === "weekly"
-        ? " It resets on Monday."
-        : " It resets at midnight Manila time.";
+        ? " It resets at 5:00 AM Manila time on Monday."
+        : " It resets at 5:00 AM Manila time.";
     const message =
       reservation.blockedBy === "global"
         ? `${BLOCKED_MESSAGES.global}${globalReset}`

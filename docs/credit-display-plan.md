@@ -70,7 +70,7 @@ No editor holds credits, no account has a balance column, and nothing is reserve
 > not 18,000 credits committed; they are three independent ceilings over one shared pot.
 
 **Monday resets by arithmetic, and this already works — it is built, not scope.**
-`getWeeklySpend` sums `runs.cost_usd` from the current Asia/Manila Monday forward. When the
+`getWeeklySpend` sums `runs.cost_usd` from Monday 05:00 Asia/Manila forward. When the
 week rolls over the window moves, the total drops to zero, and the headroom returns on its
 own. There is no balance to reset, so **no cron job, trigger, or scheduled write is needed
 or wanted.**

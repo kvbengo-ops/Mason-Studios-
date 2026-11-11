@@ -99,7 +99,7 @@ export function PassCreditsDialog({
           <DialogDescription>
             Pass part of your weekly allowance to a colleague. The pass expires at the end of this
             Manila week and is not returned. Unspent headroom for both of you stops existing on
-            Monday.
+            Monday at 5:00 AM Manila time.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">

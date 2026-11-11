@@ -1,7 +1,7 @@
 // Spend caps are enforced in USD; credits are only the display unit.
 // Role daily/weekly defaults come from env; the optional global daily/weekly
-// cap is configurable in app_settings. Per-account hourly overrides live on
-// profiles. Calendar boundaries use Asia/Manila; hourly caps use a rolling hour.
+// cap is configurable in app_settings. Per-account hourly overrides live on profiles.
+// Spend periods reset at 05:00 Asia/Manila; hourly caps use a rolling hour.
 // ---------------------------------------------------------------------------
 // The timezone question — day and week boundaries are Asia/Manila,
 // deliberately, not UTC
@@ -23,24 +23,21 @@
 //     that reset an hour ago for reasons that have nothing to do with their
 //     actual workday.
 //
-// Every day boundary in this file is now Asia/Manila midnight, computed
-// with a fixed +8h offset (manilaDateParts / manilaMidnightUtcIso below) —
+// Every spend-day boundary in this file is now 05:00 Asia/Manila, computed
+// with a fixed +8h offset (manilaDateParts / manilaFiveAmUtcIso below) —
 // deliberately not `Intl.DateTimeFormat` with a timeZone option or a tz
 // database dependency, because Manila's offset never changes; a fixed
 // arithmetic shift is the simplest correct implementation for a zone with
 // no DST, and anything more general would be solving a problem this team
-// doesn't have. supabase/migrations/0031_account_allowances.sql's
-// account_spend_windows view mirrors this exact boundary in SQL via
-// `at time zone 'Asia/Manila'` (which Postgres's zoneinfo database handles
-// natively) so /users' admin read and this file's cap enforcement can never
-// disagree about what "today" means.
+// doesn't have. Migration 0136's SQL boundary functions mirror these
+// calculations so /users' admin read and cap enforcement agree.
 //
 // ---------------------------------------------------------------------------
-// The week question — calendar week (Monday reset), not a rolling 7 days
+// The week question — calendar week (Monday 05:00 reset), not a rolling 7 days
 // ---------------------------------------------------------------------------
 // Two shapes were on the table:
 //
-//   - Calendar week: resets every Monday 00:00 Manila. Predictable ("your
+//   - Calendar week: resets every Monday 05:00 Manila. Predictable ("your
 //     allowance is back Monday"), easy to explain to an editor without
 //     doing arithmetic, and matches how a periodic allocation is usually
 //     described ("$5/week") — nobody reads "$5/week" as "$5 available in
@@ -67,10 +64,9 @@
 // already exhausts the whole weekly allowance, leaving five more days in
 // the week where the daily guard alone blocks any further render).
 //
-// Calendar week = Monday 00:00 Manila through the following Monday 00:00
-// Manila, computed by manilaWeekStartIso below. Mirrored in SQL by
-// account_spend_windows via `date_trunc('week', ...)`, which Postgres
-// already truncates to Monday.
+// Calendar week = Monday 05:00 Manila through the following Monday 05:00
+// Manila, computed by startOfManilaWeekIso below. Mirrored in SQL by
+// migration 0138's manila_spend_week_start function.
 //
 // ---------------------------------------------------------------------------
 // `assertCapNotExceeded` / `assertWeeklyCapNotExceeded` /
@@ -447,7 +443,7 @@ export function resolveAccountCaps(profile: AccountCapProfile): AccountCaps {
  * message deliberately says "your"/"you" throughout AND names this a
  * "daily burst guard", not just "your daily cap": an editor who reads this
  * needs to know the remedy is "wait until tomorrow" (the guard resets at
- * Manila midnight), which is a different, narrower problem than "you're out
+ * Manila reset), which is a different, narrower problem than "you're out
  * of allowance for the week" (assertWeeklyCapNotExceeded) or "the team is
  * out" (assertGlobalCapNotExceeded) — see this file's header for why all
  * three have to stay legible from the message text alone.
@@ -463,7 +459,7 @@ export function assertCapNotExceeded(
       `This render would bring your spend today to $${projectedUsd.toFixed(2)}, over your ` +
         `$${capUsd.toFixed(2)} daily burst guard ($${spentTodayUsd.toFixed(2)} already spent ` +
         `today, this render is estimated at $${estimatedUsd.toFixed(2)}). You've hit today's ` +
-        "burst guard — wait until tomorrow, or ask an admin to raise your daily allowance. " +
+        "burst guard — wait until 5:00 AM Manila time, or ask an admin to raise your daily allowance. " +
         "Refusing to enqueue.",
     );
   }
@@ -477,7 +473,7 @@ export function assertCapNotExceeded(
  *
  * This is the check that represents the REAL periodic allocation the
  * proposal describes (see this file's header) — an editor who trips this
- * is out of allowance until the calendar week resets (Monday 00:00 Manila),
+ * is out of allowance until the calendar week resets (Monday 05:00 Manila),
  * not until tomorrow, so the message says "Monday" explicitly rather than
  * the daily guard's "tomorrow": conflating the two would send someone to
  * wait one day for an allowance that isn't actually coming back for up to
@@ -512,7 +508,7 @@ export function assertWeeklyCapNotExceeded(
       `This render would bring your spend this week to $${projectedUsd.toFixed(2)}, over your ` +
         `$${capUsd.toFixed(2)} weekly allowance ($${spentThisWeekUsd.toFixed(2)} already spent ` +
         `this week, this render is estimated at $${estimatedUsd.toFixed(2)}). You've used this ` +
-        "week's allowance — wait until Monday, or ask an admin to raise your weekly allowance. " +
+        "week's allowance — wait until 5:00 AM Monday Manila time, or ask an admin to raise your weekly allowance. " +
         "Refusing to enqueue.",
     );
   }
@@ -546,7 +542,8 @@ export function assertGlobalCapNotExceeded(
   const projectedUsd = globalSpentUsd + estimatedUsd;
   if (projectedUsd > capUsd) {
     const periodLabel = period === "weekly" ? "this week" : "today";
-    const resetLabel = period === "weekly" ? "Monday" : "tomorrow";
+    const resetLabel =
+      period === "weekly" ? "5:00 AM Monday Manila time" : "5:00 AM Manila time tomorrow";
     throw new Error(
       `This render would bring the WHOLE TEAM's spend ${periodLabel} to $${projectedUsd.toFixed(2)}, over ` +
         `the $${capUsd.toFixed(2)} global ${period} cap ($${globalSpentUsd.toFixed(2)} already ` +
@@ -648,6 +645,7 @@ export function assertKieBalanceCoversEstimate(balanceUsd: number, estimatedUsd:
 // arithmetic, not a timezone database.
 // ---------------------------------------------------------------------------
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
+const RESET_HOUR_MS = 5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -678,6 +676,15 @@ function manilaMidnightUtcIso(year: number, month: number, day: number): string 
   return new Date(Date.UTC(year, month, day) - MANILA_OFFSET_MS).toISOString();
 }
 
+/** The UTC instant of 05:00 Manila on the given Manila-local date. */
+function manilaFiveAmUtcIso(year: number, month: number, day: number): string {
+  return new Date(Date.UTC(year, month, day) + RESET_HOUR_MS - MANILA_OFFSET_MS).toISOString();
+}
+
+function manilaResetDateParts(instant: Date): ReturnType<typeof manilaDateParts> {
+  return manilaDateParts(new Date(instant.getTime() - RESET_HOUR_MS));
+}
+
 /**
  * Start of the current Manila day, as a UTC ISO timestamp. Exported (not
  * just used internally) so the day-boundary arithmetic itself is
@@ -685,22 +692,22 @@ function manilaMidnightUtcIso(year: number, month: number, day: number): string 
  * spend.test.ts.
  */
 export function startOfManilaDayIso(now: Date = new Date()): string {
-  const { year, month, day } = manilaDateParts(now);
-  return manilaMidnightUtcIso(year, month, day);
+  const { year, month, day } = manilaResetDateParts(now);
+  return manilaFiveAmUtcIso(year, month, day);
 }
 
 /**
- * Start of the current Manila calendar week (Monday 00:00 Manila), as a UTC
+ * Start of the current Manila calendar week (Monday 05:00 Manila), as a UTC
  * ISO timestamp. Exported for the same testability reason as
  * startOfManilaDayIso above.
  */
 export function startOfManilaWeekIso(now: Date = new Date()): string {
-  const { year, month, day, weekday } = manilaDateParts(now);
+  const { year, month, day, weekday } = manilaResetDateParts(now);
   // getUTCDay(): 0=Sun, 1=Mon, ..., 6=Sat. Days since the most recent Monday:
   // Mon->0, Tue->1, ..., Sat->5, Sun->6.
   const daysSinceMonday = (weekday + 6) % 7;
   const monday = new Date(Date.UTC(year, month, day) - daysSinceMonday * DAY_MS);
-  return manilaMidnightUtcIso(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate());
+  return manilaFiveAmUtcIso(monday.getUTCFullYear(), monday.getUTCMonth(), monday.getUTCDate());
 }
 
 /**
@@ -717,7 +724,7 @@ export function startOfRollingHourIso(now: Date = new Date()): string {
 }
 
 /**
- * End of the current Manila calendar week — the following Monday 00:00
+ * End of the current Manila calendar week — the following Monday 05:00
  * Manila — as a UTC ISO timestamp. startOfManilaWeekIso's twin, exactly one
  * week later (`+ 7 * DAY_MS` on the same UTC instant, not a second call to
  * manilaDateParts — the week boundary is a fixed 7*24h span in this
@@ -735,9 +742,9 @@ export function endOfManilaWeekIso(now: Date = new Date()): string {
 }
 
 /**
- * Next Manila midnight. The default `expires_at` of an approved allowance request
+ * Next 05:00 Manila reset. The default `expires_at` of an approved allowance request
  * (owner, 2026-11-11): a grant is for TODAY, raising both the daily and the weekly
- * ceiling until midnight. What it paid for still counts as this week's spend.
+ * ceiling until the next 05:00 reset. What it paid for still counts as this week's spend.
  */
 export function endOfManilaDayIso(now: Date = new Date()): string {
   return new Date(new Date(startOfManilaDayIso(now)).getTime() + DAY_MS).toISOString();
@@ -777,7 +784,7 @@ export async function getDailySpend(userId: string): Promise<number> {
 
 /**
  * getDailySpend's weekly twin: sums the same account's runs since the start
- * of the current Manila calendar week (Monday 00:00 Manila) instead of the
+ * of the current Manila calendar week (Monday 05:00 Manila) instead of the
  * current Manila day. Backs the weekly allowance check
  * (assertWeeklyCapNotExceeded) — see this file's header for why the window
  * is a calendar week, not a rolling 7 days.

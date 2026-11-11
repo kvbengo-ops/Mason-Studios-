@@ -244,7 +244,7 @@ export default async function AllowancesPage({
   const requests = (data ?? []) as AllowanceRequestDirectoryRow[];
 
   // The default grant expiry is the SAME for every pending row on this page
-  // (the next Manila midnight — lib/spend.ts's endOfManilaDayIso)
+  // (the next 05:00 Manila reset — lib/spend.ts's endOfManilaDayIso)
   // regardless of when each request was filed, so it's computed once here
   // rather than per row. lib/spend.ts is imported dynamically, same
   // fail-soft reasoning as /users and the sidebar (this file's own header):

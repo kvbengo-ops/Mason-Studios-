@@ -64,7 +64,7 @@ export function requestAllowanceDescription(
     case "normal":
       return (
         "You've used your allowance. Ask an admin for more — a grant raises today's limit " +
-        "until midnight Asia/Manila, then you're back to your normal cap. They can grant a " +
+        "until 5:00 AM Asia/Manila, then you're back to your normal cap. They can grant a " +
         "different amount than what you request, so this is a starting point, not a promise."
       );
     case "headroom":
@@ -76,7 +76,7 @@ export function requestAllowanceDescription(
     case "blocked-global":
       return (
         `Requesting more won't unblock you right now — the team's shared ${globalCapPeriod} cap is what's ` +
-        `stopping you, not your own usage. A grant doesn't change that. It resets ${globalCapPeriod === "weekly" ? "on Monday" : "at midnight Asia/Manila"}.`
+        `stopping you, not your own usage. A grant doesn't change that. It resets at 5:00 AM Manila time ${globalCapPeriod === "weekly" ? "on Monday" : "tomorrow"}.`
       );
     case "blocked-hourly":
       return (

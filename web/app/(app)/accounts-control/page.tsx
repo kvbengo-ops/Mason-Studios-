@@ -799,7 +799,7 @@ export default async function AccountsControlPage({
               icon={Activity}
               label="Renders today"
               value={overview.rendersToday !== null ? String(overview.rendersToday) : "Unavailable"}
-              sub="Video and image runs since midnight"
+              sub="Video and image runs since 5:00 AM Manila time"
             />
             <KpiTile
               compact

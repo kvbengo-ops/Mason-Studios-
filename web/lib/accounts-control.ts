@@ -9,7 +9,7 @@ import {
   type ThumbnailSource,
 } from "@/lib/bin-thumbnails";
 import type { BinCardThumbnail } from "@/components/bin-card";
-import { manilaDayKey, manilaDayKeys, manilaWindowEndIso, manilaWindowStartIso } from "@/lib/burn";
+import { manilaDayKey, manilaDayKeys, manilaWindowStartIso } from "@/lib/burn";
 import {
   getSpendCategoryTotals,
   getSpendCategoryTotalsByUser,
@@ -24,6 +24,7 @@ import { COMPILER_MODELS, getModel, imageModelLabelFor, mergeRenderSettings } fr
 import { computeRunway, RUNWAY_WINDOW_DAYS, type RunwayEstimate } from "@/lib/runway";
 import {
   getGlobalSpendSnapshot,
+  endOfManilaDayIso,
   startOfManilaDayIso,
   startOfManilaMonthIso,
   type GlobalSpendCapSettings,
@@ -85,13 +86,13 @@ export interface AccountSpendSummary {
 export interface AccountsControlOverview {
   windowDays: AccountsControlWindowDays;
   todaySpendUsd: number;
-  /** Yesterday from Manila midnight up to this time of day: today's like-for-like comparison. */
+  /** Yesterday from the 05:00 Manila reset up to this time: today's like-for-like comparison. */
   yesterdaySameTimeUsd: number;
   /** Last month over the same elapsed span as this month so far. */
   lastMonthSameSpanUsd: number;
   /** The `windowDays` before the current window. */
   previousWindowUsd: number;
-  /** Every runs row (attempt) since Manila midnight, video and image, billed or not. */
+  /** Every runs row (attempt) since the 05:00 Manila reset, billed or not. */
   rendersToday: number | null;
   /** Mean cost of the billed (cost > 0) runs in the window; null when there were none. */
   avgCostPerRenderUsd: number | null;
@@ -173,8 +174,8 @@ const shortDayFormatter = new Intl.DateTimeFormat("en-US", {
 
 /**
  * Aggregates raw `runs` rows into a contiguous daily series of length
- * `windowDays` ending on `now`, one bucket per Asia/Manila calendar day (the
- * same boundary the spend caps reset on), split between video rendering
+ * `windowDays` ending on `now`, one bucket per Asia/Manila calendar day
+ * (rather than spend-cap periods), split between video rendering
  * (`scene_id !== null`) and image/iterating (`scene_id === null`).
  */
 export function buildDailySpendSeries(
@@ -398,11 +399,10 @@ export async function loadAccountsControlOverview(
   const supabase = await createClient();
 
   // Asia/Manila boundaries, the same ones the spend caps reset on. The upper
-  // edge of every "so far" figure is Manila midnight tomorrow (runs never
-  // land in the future).
+  // edge of every "so far" figure is the next 05:00 Manila reset.
   const DAY_MS = 24 * 60 * 60 * 1000;
   const todayStart = new Date(startOfManilaDayIso(now));
-  const tomorrowStart = new Date(manilaWindowEndIso(now));
+  const tomorrowStart = new Date(endOfManilaDayIso(now));
   const monthStart = new Date(startOfManilaMonthIso(now));
   const windowStart = new Date(manilaWindowStartIso(now, windowDays));
   // Previous periods, like for like: yesterday up to this time of day, last
@@ -629,7 +629,7 @@ export async function loadAccountsRunLog(
   now: Date = new Date(),
 ): Promise<{ rows: AccountsRunLogRow[]; total: number }> {
   const supabase = await createClient();
-  const tomorrowStart = new Date(manilaWindowEndIso(now));
+  const tomorrowStart = new Date(endOfManilaDayIso(now));
   const windowStart = new Date(manilaWindowStartIso(now, windowDays));
   const { data, error, count } = await supabase
     .from("runs")
