@@ -159,7 +159,7 @@ describe("extractArchivedStorageKeys", () => {
 });
 
 describe("isBinEntryExpired and binExpiryLabel", () => {
-  it("marks entries at or past 14 days as expired", () => {
+  it("marks entries at or past 3 days as expired", () => {
     const now = Date.parse("2026-10-31T00:00:00.000Z");
     const exactCutoff = new Date(now - BIN_RETENTION_MS).toISOString();
     const recent = new Date(now - BIN_RETENTION_MS + 1000).toISOString();

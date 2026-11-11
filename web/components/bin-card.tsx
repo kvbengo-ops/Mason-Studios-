@@ -34,7 +34,7 @@ export interface BinCardProps {
   meta?: string;
   promptFirstLine: string;
   deletedAtLabel: string;
-  /** Optional countdown label for the 2-week bin retention window. */
+  /** Optional countdown label for the 3-day bin retention window. */
   expiresLabel?: string | null;
   /** Optional owner identifier shown to admins reviewing cross-account bin items. */
   ownerLabel?: string | null;

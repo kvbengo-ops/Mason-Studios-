@@ -600,9 +600,9 @@ export async function loadAccountsRunLog(
 }
 
 /**
- * Loads a target account's active 2-week Bin entries (deleted scenes, deleted
+ * Loads a target account's active 3-day Bin entries (deleted scenes, deleted
  * takes, and binned personal images) with playable video clip URLs, download
- * URLs, and 2-week expiry labels for `/accounts-control`.
+ * URLs, and 3-day expiry labels for `/accounts-control`.
  */
 export async function loadAccountControlDeleted(
   userId: string,

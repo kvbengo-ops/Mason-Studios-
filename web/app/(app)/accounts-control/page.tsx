@@ -352,13 +352,13 @@ function DeletedSection({ deleted }: { deleted: AccountControlDeletedData }): JS
   const { scenes, versions, images } = deleted;
 
   if (scenes.length + versions.length + images.length === 0) {
-    return <EmptyState>Nothing in this account&apos;s 2-week Bin.</EmptyState>;
+    return <EmptyState>Nothing in this account&apos;s 3-day Bin.</EmptyState>;
   }
 
   return (
     <div className="flex flex-col gap-10">
       <p className="text-xs text-muted-foreground">
-        Deleted work stays here for two weeks, then is removed for good.
+        Deleted work stays here for three days, then is removed for good.
       </p>
 
       {scenes.length > 0 ? (

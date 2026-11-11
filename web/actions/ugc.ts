@@ -2821,7 +2821,7 @@ export async function restoreScene(formData: FormData): Promise<ActionResult> {
   const { project } = await requireProject(archived.project_id);
 
   if (typeof archived.deleted_at === "string" && isBinEntryExpired(archived.deleted_at)) {
-    return { error: "That scene has expired from the bin after 2 weeks." };
+    return { error: "That scene has expired from the bin after 3 days." };
   }
 
   const admin = createAdminClient();
@@ -3063,7 +3063,7 @@ async function removeUnreferencedArchivedAssets(
 
 /**
  * Hard-deletes any `deleted_scenes` and `deleted_scene_versions` rows that
- * have passed the 2-week (14-day) bin retention window (or were previously
+ * have passed the 3-day bin retention window (or were previously
  * soft-marked with `hard_deleted_at`), along with their unreferenced Storage
  * objects.
  */
@@ -3115,8 +3115,8 @@ export async function reapExpiredBinEntries(): Promise<void> {
  * Storage objects.
  *
  * GUARD: requireAdmin — regular users can only restore scenes during the
- * 2-week retention window so that admins can review deleted work in /bin.
- * Only an admin may permanently delete a bin entry before the 2 weeks elapse.
+ * 3-day retention window so that admins can review deleted work in /bin.
+ * Only an admin may permanently delete a bin entry before the 3 days elapse.
  */
 export async function purgeDeletedScene(formData: FormData): Promise<ActionResult> {
   const sceneId = String(formData.get("sceneId") ?? "");
@@ -3316,7 +3316,7 @@ export async function restoreClipVersion(formData: FormData): Promise<ActionResu
   const { project } = await requireProject(archived.project_id);
 
   if (typeof archived.deleted_at === "string" && isBinEntryExpired(archived.deleted_at)) {
-    return { error: "That version has expired from the bin after 2 weeks." };
+    return { error: "That version has expired from the bin after 3 days." };
   }
 
   const admin = createAdminClient();
@@ -3460,7 +3460,7 @@ export async function restoreClipVersion(formData: FormData): Promise<ActionResu
  * purgeDeletedScene's twin for a single version's bin entry — permanently
  * deletes the row from deleted_scene_versions and cleans up its unreferenced
  * clip object in Storage. Guarded by requireAdmin so only admins can
- * permanently delete before the 2-week retention window expires.
+ * permanently delete before the 3-day retention window expires.
  */
 export async function purgeDeletedVersion(formData: FormData): Promise<ActionResult> {
   const versionId = String(formData.get("versionId") ?? "");

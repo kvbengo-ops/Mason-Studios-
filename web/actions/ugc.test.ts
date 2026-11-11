@@ -3205,7 +3205,7 @@ describe("restoreScene", () => {
     expect(result?.error).toMatch(/no scene to restore/i);
   });
 
-  it("refuses to restore a scene that has been in the bin for more than 2 weeks", async () => {
+  it("refuses to restore a scene that has been in the bin for more than 3 days", async () => {
     const expiredDeletedAt = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString();
     const archived = anArchivedRow({ deleted_at: expiredDeletedAt });
     const adminMock = buildRestoreAdminMock({ lastIdx: null, claimedRow: archived });
@@ -3226,7 +3226,7 @@ describe("restoreScene", () => {
     form.set("sceneId", "scene-1");
     const result = await restoreScene(form);
 
-    expect(result?.error).toMatch(/expired from the bin after 2 weeks/i);
+    expect(result?.error).toMatch(/expired from the bin after 3 days/i);
     expect(adminMock.sceneInsertSpy).not.toHaveBeenCalled();
   });
 

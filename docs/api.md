@@ -104,7 +104,7 @@ Image model IDs for `POST /images`: `nano-banana-2-1` (default), `seedream-5.0-p
 
 Poll about every 10 seconds.
 
-Active element and generated asset files have no automatic expiry in Mason Storage. A soft-deleted element keeps its file so existing references remain safe. Deleted scenes and clip versions appear in Bin for 14 days; expired Bin entries and their unreferenced files are reaped when Bin cleanup runs. Download links expire after one hour; request a fresh URL when needed.
+Active element and generated asset files have no automatic expiry in Mason Storage. A soft-deleted element keeps its file so existing references remain safe. Deleted scenes, clip versions and images appear in Bin for 3 days; the worker removes expired Bin entries and their unreferenced files hourly. Download links expire after one hour; request a fresh URL when needed.
 
 ## Pricing
 

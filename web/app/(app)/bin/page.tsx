@@ -495,8 +495,8 @@ export default async function BinPage(): Promise<JSX.Element> {
         <h1 className="text-2xl font-semibold">Bin</h1>
         <p className="text-sm text-muted-foreground">
           Deleted generated images, scenes and clip versions, across every project
-          {viewerIsAdmin ? " and every account" : ""} — scenes and clip versions stay in the bin for
-          2 weeks before automatic permanent deletion
+          {viewerIsAdmin ? " and every account" : ""} — everything stays in the bin for 3 days
+          before automatic permanent deletion
           {viewerIsAdmin ? ". Admins can preview, download, or permanently delete any entry." : "."}
         </p>
       </div>
@@ -511,7 +511,7 @@ export default async function BinPage(): Promise<JSX.Element> {
           <Trash2 aria-hidden="true" className="size-8 text-muted-foreground" />
           <p className="text-sm font-medium">No scenes or clip versions in Bin</p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Delete a scene or a clip version from any project and it stays here for 2 weeks so you
+            Delete a scene or a clip version from any project and it stays here for 3 days so you
             can restore it before it is permanently deleted.
           </p>
         </div>

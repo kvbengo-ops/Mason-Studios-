@@ -1,7 +1,9 @@
 package store
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -61,6 +63,47 @@ func UploadObject(ctx context.Context, cfg *config.Config, bucket, path string, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("store: upload object %s: status %d: %s", path, resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+// deleteBatch is how many keys go in one Storage delete call.
+const deleteBatch = 100
+
+// DeleteObjects removes keys from a Supabase Storage bucket. A key that is
+// already gone is not an error — Storage answers 200 with only the objects it
+// actually removed.
+//
+// DELETE {SUPABASE_URL}/storage/v1/object/{bucket}  body {"prefixes":[...]}
+func DeleteObjects(ctx context.Context, cfg *config.Config, bucket string, keys []string) error {
+	if bucket == "" {
+		return fmt.Errorf("store: delete objects: bucket is empty")
+	}
+	endpoint := fmt.Sprintf("%s/storage/v1/object/%s", strings.TrimRight(cfg.SupabaseURL, "/"), bucket)
+	httpClient := &http.Client{Timeout: uploadTimeout}
+
+	for start := 0; start < len(keys); start += deleteBatch {
+		end := min(start+deleteBatch, len(keys))
+		payload, err := json.Marshal(map[string][]string{"prefixes": keys[start:end]})
+		if err != nil {
+			return fmt.Errorf("store: delete objects: encode: %w", err)
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, bytes.NewReader(payload))
+		if err != nil {
+			return fmt.Errorf("store: delete objects: build request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+cfg.SupabaseServiceRoleKey)
+		req.Header.Set("apikey", cfg.SupabaseServiceRoleKey)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("store: delete objects: %w", err)
+		}
+		respBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return fmt.Errorf("store: delete objects: status %d: %s", resp.StatusCode, string(respBody))
+		}
 	}
 	return nil
 }

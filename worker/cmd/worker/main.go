@@ -202,6 +202,11 @@ func run() error {
 			logger.Warn("initial weekly credit notification check failed", slog.String("error", err.Error()))
 		}
 		go loop.Every(ctx, 5*time.Minute, "weekly-credit-renewal", notifyWeeklyCreditRenewal)
+		// Production only: the bin tables carry no dev flag, so a development
+		// worker would purge production's bin.
+		go loop.Every(ctx, loop.BinPurgeInterval, "bin-purge", func(ctx context.Context) error {
+			return loop.PurgeBin(ctx, st, cfg, logger)
+		})
 	}
 
 	srv := whttp.New(fmt.Sprintf(":%d", cfg.Port), st, cfg, kieClient, mediaRunner, logger)

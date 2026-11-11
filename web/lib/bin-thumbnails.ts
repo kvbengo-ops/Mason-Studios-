@@ -104,7 +104,7 @@ export function pickSceneClipSource(assetsJson: unknown): SceneClipSource | null
 /**
  * Collects every usable `storage_key` from an archived scene's `assets`
  * array and/or an archived version's `clip_asset` object for Storage cleanup
- * when an entry is permanently deleted by an admin or expires after 2 weeks.
+ * when an entry is permanently deleted by an admin or expires after 3 days.
  */
 export function extractArchivedStorageKeys(
   assetsJson: unknown,
@@ -125,8 +125,8 @@ export function extractArchivedStorageKeys(
   return Array.from(keys);
 }
 
-/** Deleted scenes and clip versions stay in /bin for 2 weeks (14 days). */
-export const BIN_RETENTION_DAYS = 14;
+/** Deleted scenes, clip versions and images stay in /bin for 3 days. worker/internal/loop/purge_bin.go must use the same window. */
+export const BIN_RETENTION_DAYS = 3;
 export const BIN_RETENTION_MS = BIN_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 export function binRetentionCutoffIso(nowMs: number = Date.now()): string {
