@@ -208,7 +208,8 @@ export function ImageGeneratorForm({
   // one chosen on the last (kie documents none for google/nano-banana).
   const [resolution, setResolution] = useState<ImageResolutionId>("1K");
   const selectedResolution = selectedModel.resolutions?.includes(resolution) ? resolution : "1K";
-  const selectedCostUsd = imageCostUsd(selectedModel, selectedResolution);
+  // Includes a per-reference charge where the model has one (Seedream 5.5 · Kie).
+  const selectedCostUsd = imageCostUsd(selectedModel, selectedResolution, taggedPictures.length);
   const costLabel =
     selectedCostUsd === null ? "Pricing verification pending" : formatUsdRate(selectedCostUsd);
   const batchCostLabel =
@@ -748,7 +749,7 @@ export function ImageGeneratorForm({
                             Resolution
                           </DropdownMenuLabel>
                           {selectedModel.resolutions.map((tier) => {
-                            const cost = imageCostUsd(selectedModel, tier);
+                            const cost = imageCostUsd(selectedModel, tier, taggedPictures.length);
                             return (
                               <DropdownMenuItem
                                 key={tier}

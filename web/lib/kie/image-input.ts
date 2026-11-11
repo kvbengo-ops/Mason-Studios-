@@ -41,6 +41,13 @@ export const NANO_BANANA_2_1_ID = "nano-banana-2-1";
 /** Seedream 5.5 text-to-image uses a distinct model id and defaults to 2K. */
 export const SEEDREAM_5_5_TEXT_ID = "seedream/5-5-text-to-image";
 
+/**
+ * Seedream 5.5 image-to-image — https://docs.kie.ai/market/seedream/5-5-image-to-image.
+ * References go in `image_urls` (1-10; JPEG/PNG/WEBP, 10 MB each); each one is
+ * billed separately (ImageModelDescriptor.inputImageCostUsd).
+ */
+export const SEEDREAM_5_5_EDIT_ID = "seedream/5-5-image-to-image";
+
 export function kieImageInput(
   model: string,
   prompt: string,
@@ -50,6 +57,9 @@ export function kieImageInput(
 ): Record<string, unknown> {
   if (model === SEEDREAM_5_5_TEXT_ID) {
     return { prompt, aspect_ratio: aspectRatio, size: resolution };
+  }
+  if (model === SEEDREAM_5_5_EDIT_ID) {
+    return { prompt, image_urls: refImageUrls, aspect_ratio: aspectRatio, size: resolution };
   }
   if (model === GPT_IMAGE_2_6_ECONOMY_TEXT || model === GPT_IMAGE_2_6_ECONOMY_EDIT) {
     if (resolution !== "1K") throw new Error("GPT Image 2.6 Economy offers 1K only.");

@@ -549,7 +549,9 @@ export async function generateImageFor(
   }
   // A tier nobody has been billed at is not for sale — the same rule as a
   // model with no price (above).
-  const estimateUsd = imageCostUsd(imageModel, resolution);
+  // Per-input-image charges count too (Seedream 5.5 · Kie), so the hold and
+  // the caps see what the vendor bills, not just the output price.
+  const estimateUsd = imageCostUsd(imageModel, resolution, refImageUrls.length);
   if (estimateUsd === null) {
     return {
       error: `${imageModel.label} at ${resolution} is awaiting pricing verification and cannot generate yet.`,

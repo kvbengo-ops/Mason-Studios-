@@ -38,6 +38,7 @@ import {
   NANO_BANANA_2_1_ID,
   GPT_IMAGE_2_6_ECONOMY_EDIT,
   GPT_IMAGE_2_6_ECONOMY_TEXT,
+  SEEDREAM_5_5_EDIT_ID,
   SEEDREAM_5_5_TEXT_ID,
 } from "./kie/image-input";
 import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
@@ -1469,6 +1470,11 @@ export interface ImageModelDescriptor {
   referenceDisabledReason?: string;
   /** Null keeps an unpriced model visible but unavailable. */
   costUsd: number | null;
+  /**
+   * Charged per reference image on an edit, on top of the output price
+   * (Kie Seedream 5.5 bills each input image separately). Absent = no input charge.
+   */
+  inputImageCostUsd?: number;
   /** Model-specific vendor cap, including required image safety instructions. */
   maxPromptChars?: number;
   aspectRatios: readonly ImageAspectRatio[];
@@ -1527,13 +1533,14 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     id: "seedream-5.5",
     label: "Seedream 5.5 · Kie",
     textToImageId: SEEDREAM_5_5_TEXT_ID,
-    // Kie charges separately for input images, but does not publish their rate
-    // here; keep edits disabled until their reservation estimate is known.
-    editId: null,
-    referenceDisabledReason:
-      "Seedream 5.5 reference edits are unavailable until Kie's input-image price is verified. Remove the references or choose another model.",
-    // Kie's published output rates: 3.6 credits at 1K/1.5K and 6.3 at 2K.
+    // seedream/5-5-image-to-image: references in image_urls, 1-10 (kie docs, 2026-11-12).
+    editId: SEEDREAM_5_5_EDIT_ID,
+    // Kie's published output rates: 3.6 credits at 1K/1.5K and 6.3 at 2K, the
+    // same for text-to-image and image-to-image.
     costUsd: 0.018,
+    // Plus 1.44 credits ($0.0072) per input image (kie.ai/pricing, 2026-11-12);
+    // kie's own example: one input at 2K = 6.3 + 1.44 = 7.74 credits.
+    inputImageCostUsd: 0.0072,
     maxPromptChars: 5_000,
     observedSeconds: null,
     aspectRatios: IMAGE_ASPECT_RATIOS,
@@ -1705,13 +1712,20 @@ export function blocksInline(model: ImageModelDescriptor, hasRefs: boolean): boo
 /**
  * What one image costs at a tier, or null when no one has been billed at it.
  * The base tier is the model's own `costUsd`; a model with no `resolutions`
- * has only that.
+ * has only that. `referenceCount` adds the model's per-input-image charge
+ * (inputImageCostUsd) for an edit with that many references.
  */
 export function imageCostUsd(
   model: ImageModelDescriptor,
   resolution: ImageResolutionId = BASE_IMAGE_RESOLUTION,
+  referenceCount = 0,
 ): number | null {
-  if (resolution === BASE_IMAGE_RESOLUTION) return model.costUsd;
-  if (!model.resolutions?.includes(resolution)) return null;
-  return model.resolutionCostsUsd?.[resolution as Exclude<ImageResolutionId, "1K">] ?? null;
+  const output =
+    resolution === BASE_IMAGE_RESOLUTION
+      ? model.costUsd
+      : model.resolutions?.includes(resolution)
+        ? (model.resolutionCostsUsd?.[resolution as Exclude<ImageResolutionId, "1K">] ?? null)
+        : null;
+  if (output === null) return null;
+  return output + (model.inputImageCostUsd ?? 0) * referenceCount;
 }
