@@ -168,7 +168,10 @@ func run() error {
 		logger.Info("ASSEMBLE_ENABLED is off: delivering raw clips, not an assembled final video")
 	}
 
-	go loop.Every(ctx, 30*time.Second, "dispatch", func(ctx context.Context) error {
+	// 10s, not 30s: a queued scene waits half a tick on average before
+	// submit. Ticks never overlap, and submitGap still paces kie under its
+	// 20-per-10s limit.
+	go loop.Every(ctx, 10*time.Second, "dispatch", func(ctx context.Context) error {
 		return loop.Dispatch(ctx, deps)
 	})
 	// Was 2m, paired with reconcile.go's old 3m staleAfter. Measured against
