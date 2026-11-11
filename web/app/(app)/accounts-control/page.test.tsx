@@ -136,6 +136,7 @@ describe("AccountsControlPage", () => {
         totalUsd: 12.0,
       },
       modelUsage: [],
+      hourlySeries: [],
       dailySeries: [
         {
           date: "2026-10-30",
@@ -198,9 +199,7 @@ describe("AccountsControlPage", () => {
     expect(dailySpendBar.getAttribute("aria-valuenow")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     expect(dailySpendBar.getAttribute("aria-valuemax")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     // $2.50 today, read from the Today tile: the figure can repeat elsewhere on the page.
-    expect(screen.getByText("Today").closest("div")?.parentElement?.textContent).toContain(
-      "$2.50",
-    );
+    expect(screen.getByText("Today").closest("div")?.parentElement?.textContent).toContain("$2.50");
     expect(loadEditorVideos).not.toHaveBeenCalled();
     cleanup();
 
@@ -232,6 +231,7 @@ describe("AccountsControlPage", () => {
       rangeCategoryTotals: { renderUsd: 5.0, iterateUsd: 0, totalUsd: 5.0 },
       modelUsage: [],
       dailySeries: [],
+      hourlySeries: [],
       accounts: [
         {
           id: "editor-1",
@@ -304,6 +304,7 @@ describe("AccountsControlPage", () => {
       rangeCategoryTotals: { renderUsd: 0, iterateUsd: 0.04, totalUsd: 0.04 },
       modelUsage: [],
       dailySeries: [],
+      hourlySeries: [],
       accounts: [
         {
           id: "editor-1",

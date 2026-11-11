@@ -146,3 +146,49 @@ describe("parseWindowDays", () => {
     expect(parseWindowDays("99")).toBe(14);
   });
 });
+
+describe("Spend chart granularity", () => {
+  it("buckets the last 24 Manila hours, ending with the current one", async () => {
+    const { buildHourlySpendSeries } = await import("./accounts-control");
+    // 2026-11-12 15:30 Manila = 07:30 UTC.
+    const now = new Date("2026-11-12T07:30:00Z");
+    const series = buildHourlySpendSeries(
+      [
+        { created_at: "2026-11-12T07:05:00Z", cost_usd: 2, scene_id: "s1" }, // 15:05 Manila
+        { created_at: "2026-11-12T07:10:00Z", cost_usd: 0.5, scene_id: null }, // same hour, image
+        { created_at: "2026-11-11T07:59:00Z", cost_usd: 9, scene_id: "s2" }, // 15:59 yesterday: outside
+        { created_at: "2026-11-11T08:00:00Z", cost_usd: 1, scene_id: "s3" }, // 16:00 yesterday: first bucket
+      ],
+      now,
+    );
+    expect(series).toHaveLength(24);
+    expect(series[0]).toMatchObject({ date: "2026-11-11T16", label: "4 PM", totalUsd: 1 });
+    expect(series[23]).toMatchObject({
+      date: "2026-11-12T15",
+      label: "3 PM",
+      renderUsd: 2,
+      iterateUsd: 0.5,
+      totalUsd: 2.5,
+    });
+    expect(series.reduce((sum, p) => sum + p.totalUsd, 0)).toBe(3.5);
+  });
+
+  it("splits the last 12 Manila months into [start, end) windows, oldest first", async () => {
+    const { manilaMonthWindows } = await import("./accounts-control");
+    const now = new Date("2026-11-12T07:30:00Z");
+    const windows = manilaMonthWindows(now, 12);
+    expect(windows).toHaveLength(12);
+    expect(windows[11]).toMatchObject({ date: "2026-11", startIso: "2026-10-31T16:00:00.000Z" });
+    expect(windows[0]).toMatchObject({ date: "2025-12", label: "Dec 25" });
+    // Contiguous: each month ends where the next one starts.
+    for (let i = 0; i < 11; i++) expect(windows[i]!.endIso).toBe(windows[i + 1]!.startIso);
+  });
+
+  it("reads the chart param, defaulting to daily", async () => {
+    const { parseSpendGranularity } = await import("./accounts-control");
+    expect(parseSpendGranularity("hourly")).toBe("hourly");
+    expect(parseSpendGranularity(["monthly"])).toBe("monthly");
+    expect(parseSpendGranularity("weekly")).toBe("daily");
+    expect(parseSpendGranularity(undefined)).toBe("daily");
+  });
+});

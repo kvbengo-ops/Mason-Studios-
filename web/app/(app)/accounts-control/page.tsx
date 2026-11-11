@@ -55,6 +55,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   loadAccountControlDeleted,
   loadAccountsControlOverview,
+  loadMonthlySpendSeries,
+  parseSpendGranularity,
+  type SpendGranularity,
   loadAccountsRunLog,
   parseWindowDays,
   type AccountControlDeletedData,
@@ -135,8 +138,12 @@ function buildAccountsControlHref(params: {
   user?: string | null;
   tab?: AccountsControlTab;
   page?: number;
+  chart?: SpendGranularity;
 }): string {
   const query = new URLSearchParams();
+  if (params.chart && params.chart !== "daily") {
+    query.set("chart", params.chart);
+  }
   if (params.view !== "spending") {
     query.set("view", params.view);
   }
@@ -508,6 +515,7 @@ export default async function AccountsControlPage({
     user?: string | string[];
     tab?: string | string[];
     page?: string | string[];
+    chart?: string | string[];
   }>;
 }): Promise<JSX.Element> {
   const { user: viewer, profile: viewerProfile } = await requireAdmin();
@@ -519,33 +527,48 @@ export default async function AccountsControlPage({
   const tab = parseTab(resolvedParams.tab);
   const requestedUserId = parseUserParam(resolvedParams.user);
   const requestedPage = parsePage(resolvedParams.page);
+  const chart = parseSpendGranularity(resolvedParams.chart);
 
   // Only what the open view shows is loaded. The Needs attention reads are
   // fail-soft (null), and a null line is skipped rather than shown as zero.
   const spending = view === "spending";
   const supabase = await createClient();
   const now = new Date();
-  const [overview, claudeSpend, runLog, team, failedRunErrors, pendingAllowanceRequests] =
-    await Promise.all([
-      loadAccountsControlOverview(windowDays, now),
-      spending ? getAnthropicMonthlySpend() : null,
-      view === "runs"
-        ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now)
-        : null,
-      spending
-        ? loadTeamSnapshot(supabase, now).catch((error: unknown) => {
-            console.error("Failed to load team snapshot for /accounts-control", error);
-            return null;
-          })
-        : null,
-      spending
-        ? loadFailedRunErrors(supabase, manilaWindowStartIso(now, 1)).catch((error: unknown) => {
-            console.error("Failed to load failed runs for /accounts-control", error);
-            return null;
-          })
-        : null,
-      spending ? getDecidableRequestCount(viewer.id, viewerProfile) : null,
-    ]);
+  const [
+    overview,
+    claudeSpend,
+    runLog,
+    team,
+    failedRunErrors,
+    pendingAllowanceRequests,
+    monthlySeries,
+  ] = await Promise.all([
+    loadAccountsControlOverview(windowDays, now),
+    spending ? getAnthropicMonthlySpend() : null,
+    view === "runs"
+      ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now)
+      : null,
+    spending
+      ? loadTeamSnapshot(supabase, now).catch((error: unknown) => {
+          console.error("Failed to load team snapshot for /accounts-control", error);
+          return null;
+        })
+      : null,
+    spending
+      ? loadFailedRunErrors(supabase, manilaWindowStartIso(now, 1)).catch((error: unknown) => {
+          console.error("Failed to load failed runs for /accounts-control", error);
+          return null;
+        })
+      : null,
+    spending ? getDecidableRequestCount(viewer.id, viewerProfile) : null,
+    // Twelve small aggregate calls, so only when the chart asks for months.
+    spending && chart === "monthly"
+      ? loadMonthlySpendSeries(now).catch((error: unknown) => {
+          console.error("Failed to load monthly spend for /accounts-control", error);
+          return null;
+        })
+      : null,
+  ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
   const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
   // Archived (deactivated) accounts keep naming their runs, but leave the ranking.
@@ -569,11 +592,34 @@ export default async function AccountsControlPage({
     }
   }
 
-  const maxDailyUsd = Math.max(...overview.dailySeries.map((point) => point.totalUsd), 0);
+  // The Spend chart's series: last 24 hours, the page window, or last 12 months.
+  // Monthly falls back to daily if its read failed, and the switch says so.
+  const monthlyFailed = chart === "monthly" && monthlySeries === null;
+  const chartKind: SpendGranularity = monthlyFailed ? "daily" : chart;
+  const series =
+    chartKind === "hourly"
+      ? overview.hourlySeries
+      : chartKind === "monthly" && monthlySeries
+        ? monthlySeries
+        : overview.dailySeries;
+  const seriesTotals = series.reduce(
+    (sum, point) => ({
+      renderUsd: sum.renderUsd + point.renderUsd,
+      iterateUsd: sum.iterateUsd + point.iterateUsd,
+      totalUsd: sum.totalUsd + point.totalUsd,
+    }),
+    { renderUsd: 0, iterateUsd: 0, totalUsd: 0 },
+  );
+  const CHART_COPY: Record<SpendGranularity, { title: string; span: string; unit: string }> = {
+    hourly: { title: "Hourly spend", span: "the last 24 hours", unit: "Hour" },
+    daily: { title: "Daily spend", span: `the last ${windowDays} days`, unit: "Day" },
+    monthly: { title: "Monthly spend", span: "the last 12 months", unit: "Month" },
+  };
+  const chartCopy = CHART_COPY[chartKind];
+  const maxDailyUsd = Math.max(...series.map((point) => point.totalUsd), 0);
   const maxAccountRangeUsd = Math.max(...rankedAccounts.map((account) => account.rangeTotalUsd), 0);
   const runwayShort = isRunwayShort(overview.runwayEstimate);
   const kieEmpty = overview.kieBalanceUsd !== null && overview.kieBalanceUsd <= 0;
-  const series = overview.dailySeries;
   // Top accounts: share of the team's window total, which keeps archived
   // accounts' past spend even though they leave the ranking.
   const teamWindowUsd = overview.rangeCategoryTotals.totalUsd;
@@ -728,7 +774,7 @@ export default async function AccountsControlPage({
             {WINDOW_OPTIONS.map((days) => (
               <Link
                 key={days}
-                href={buildAccountsControlHref({ view, days, user, tab })}
+                href={buildAccountsControlHref({ view, days, user, tab, chart })}
                 aria-current={windowDays === days ? "page" : undefined}
                 scroll={false}
                 className={cn(SEGMENT, windowDays === days ? SEGMENT_ON : SEGMENT_OFF)}
@@ -790,23 +836,69 @@ export default async function AccountsControlPage({
 
           <ViewPanel
             id="accounts-control-spending-heading"
-            title="Daily spend"
+            title={chartCopy.title}
             meta={
-              <span className="inline-flex flex-wrap items-center gap-x-2">
-                {formatUsd(teamWindowUsd)} in {windowDays} days
-                <ChangeLine
-                  change={periodChange(teamWindowUsd, overview.previousWindowUsd)}
-                  vs={`previous ${windowDays} days`}
-                />
-              </span>
+              chartKind === "daily" ? (
+                <span className="inline-flex flex-wrap items-center gap-x-2">
+                  {formatUsd(teamWindowUsd)} in {windowDays} days
+                  <ChangeLine
+                    change={periodChange(teamWindowUsd, overview.previousWindowUsd)}
+                    vs={`previous ${windowDays} days`}
+                  />
+                </span>
+              ) : (
+                <span>
+                  {formatUsd(seriesTotals.totalUsd)} in {chartCopy.span}
+                </span>
+              )
             }
           >
             <Tabs defaultValue="area" className="gap-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                <p className="text-xs tabular-nums text-muted-foreground">
-                  Video {formatUsd(overview.rangeCategoryTotals.renderUsd)} · Images{" "}
-                  {formatUsd(overview.rangeCategoryTotals.iterateUsd)}
-                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <nav aria-label="Chart period" className={SEGMENTED}>
+                    {(["hourly", "daily", "monthly"] as const).map((option) => (
+                      <Link
+                        key={option}
+                        href={buildAccountsControlHref({
+                          view,
+                          days: windowDays,
+                          user,
+                          tab,
+                          chart: option,
+                        })}
+                        aria-current={chartKind === option ? "page" : undefined}
+                        scroll={false}
+                        className={cn(
+                          SEGMENT,
+                          "text-xs",
+                          chartKind === option ? SEGMENT_ON : SEGMENT_OFF,
+                        )}
+                      >
+                        {option === "hourly" ? "Hourly" : option === "daily" ? "Daily" : "Monthly"}
+                      </Link>
+                    ))}
+                  </nav>
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    Video{" "}
+                    {formatUsd(
+                      chartKind === "daily"
+                        ? overview.rangeCategoryTotals.renderUsd
+                        : seriesTotals.renderUsd,
+                    )}{" "}
+                    · Images{" "}
+                    {formatUsd(
+                      chartKind === "daily"
+                        ? overview.rangeCategoryTotals.iterateUsd
+                        : seriesTotals.iterateUsd,
+                    )}
+                  </p>
+                  {monthlyFailed ? (
+                    <p role="status" className="text-xs text-destructive">
+                      Monthly totals could not be loaded; showing daily.
+                    </p>
+                  ) : null}
+                </div>
                 <TabsList aria-label="Chart type">
                   <TabsTrigger value="area" className="px-3 text-xs">
                     Area
@@ -820,9 +912,10 @@ export default async function AccountsControlPage({
               <TabsContent value="area">
                 <AreaChart
                   heightClass="h-64 sm:h-72"
-                  ariaLabel={`Daily spend over the last ${windowDays} days`}
+                  ariaLabel={`${chartCopy.title} over ${chartCopy.span}`}
                   points={series.map((point) => ({
                     date: point.date,
+                    label: chartKind === "daily" ? undefined : point.label,
                     valueUsd: point.totalUsd,
                     details: [
                       { label: "Video", valueUsd: point.renderUsd },
@@ -845,11 +938,13 @@ export default async function AccountsControlPage({
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
                   <span>Spent</span>
-                  <span>Peak day · {formatUsd(maxDailyUsd)}</span>
+                  <span>
+                    Peak {chartCopy.unit.toLowerCase()} · {formatUsd(maxDailyUsd)}
+                  </span>
                 </div>
                 <div
                   role="img"
-                  aria-label={`Daily spend over the last ${windowDays} days`}
+                  aria-label={`${chartCopy.title} over ${chartCopy.span}`}
                   className="flex h-64 items-end gap-1 rounded-t-lg border-b border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] pt-4 sm:h-72 sm:gap-2"
                 >
                   {series.map((point) => {
@@ -900,14 +995,16 @@ export default async function AccountsControlPage({
             </Tabs>
             <details className="mt-5 border-t border-border/60 pt-4">
               <summary className="cursor-pointer rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                View daily totals
+                View{" "}
+                {chartKind === "hourly" ? "hourly" : chartKind === "monthly" ? "monthly" : "daily"}{" "}
+                totals
               </summary>
               <div className="mt-4">
                 <Table>
-                  <caption className="sr-only">Daily spend</caption>
+                  <caption className="sr-only">{chartCopy.title}</caption>
                   <TableHeader>
                     <TableRow>
-                      <TableHead scope="col">Day</TableHead>
+                      <TableHead scope="col">{chartCopy.unit}</TableHead>
                       <TableHead scope="col" numeric>
                         Video
                       </TableHead>

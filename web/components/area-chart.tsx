@@ -5,8 +5,10 @@ import { formatUsd } from "@/lib/format-usd";
 import { cn } from "@/lib/utils";
 
 export interface AreaPoint {
-  /** `YYYY-MM-DD`. */
+  /** `YYYY-MM-DD`, or any unique key when `label` is given. */
   date: string;
+  /** Shown instead of the formatted date (an hour or a month bucket). */
+  label?: string;
   valueUsd: number;
   /** Optional breakdown shown in the tooltip and accessible name ("Video $4.00"). */
   details?: readonly { label: string; valueUsd: number }[];
@@ -26,7 +28,8 @@ const dayLabel = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   timeZone: "UTC",
 });
-const fmtDay = (key: string): string => dayLabel.format(new Date(`${key}T00:00:00Z`));
+const fmtDate = (key: string): string => dayLabel.format(new Date(`${key}T00:00:00Z`));
+const fmtDay = (p: AreaPoint): string => p.label ?? fmtDate(p.date);
 
 /**
  * Dollars per day as a line with a soft gradient fill. The tooltip follows
@@ -56,7 +59,7 @@ export function AreaChart({
   const coords = points.map((p, i) => `${(xPct(i) / 100) * W},${(yPct(p.valueUsd) / 100) * H}`);
   const line = `M${coords.join(" L")}`;
   const area = `M0,${H} L${coords.join(" L")} L${W},${H} Z`;
-  const label = `${ariaLabel}: ${points.map((p) => `${fmtDay(p.date)} ${formatUsd(p.valueUsd)}${detailText(p)}`).join(", ")}`;
+  const label = `${ariaLabel}: ${points.map((p) => `${fmtDay(p)} ${formatUsd(p.valueUsd)}${detailText(p)}`).join(", ")}`;
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
     if (n === 0) return;
@@ -90,7 +93,7 @@ export function AreaChart({
       <div
         tabIndex={0}
         role="group"
-        aria-label={`${ariaLabel}. Use the arrow keys to read each day.`}
+        aria-label={`${ariaLabel}. Use the arrow keys to read each point.`}
         onKeyDown={onKeyDown}
         onFocus={() => setActive((a) => a ?? n - 1)}
         onBlur={() => setActive(null)}
@@ -156,11 +159,15 @@ export function AreaChart({
               role="status"
               className={cn(
                 "pointer-events-none absolute top-0 z-10 -translate-y-full whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md",
-                xPct(active) > 70 ? "-translate-x-full" : xPct(active) > 30 ? "-translate-x-1/2" : "",
+                xPct(active) > 70
+                  ? "-translate-x-full"
+                  : xPct(active) > 30
+                    ? "-translate-x-1/2"
+                    : "",
               )}
               style={{ left: `${xPct(active)}%` }}
             >
-              <span className="text-muted-foreground">{fmtDay(point.date)}</span>{" "}
+              <span className="text-muted-foreground">{fmtDay(point)}</span>{" "}
               <span className="font-semibold tabular-nums">{formatUsd(point.valueUsd)}</span>
               {point.details?.map((d) => (
                 <span key={d.label} className="block tabular-nums text-muted-foreground">
@@ -176,9 +183,9 @@ export function AreaChart({
           aria-hidden="true"
           className="flex justify-between text-[11px] tabular-nums text-muted-foreground"
         >
-          <span>{fmtDay(points[0]!.date)}</span>
+          <span>{fmtDay(points[0]!)}</span>
           <span>Peak {formatUsd(peak)}</span>
-          <span>{fmtDay(points[n - 1]!.date)}</span>
+          <span>{fmtDay(points[n - 1]!)}</span>
         </div>
       ) : null}
     </div>

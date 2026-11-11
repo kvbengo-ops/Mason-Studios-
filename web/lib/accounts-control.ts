@@ -36,6 +36,14 @@ const SIGNED_URL_TTL_SECONDS = 3600;
 
 export type AccountsControlWindowDays = 7 | 14 | 30;
 
+/** The Spend chart's bucket size: last 24 hours, the page window, or last 12 months. */
+export type SpendGranularity = "hourly" | "daily" | "monthly";
+
+export function parseSpendGranularity(value: string | string[] | undefined): SpendGranularity {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw === "hourly" || raw === "monthly" ? raw : "daily";
+}
+
 export interface DailySpendPoint {
   date: string;
   label: string;
@@ -99,6 +107,8 @@ export interface AccountsControlOverview {
   runwayEstimate: RunwayEstimate;
   rangeCategoryTotals: SpendCategoryTotals;
   dailySeries: DailySpendPoint[];
+  /** The last 24 Manila hours, from the same window read as dailySeries. */
+  hourlySeries: DailySpendPoint[];
   modelUsage: ModelUsage[];
   accounts: AccountSpendSummary[];
 }
@@ -202,6 +212,107 @@ export function buildDailySpendSeries(
   return Array.from(byDate.values());
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+// Asia/Manila has no daylight saving, so a fixed +8h offset is exact.
+const MANILA_OFFSET_MS = 8 * HOUR_MS;
+
+const hourLabelFormatter = new Intl.DateTimeFormat("en-US", {
+  hour: "numeric",
+  timeZone: "UTC",
+});
+
+/**
+ * The last 24 Asia/Manila clock hours ending with the current one, split the
+ * same way as buildDailySpendSeries. Each point's date is the Manila hour as
+ * "YYYY-MM-DDTHH" and its label "3 PM".
+ */
+export function buildHourlySpendSeries(
+  runs: readonly {
+    created_at: string;
+    cost_usd: number | null;
+    scene_id: string | null;
+  }[],
+  now: Date = new Date(),
+): DailySpendPoint[] {
+  const hourIndex = (date: Date): number =>
+    Math.floor((date.getTime() + MANILA_OFFSET_MS) / HOUR_MS);
+  const currentHour = hourIndex(now);
+  const byHour = new Map<number, DailySpendPoint>();
+  for (let index = currentHour - 23; index <= currentHour; index++) {
+    // A Date whose UTC fields read as the Manila wall clock.
+    const wall = new Date(index * HOUR_MS);
+    byHour.set(index, {
+      date: wall.toISOString().slice(0, 13),
+      label: hourLabelFormatter.format(wall),
+      renderUsd: 0,
+      iterateUsd: 0,
+      totalUsd: 0,
+    });
+  }
+
+  for (const run of runs) {
+    if (typeof run.cost_usd !== "number" || run.cost_usd <= 0) continue;
+    const point = byHour.get(hourIndex(new Date(run.created_at)));
+    if (!point) continue;
+    if (run.scene_id !== null) {
+      point.renderUsd += run.cost_usd;
+    } else {
+      point.iterateUsd += run.cost_usd;
+    }
+    point.totalUsd = point.renderUsd + point.iterateUsd;
+  }
+
+  return Array.from(byHour.values());
+}
+
+const monthLabelFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  year: "2-digit",
+  timeZone: "UTC",
+});
+
+/** The last `months` Manila calendar months, oldest first, as [start, end) ISO pairs. */
+export function manilaMonthWindows(
+  now: Date,
+  months: number,
+): { date: string; label: string; startIso: string; endIso: string }[] {
+  const windows: { date: string; label: string; startIso: string; endIso: string }[] = [];
+  let endIso = new Date(now.getTime() + 1).toISOString();
+  let startIso = startOfManilaMonthIso(now);
+  for (let i = 0; i < months; i++) {
+    const wall = new Date(new Date(startIso).getTime() + MANILA_OFFSET_MS);
+    windows.unshift({
+      date: wall.toISOString().slice(0, 7),
+      label: monthLabelFormatter.format(wall),
+      startIso,
+      endIso,
+    });
+    endIso = startIso;
+    startIso = startOfManilaMonthIso(new Date(new Date(startIso).getTime() - 24 * HOUR_MS));
+  }
+  return windows;
+}
+
+/**
+ * The last 12 Manila months of team spend: one spend_category_totals call per
+ * month, run in parallel, so no runs rows are paged in. Only loaded when the
+ * chart is set to Monthly.
+ */
+export async function loadMonthlySpendSeries(now: Date = new Date()): Promise<DailySpendPoint[]> {
+  const supabase = await createClient();
+  const windows = manilaMonthWindows(now, 12);
+  const totals = await Promise.all(
+    windows.map((w) => getSpendCategoryTotals(supabase, w.startIso, w.endIso)),
+  );
+  return windows.map((w, i) => ({
+    date: w.date,
+    label: w.label,
+    renderUsd: totals[i]!.renderUsd,
+    iterateUsd: totals[i]!.iterateUsd,
+    totalUsd: totals[i]!.totalUsd,
+  }));
+}
+
 /**
  * A display name for `runs.model`, which holds whatever each writer sent:
  * kie's wire name for worker renders, a kie image id for personal images, an
@@ -299,7 +410,10 @@ export async function loadAccountsControlOverview(
   const yesterdayStart = new Date(todayStart.getTime() - DAY_MS);
   const lastMonthStart = new Date(startOfManilaMonthIso(new Date(monthStart.getTime() - DAY_MS)));
   const lastMonthSpanEnd = new Date(
-    Math.min(lastMonthStart.getTime() + (now.getTime() - monthStart.getTime()), monthStart.getTime()),
+    Math.min(
+      lastMonthStart.getTime() + (now.getTime() - monthStart.getTime()),
+      monthStart.getTime(),
+    ),
   );
   const previousWindowStart = new Date(manilaWindowStartIso(now, windowDays * 2));
   const runwayWindowStart = new Date(now.getTime() - RUNWAY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
@@ -328,9 +442,11 @@ export async function loadAccountsControlOverview(
     ),
     getSpendTotalUsd(supabase, lastMonthStart.toISOString(), lastMonthSpanEnd.toISOString()),
     // Same source as rangeCategoryTotals, so the two windows compare like for like.
-    getSpendCategoryTotals(supabase, previousWindowStart.toISOString(), windowStart.toISOString()).then(
-      (totals) => totals.totalUsd,
-    ),
+    getSpendCategoryTotals(
+      supabase,
+      previousWindowStart.toISOString(),
+      windowStart.toISOString(),
+    ).then((totals) => totals.totalUsd),
     supabase
       .from("runs")
       .select("id", { count: "exact", head: true })
@@ -388,6 +504,8 @@ export async function loadAccountsControlOverview(
   }
 
   const dailySeries = buildDailySpendSeries(windowRuns, windowDays, now);
+  // The window is at least 7 days, so it always covers the last 24 hours.
+  const hourlySeries = buildHourlySpendSeries(windowRuns, now);
   const presenceById = new Map((presenceData ?? []).map((row) => [row.id, row]));
   // Billed runs per owner, resolved like every spend read: coalesce(runs.user_id, project owner).
   const runCountByUserId = new Map<string, number>();
@@ -405,7 +523,8 @@ export async function loadAccountsControlOverview(
     avatarStorageKey: presenceById.get(account.id)?.avatar_storage_key ?? null,
     rangeRunCount: runCountByUserId.get(account.id) ?? 0,
   }));
-  if (rendersTodayError) console.error(`Failed to count today's runs: ${rendersTodayError.message}`);
+  if (rendersTodayError)
+    console.error(`Failed to count today's runs: ${rendersTodayError.message}`);
   const runwayEstimate = computeRunway(kieBalanceUsd, weekSpendUsd);
 
   return {
@@ -431,6 +550,7 @@ export async function loadAccountsControlOverview(
     runwayEstimate,
     rangeCategoryTotals,
     dailySeries,
+    hourlySeries,
     modelUsage: buildModelUsage(windowRuns),
     accounts,
   };
