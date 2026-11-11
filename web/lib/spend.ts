@@ -79,6 +79,7 @@
 // how lib/recompile-guard.ts pulls pure checks out of the "use server"
 // actions that call them.
 
+import { cache } from "react";
 import { getSpendTotalUsd, getUserSpendUsd, getUserActiveGrantsUsd } from "@/lib/db-aggregates";
 import { isDev } from "@/lib/mode";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -985,7 +986,9 @@ export async function getEffectiveWeeklyCapUsd(
  * renders that every real ceiling permits, which is an outage of the product
  * to protect a limit that is not the one holding the line.
  */
-export async function getUserDailyCapEnabled(): Promise<boolean> {
+// cache(): one app_settings read per request. A page renders the sidebar, the
+// budget snapshot and the spend checks, and each used to read this row again.
+export const getUserDailyCapEnabled = cache(async (): Promise<boolean> => {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("app_settings")
@@ -998,9 +1001,10 @@ export async function getUserDailyCapEnabled(): Promise<boolean> {
     return false;
   }
   return data?.user_daily_cap_enabled ?? false;
-}
+});
 
-export async function getGlobalSpendCapSettings(): Promise<GlobalSpendCapSettings> {
+// cache(): same reason as getUserDailyCapEnabled above.
+export const getGlobalSpendCapSettings = cache(async (): Promise<GlobalSpendCapSettings> => {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("app_settings")
@@ -1017,7 +1021,7 @@ export async function getGlobalSpendCapSettings(): Promise<GlobalSpendCapSetting
     capUsd: data.global_spend_cap_usd ?? DEFAULT_GLOBAL_SPEND_CAP_SETTINGS.capUsd,
     period: data.global_spend_cap_period ?? DEFAULT_GLOBAL_SPEND_CAP_SETTINGS.period,
   };
-}
+});
 
 export async function getGlobalSpend(
   settings: GlobalSpendCapSettings,

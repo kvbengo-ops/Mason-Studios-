@@ -49,6 +49,10 @@ func UploadObject(ctx context.Context, cfg *config.Config, bucket, path string, 
 	req.Header.Set("Authorization", "Bearer "+cfg.SupabaseServiceRoleKey)
 	req.Header.Set("apikey", cfg.SupabaseServiceRoleKey)
 	req.Header.Set("x-upsert", "true")
+	// Same 1-year lifetime as web/lib/storage.ts's uploads. Without it Storage
+	// stores max-age=3600, so a browser re-downloads every clip and poster each
+	// hour; the keys are unique per render, so a long lifetime is safe.
+	req.Header.Set("Cache-Control", "max-age=31536000")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
