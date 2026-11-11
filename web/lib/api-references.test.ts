@@ -159,80 +159,153 @@ describe("resolveApiReferences", () => {
   it.each(["seedance-2.5-byteplus", "seedance-2.5"])(
     "accepts 8+1+3 %s references and names per-type and time overflows",
     async (modelId) => {
-    const kinds = [...Array(8).fill("image"), "video", ...Array(3).fill("audio")] as (
-      "image" | "video" | "audio"
-    )[];
-    const elements: FakeElement[] = kinds.map((kind, i) => ({
-      id: `el-${i}`,
-      user_id: "user-1",
-      name: `ref_${i}`,
-      // Images are filed as characters; the asset kind below decides what the ref is.
-      category: kind === "image" ? "character" : kind,
-      description: null,
-      ai_description: null,
-      asset_id: `asset-${i}`,
-    }));
-    const assets: FakeAsset[] = kinds.map((kind, i) => ({
-      id: `asset-${i}`,
-      kind: kind === "image" ? "ref_frame" : kind === "video" ? "video_ref" : "audio",
-      storage_key: `users/user-1/${kind}/ref-${i}.${kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3"}`,
-      duration_s: kind === "video" ? 4 : kind === "audio" ? 8 : null,
-    }));
-    const admin = makeFakeAdmin({ ownedElements: elements, assets });
-    const args = {
-      admin,
-      userId: "user-1",
-      modelId,
-      resolution: "480p",
-      prompt: "A wide cinematic shot",
-      imageRefs: elements.slice(0, 8).map((e) => e.id),
-      videoRefs: [elements[8]!.id],
-      audioRefs: elements.slice(9).map((e) => e.id),
-    };
-    expect((await resolveApiReferences(args)).ok).toBe(true);
-    expect(
-      await resolveApiReferences({ ...args, imageRefs: [...args.imageRefs, args.imageRefs[0]!] }),
-    ).toMatchObject({ ok: false, code: "invalid_parameters" });
-    const ninthImage = { ...elements[0]!, id: "el-12", name: "ref_12", asset_id: "asset-12" };
-    const adminWithNinth = makeFakeAdmin({
-      ownedElements: [...elements, ninthImage],
-      assets: [...assets, { ...assets[0]!, id: "asset-12" }],
-    });
-    expect(
-      await resolveApiReferences({
-        ...args,
-        admin: adminWithNinth,
-        imageRefs: [...args.imageRefs, ninthImage.id],
-      }),
-    ).toMatchObject({
-      ok: false,
-      code: "too_many_references",
-      error: expect.stringMatching(/8 image/),
-    });
-    assets[8]!.duration_s = 31;
-    expect(
-      await resolveApiReferences({
-        ...args,
-        admin: makeFakeAdmin({ ownedElements: elements, assets }),
-      }),
-    ).toMatchObject({
-      ok: false,
-      code: "invalid_media_file",
-      error: expect.stringMatching(/30 seconds per video/),
-    });
-    // App-uploaded voices carry no duration_s; they pass through rather than being refused.
-    assets[8]!.duration_s = 4;
-    assets[9]!.duration_s = null;
-    expect(
-      (
+      const kinds = [...Array(8).fill("image"), "video", ...Array(3).fill("audio")] as (
+        "image" | "video" | "audio"
+      )[];
+      const elements: FakeElement[] = kinds.map((kind, i) => ({
+        id: `el-${i}`,
+        user_id: "user-1",
+        name: `ref_${i}`,
+        // Images are filed as characters; the asset kind below decides what the ref is.
+        category: kind === "image" ? "character" : kind,
+        description: null,
+        ai_description: null,
+        asset_id: `asset-${i}`,
+      }));
+      const assets: FakeAsset[] = kinds.map((kind, i) => ({
+        id: `asset-${i}`,
+        kind: kind === "image" ? "ref_frame" : kind === "video" ? "video_ref" : "audio",
+        storage_key: `users/user-1/${kind}/ref-${i}.${kind === "image" ? "png" : kind === "video" ? "mp4" : "mp3"}`,
+        duration_s: kind === "video" ? 4 : kind === "audio" ? 8 : null,
+      }));
+      const admin = makeFakeAdmin({ ownedElements: elements, assets });
+      const args = {
+        admin,
+        userId: "user-1",
+        modelId,
+        resolution: "480p",
+        prompt: "A wide cinematic shot",
+        imageRefs: elements.slice(0, 8).map((e) => e.id),
+        videoRefs: [elements[8]!.id],
+        audioRefs: elements.slice(9).map((e) => e.id),
+      };
+      expect((await resolveApiReferences(args)).ok).toBe(true);
+      expect(
+        await resolveApiReferences({ ...args, imageRefs: [...args.imageRefs, args.imageRefs[0]!] }),
+      ).toMatchObject({ ok: false, code: "invalid_parameters" });
+      const ninthImage = { ...elements[0]!, id: "el-12", name: "ref_12", asset_id: "asset-12" };
+      const adminWithNinth = makeFakeAdmin({
+        ownedElements: [...elements, ninthImage],
+        assets: [...assets, { ...assets[0]!, id: "asset-12" }],
+      });
+      expect(
+        await resolveApiReferences({
+          ...args,
+          admin: adminWithNinth,
+          imageRefs: [...args.imageRefs, ninthImage.id],
+        }),
+      ).toMatchObject({
+        ok: false,
+        code: "too_many_references",
+        error: expect.stringMatching(/12 total/),
+      });
+      assets[8]!.duration_s = 31;
+      expect(
         await resolveApiReferences({
           ...args,
           admin: makeFakeAdmin({ ownedElements: elements, assets }),
-        })
-      ).ok,
-    ).toBe(true);
+        }),
+      ).toMatchObject({
+        ok: false,
+        code: "invalid_media_file",
+        error: expect.stringMatching(/30 seconds per video/),
+      });
+      // App-uploaded voices carry no duration_s; they pass through rather than being refused.
+      assets[8]!.duration_s = 4;
+      assets[9]!.duration_s = null;
+      expect(
+        (
+          await resolveApiReferences({
+            ...args,
+            admin: makeFakeAdmin({ ownedElements: elements, assets }),
+          })
+        ).ok,
+      ).toBe(true);
     },
   );
+
+  function refsOf(kind: "image" | "video", count: number, durationS: number | null = null) {
+    const elements: FakeElement[] = Array.from({ length: count }, (_, i) => ({
+      id: `el-${kind}-${i}`,
+      user_id: "user-1",
+      name: `${kind}_${i}`,
+      category: kind === "image" ? "character" : "video",
+      description: null,
+      ai_description: null,
+      asset_id: `asset-${kind}-${i}`,
+    }));
+    const assets: FakeAsset[] = elements.map((e, i) => ({
+      id: e.asset_id,
+      kind: kind === "image" ? "ref_frame" : "video_ref",
+      storage_key: `users/user-1/${kind}/ref-${i}.${kind === "image" ? "png" : "mp4"}`,
+      duration_s: durationS,
+    }));
+    return { elements, assets, ids: elements.map((e) => e.id) };
+  }
+
+  it.each([
+    ["seedance-2.5", "480p", 12],
+    ["seedance-2.5-byteplus", "480p", 12],
+    ["wan-3.0", "480P", 10],
+  ] as const)(
+    "%s takes 8 and up to %s images, refuses one more",
+    async (modelId, resolution, max) => {
+      for (const count of [8, 12, max, max + 1]) {
+        const { elements, assets, ids } = refsOf("image", count);
+        const imageTags = ids.map((_, i) => `@Image ${i + 1}`).join(" ");
+        const result = await resolveApiReferences({
+          admin: makeFakeAdmin({ ownedElements: elements, assets }),
+          userId: "user-1",
+          modelId,
+          resolution,
+          prompt: `A product lineup: ${imageTags}`,
+          imageRefs: ids,
+        });
+        if (count <= max) {
+          expect(result.ok, `${modelId} ${count}`).toBe(true);
+          if (result.ok) {
+            // The last tag still maps to its provider slot, so nothing past image 8 is dropped.
+            expect(result.providerReferencePrompt).toContain(`@image${count}`);
+            expect(result.orderedReferences.images).toHaveLength(count);
+          }
+        } else {
+          expect(result, `${modelId} ${count}`).toMatchObject({
+            ok: false,
+            status: 422,
+            code: "too_many_references",
+            error: expect.stringMatching(new RegExp(`${max} image`)),
+          });
+        }
+      }
+    },
+  );
+
+  it("caps Wan 3.0 at 5 reference videos and 15 s combined", async () => {
+    const run = (count: number, durationS: number) => {
+      const { elements, assets, ids } = refsOf("video", count, durationS);
+      return resolveApiReferences({
+        admin: makeFakeAdmin({ ownedElements: elements, assets }),
+        userId: "user-1",
+        modelId: "wan-3.0",
+        resolution: "480P",
+        prompt: "A dancer copies @Video 1",
+        videoRefs: ids,
+      });
+    };
+    expect((await run(5, 3)).ok).toBe(true);
+    expect(await run(6, 2)).toMatchObject({ ok: false, code: "too_many_references" });
+    expect(await run(2, 8)).toMatchObject({ ok: false, code: "invalid_media_file" });
+  });
 
   it("applies the 20,000 character cap AFTER @tags expand into descriptions", async () => {
     // A short raw prompt passes parseApiClipInput; the description it expands to does not.

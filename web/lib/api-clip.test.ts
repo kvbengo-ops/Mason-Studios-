@@ -45,7 +45,7 @@ describe("API clip input", () => {
 
   it("sets model-specific reference limits", () => {
     expect(referenceLimitsFor("seedance-2.5-byteplus")).toMatchObject({
-      image: 8,
+      image: 12,
       video: 1,
       audio: 3,
       total: 12,
