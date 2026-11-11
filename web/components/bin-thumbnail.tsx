@@ -71,7 +71,7 @@ export function BinThumbnail({
       src={thumbnail.url}
       poster={thumbnail.posterUrl ?? undefined}
       controls
-      preload="metadata"
+      preload={thumbnail.posterUrl ? "none" : "metadata"}
       playsInline
       aria-label={itemLabel}
       onError={() => setFailed(true)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { JSX } from "react";
@@ -53,6 +53,8 @@ export type WallItem =
       durationS: number | null;
       createdAt: string;
       url: string;
+      /** The worker's ~15 KB poster frame, or null. With one, the tile loads no video until hovered. */
+      posterUrl?: string | null;
       filename: string;
       referenceTags: string[];
       /** How Delete is done: a version if its scene has others, else the scene; null if neither is allowed. */
@@ -313,6 +315,18 @@ function ClipTile({
   // The clip's own shape, once its metadata is in — same idea as the image wall.
   const [ratio, setRatio] = useState<number | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  // preload="none" means no loadedmetadata until hover, so read the tile's
+  // shape from the poster (same frame, a third of the size).
+  useEffect(() => {
+    if (!item.posterUrl) return;
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        setRatio(img.naturalWidth / img.naturalHeight);
+      }
+    };
+    img.src = item.posterUrl;
+  }, [item.posterUrl]);
   const [dialog, setDialog] = useState<"save" | "move" | null>(null);
 
   async function share(): Promise<void> {
@@ -366,11 +380,15 @@ function ClipTile({
         {/* #t=0.1 makes the browser paint a frame instead of black. */}
         <video
           ref={videoRef}
-          src={`${item.url}#t=0.1`}
+          // With a poster the tile shows that ~15 KB frame and fetches no video
+          // until hovered (play() starts the download). Without one it falls back
+          // to fetching the first frame, as before. Storage egress, 2026-11-12.
+          src={item.posterUrl ? item.url : `${item.url}#t=0.1`}
+          poster={item.posterUrl ?? undefined}
           muted
           loop
           playsInline
-          preload="metadata"
+          preload={item.posterUrl ? "none" : "metadata"}
           onLoadedMetadata={(event) => {
             const { videoWidth, videoHeight } = event.currentTarget;
             if (videoWidth > 0 && videoHeight > 0) setRatio(videoWidth / videoHeight);

@@ -222,17 +222,37 @@ export async function CreateVideoConsole({
   // Keep a notification-targeted active take outside the recent wall limit.
   if (requestedTake && !takes.some((version) => version.id === requestedTake.id))
     takes.push(requestedTake);
-  const { data: assetRows } =
+  const takeSceneIds = [...new Set(takes.map((v) => v.scene_id))];
+  const [{ data: assetRows }, { data: posterRows }] =
     takes.length > 0
-      ? await supabase
-          .from("assets")
-          .select("id, storage_key")
-          .in(
-            "id",
-            takes.map((v) => v.clip_asset_id!),
-          )
-      : { data: [] };
+      ? await Promise.all([
+          supabase
+            .from("assets")
+            .select("id, storage_key, scene_id, created_at")
+            .in(
+              "id",
+              takes.map((v) => v.clip_asset_id!),
+            ),
+          supabase
+            .from("assets")
+            .select("scene_id, storage_key, created_at")
+            .eq("kind", "poster")
+            .in("scene_id", takeSceneIds),
+        ])
+      : [{ data: [] }, { data: [] }];
   const assetById = new Map((assetRows ?? []).map((a) => [a.id, a]));
+  // The worker saves a clip and its poster in one pass, so they are paired by
+  // nearest created_at within a minute: the rule ugc/[id]/page.tsx uses.
+  const posterKeyFor = (clip: { scene_id: string | null; created_at: string }): string | null => {
+    const at = new Date(clip.created_at).getTime();
+    let best: { key: string; gap: number } | null = null;
+    for (const poster of posterRows ?? []) {
+      if (poster.scene_id !== clip.scene_id) continue;
+      const gap = Math.abs(new Date(poster.created_at).getTime() - at);
+      if (!best || gap < best.gap) best = { key: poster.storage_key, gap };
+    }
+    return best && best.gap <= 60_000 ? best.key : null;
+  };
 
   const clipItems: WallItem[] = [];
   for (const version of takes) {
@@ -257,6 +277,10 @@ export async function CreateVideoConsole({
       durationS: version.duration_s ?? scene.duration_s,
       createdAt: version.created_at,
       url: await signedUrl(asset.storage_key),
+      posterUrl: await (async () => {
+        const key = posterKeyFor(asset);
+        return key ? signedUrl(key).catch(() => null) : null;
+      })(),
       filename: `clip-${version.n}.${extFromFilename(asset.storage_key, "mp4")}`,
       referenceTags: tagsByScene.get(scene.id) ?? [],
       // deleteClipVersion refuses the current (or only) version, and

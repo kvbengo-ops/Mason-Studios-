@@ -126,4 +126,21 @@ describe("CreateClipWall", () => {
     expect(deleteClipVersion).toHaveBeenCalledTimes(1);
     expect(vi.mocked(deleteClipVersion).mock.calls[0]![0].get("versionId")).toBe("b1");
   });
+
+  it("shows the poster and loads no video until hovered when a poster exists", () => {
+    const { container } = render(
+      <CreateClipWall
+        items={[{ ...clip, posterUrl: "https://example.test/poster.jpg" }]}
+        projects={[]}
+      />,
+    );
+    const video = container.querySelector("video")!;
+    expect(video.getAttribute("poster")).toBe("https://example.test/poster.jpg");
+    expect(video.getAttribute("preload")).toBe("none");
+  });
+
+  it("still fetches the first frame when a clip has no poster", () => {
+    const { container } = render(<CreateClipWall items={[clip]} projects={[]} />);
+    expect(container.querySelector("video")!.getAttribute("preload")).toBe("metadata");
+  });
 });
