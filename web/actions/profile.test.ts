@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { updateUsername, uploadAvatar, removeAvatar } from "./profile";
+import { changePassword, updateUsername, uploadAvatar, removeAvatar } from "./profile";
 import { requireUser } from "@/actions/guard";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { uploadAvatarFile, removeStorageObjects } from "@/lib/storage";
 
 // Same fakes-over-the-two-boundaries approach as actions/allowance.test.ts:
@@ -14,7 +15,12 @@ vi.mock("@/actions/guard", () => ({
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
   createAdminClient: vi.fn(),
+}));
+
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn(),
 }));
 
 vi.mock("@/lib/storage", () => ({
@@ -266,5 +272,79 @@ describe("removeAvatar", () => {
     expect(removeStorageObjects).toHaveBeenCalledWith(["avatars/user-1/old.jpg"]);
     expect(updateBuilder.update).toHaveBeenCalledWith({ avatar_storage_key: null });
     expect(updateBuilder.eq).toHaveBeenCalledWith("id", USER.id);
+  });
+});
+
+describe("changePassword", () => {
+  it("refuses a wrong current password and does not call updateUser", async () => {
+    vi.mocked(requireUser).mockResolvedValue({ user: USER, profile: {} as never });
+
+    const signInWithPasswordMock = vi.fn(async () => ({
+      data: { user: null, session: null },
+      error: { message: "Invalid login credentials" },
+    }));
+    const signOutMock = vi.fn(async () => ({ error: null }));
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      auth: {
+        signInWithPassword: signInWithPasswordMock,
+        signOut: signOutMock,
+      },
+    } as never);
+
+    const updateUserMock = vi.fn(async () => ({ error: null }));
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { updateUser: updateUserMock },
+    } as never);
+
+    const formData = new FormData();
+    formData.set("currentPassword", "wrongcurrentpassword");
+    formData.set("password", "newvalidpassword");
+    formData.set("confirmPassword", "newvalidpassword");
+
+    const result = await changePassword(formData);
+
+    expect(result).toEqual({ error: "Current password is incorrect." });
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: USER.email,
+      password: "wrongcurrentpassword",
+    });
+    expect(updateUserMock).not.toHaveBeenCalled();
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("updates the password when the current password is verified", async () => {
+    vi.mocked(requireUser).mockResolvedValue({ user: USER, profile: {} as never });
+
+    const signInWithPasswordMock = vi.fn(async () => ({
+      data: { user: USER, session: {} },
+      error: null,
+    }));
+    const signOutMock = vi.fn(async () => ({ error: null }));
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      auth: {
+        signInWithPassword: signInWithPasswordMock,
+        signOut: signOutMock,
+      },
+    } as never);
+
+    const updateUserMock = vi.fn(async () => ({ error: null }));
+    vi.mocked(createClient).mockResolvedValue({
+      auth: { updateUser: updateUserMock },
+    } as never);
+
+    const formData = new FormData();
+    formData.set("currentPassword", "correctcurrentpassword");
+    formData.set("password", "newvalidpassword");
+    formData.set("confirmPassword", "newvalidpassword");
+
+    const result = await changePassword(formData);
+
+    expect(result).toBeUndefined();
+    expect(signInWithPasswordMock).toHaveBeenCalledWith({
+      email: USER.email,
+      password: "correctcurrentpassword",
+    });
+    expect(signOutMock).toHaveBeenCalledWith({ scope: "local" });
+    expect(updateUserMock).toHaveBeenCalledWith({ password: "newvalidpassword" });
   });
 });

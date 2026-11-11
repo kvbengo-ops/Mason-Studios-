@@ -15,8 +15,10 @@
 // why.
 
 import { revalidatePath } from "next/cache";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { requireUser } from "@/actions/guard";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { signupPasswordSchema } from "@/lib/signup-password";
 import { usernameFieldSchema } from "@/lib/signup-username";
 import { uploadAvatarFile, removeStorageObjects, resolveStagedUploads } from "@/lib/storage";
 import {
@@ -194,4 +196,57 @@ export async function removeAvatar(): Promise<ActionResult> {
 
   revalidatePath(PROFILE_PATH);
   revalidatePath(SIDEBAR_LAYOUT_PATH, "layout");
+}
+
+/**
+ * Changes the caller's own password from /profile after verifying the current
+ * password with a throwaway non-persisting anon client so the session cookies
+ * are untouched.
+ */
+export async function changePassword(formData: FormData): Promise<ActionResult> {
+  const { user } = await requireUser();
+
+  const rawCurrent = formData.get("currentPassword") ?? formData.get("current");
+  const currentPassword = typeof rawCurrent === "string" ? rawCurrent : "";
+  if (currentPassword.length === 0) {
+    return { error: "Current password is required." };
+  }
+
+  const rawPassword =
+    formData.get("password") ?? formData.get("newPassword") ?? formData.get("new");
+  const rawConfirm = formData.get("confirmPassword") ?? formData.get("confirm");
+  const parsed = signupPasswordSchema.safeParse({
+    password: typeof rawPassword === "string" ? rawPassword : "",
+    confirmPassword: typeof rawConfirm === "string" ? rawConfirm : "",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid password." };
+  }
+
+  if (!user.email) {
+    return { error: "Current password is incorrect." };
+  }
+
+  const anonClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    { auth: { persistSession: false } },
+  );
+  const { error: verifyError } = await anonClient.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  await anonClient.auth.signOut({ scope: "local" });
+
+  if (verifyError) {
+    return { error: "Current password is incorrect." };
+  }
+
+  const supabase = await createClient();
+  const { error: updateError } = await supabase.auth.updateUser({
+    password: parsed.data.password,
+  });
+  if (updateError) {
+    return { error: updateError.message || "Could not update password." };
+  }
 }

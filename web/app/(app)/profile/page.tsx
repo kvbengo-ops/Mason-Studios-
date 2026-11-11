@@ -8,6 +8,7 @@ import { canUseApiTokens } from "@/lib/api-auth";
 import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { AvatarUpload } from "@/components/avatar-upload";
 import { UsernameForm } from "@/components/username-form";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { RoleBadge } from "@/components/role-badge";
 import { AllowanceStatusBadge } from "@/components/allowance-status-badge";
 import { ActionForm } from "@/components/action-form";
@@ -117,6 +118,8 @@ export default async function ProfilePage(): Promise<JSX.Element> {
           <AvatarUpload avatarUrl={avatarUrl} />
 
           <UsernameForm username={profile.username} />
+
+          <ChangePasswordForm />
 
           {/* Email and role are READ-ONLY, deliberately: role in particular
               is never rendered as a form field anywhere on this page — see

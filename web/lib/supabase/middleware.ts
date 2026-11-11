@@ -17,7 +17,16 @@ import type { Database } from "@/types/db";
 // covers /login and /signup only, which is what lets a pending account
 // stay on /pending instead of being volleyed back to /create and
 // redirected out again by the guard.
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/pending", "/api/v1", "/api/mcp"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/auth/callback",
+  "/auth/confirm",
+  "/pending",
+  "/api/v1",
+  "/api/mcp",
+];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

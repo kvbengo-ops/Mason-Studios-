@@ -130,6 +130,12 @@ export default function LoginPage(): JSX.Element {
                 {errors.password ? (
                   <p className="text-sm text-destructive">{errors.password.message}</p>
                 ) : null}
+                <Link
+                  href="/forgot-password"
+                  className="w-fit text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                  Forgot password?
+                </Link>
               </div>
               {formLevelError ? <p className="text-sm text-destructive">{formLevelError}</p> : null}
             </div>
