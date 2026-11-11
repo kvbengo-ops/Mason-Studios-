@@ -744,7 +744,10 @@ export default async function AccountsControlPage({
         // Wide column, narrow side column: activity stats across both, then
         // Daily spend | Needs attention, then Top accounts | Models used.
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <section aria-label="Activity" className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:col-span-2">
+          <section
+            aria-label="Activity"
+            className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:col-span-2"
+          >
             <KpiTile
               compact
               icon={Activity}
@@ -1285,12 +1288,12 @@ export default async function AccountsControlPage({
         >
           <div className="flex justify-end">
             <a
-              href="/api/accounts-control/runs-csv"
-              download="all-runs.csv"
+              href={`/api/accounts-control/runs-csv?days=${windowDays}`}
+              download={`runs-last-${windowDays}-days.csv`}
               className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <DownloadIcon aria-hidden="true" className="size-3.5" />
-              Export all runs CSV
+              Export {windowDays}-day runs CSV
             </a>
           </div>
           {runLog.rows.length === 0 ? (
