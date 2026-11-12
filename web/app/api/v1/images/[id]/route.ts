@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiToken } from "@/lib/api-auth";
 import { apiError } from "@/lib/api-v1";
+import { saveGeneratedImageAsElement } from "@/lib/generated-image-element";
 import { reconcileImageAttemptFor } from "@/lib/image-generation";
 import { signedUrlWithExpiry } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -47,11 +48,30 @@ export async function GET(
           .is("deleted_at", null)
           .maybeSingle(),
       ]);
+      let elementId = element?.id ?? null;
+      if (asset && !elementId) {
+        // An API caller has no "Save as element" step, so the picture is filed
+        // here, on the read that hands back its element_id. The web app does not.
+        try {
+          if (await saveGeneratedImageAsElement(admin, auth.userId, attempt.image.assetId)) {
+            const { data: filed } = await admin
+              .from("elements")
+              .select("id")
+              .eq("asset_id", attempt.image.assetId)
+              .eq("user_id", auth.userId)
+              .is("deleted_at", null)
+              .maybeSingle();
+            elementId = filed?.id ?? null;
+          }
+        } catch (error) {
+          console.warn(`GET /api/v1/images/${id}: could not file the image as an element`, error);
+        }
+      }
       if (asset) {
         const signed = await signedUrlWithExpiry(asset.storage_key);
         output = {
           asset_id: attempt.image.assetId,
-          element_id: element?.id ?? null,
+          element_id: elementId,
           download_url: signed.url,
           url_expires_in_s: signed.expiresInSeconds,
         };
