@@ -5,7 +5,22 @@
 // unbounded: the callers pass the ids on one /users page, or one account.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
-import { fillDays, manilaDayKeys, manilaWindowEndIso, manilaWindowStartIso } from "@/lib/burn";
+import {
+  SPEND_DAY_SHIFT_MS,
+  fillDays,
+  manilaDayKeys as midnightDayKeys,
+  manilaWindowEndIso as midnightWindowEndIso,
+  manilaWindowStartIso as midnightWindowStartIso,
+  spendDay,
+} from "@/lib/burn";
+
+// Spend days (05:00 to 05:00 Manila), matching spend_daily_by_user since 0141.
+const shiftIso = (iso: string): string =>
+  new Date(Date.parse(iso) + SPEND_DAY_SHIFT_MS).toISOString();
+const manilaDayKeys = (now: Date, days: number): string[] => midnightDayKeys(spendDay(now), days);
+const manilaWindowStartIso = (now: Date, days: number): string =>
+  shiftIso(midnightWindowStartIso(spendDay(now), days));
+const manilaWindowEndIso = (now: Date): string => shiftIso(midnightWindowEndIso(spendDay(now)));
 
 type Client = SupabaseClient<Database>;
 

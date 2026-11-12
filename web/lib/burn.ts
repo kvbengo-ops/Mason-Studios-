@@ -13,6 +13,16 @@
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * A spend day runs 05:00 to 05:00 Manila (0138, 0141). `spendDay(now)` is the
+ * instant to hand to the day and week helpers below so they answer for the
+ * spend day `now` is in: 03:00 Tuesday is still Monday.
+ */
+export const SPEND_DAY_SHIFT_MS = 5 * 60 * 60 * 1000;
+export function spendDay(now: Date): Date {
+  return new Date(now.getTime() - SPEND_DAY_SHIFT_MS);
+}
+
 export type BurnPace = "none" | "normal" | "amber" | "red";
 
 /** `YYYY-MM-DD` of the Manila calendar day `instant` falls on. */

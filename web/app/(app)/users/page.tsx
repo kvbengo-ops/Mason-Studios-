@@ -67,7 +67,14 @@ import { getImageUrl } from "@/lib/storage";
 import { PresenceDot } from "@/components/presence-dot";
 import { lastSeenLabel } from "@/lib/presence";
 import { BurnCell, type UserBurn } from "@/components/burn-cell";
-import { computeBurn, manilaDayKeys, manilaWindowStartIso, weekSpentFromDays } from "@/lib/burn";
+import {
+  computeBurn,
+  manilaDayKeys,
+  manilaWeekPosition,
+  manilaWindowStartIso,
+  spendDay,
+  weekSpentFromDays,
+} from "@/lib/burn";
 import { getDailySpendByUser, getTeamDailySpend } from "@/lib/burn-data";
 
 // A named function type, not an inline `typeof import("@/lib/spend").
@@ -372,9 +379,11 @@ export default async function UsersPage({
   // head counts rather than one grouped read — PostgREST's `count: exact`
   // has no GROUP BY, and both are index-only counts on a column already
   // indexed for every other role filter on this page.
-  const burnDates = manilaDayKeys(burnNow, 7);
+  // Burn days are spend days: 05:00 to 05:00 Manila (0141).
+  const burnDay = spendDay(burnNow);
+  const burnDates = manilaDayKeys(burnDay, 7);
   // 14 days: the Team burn chart, and this week vs the same days last week.
-  const teamDates = manilaDayKeys(burnNow, 14);
+  const teamDates = manilaDayKeys(burnDay, 14);
   const [
     { data, error, count },
     { count: plainEditorCount },
@@ -624,7 +633,23 @@ export default async function UsersPage({
 
   // Dashboard figures. Counts and tiles leave archived accounts out; spend
   // totals keep their past spend (team reads include it).
-  const weekToDate = teamDaily ? weekToDateChange(teamDaily, burnNow) : null;
+  const weekToDate = teamDaily ? weekToDateChange(teamDaily, burnDay) : null;
+  // Mon-Sun, this week beside last week, from the same 14 days as the chart.
+  const weekBars = teamDaily
+    ? (() => {
+        const { dayOfWeek } = manilaWeekPosition(burnDay);
+        const thisMonday = teamDaily.length - dayOfWeek;
+        return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((label, i) => ({
+          label,
+          lastUsd: teamDaily[thisMonday - 7 + i] ?? 0,
+          thisUsd: i < dayOfWeek ? (teamDaily[thisMonday + i] ?? 0) : null,
+        }));
+      })()
+    : null;
+  const weekBarsMaxUsd = Math.max(
+    0.01,
+    ...(weekBars ?? []).flatMap((d) => [d.lastUsd, d.thisUsd ?? 0]),
+  );
   const pendingCount = team
     ? team.activeAccounts.filter((a) => a.status === "pending").length
     : null;
@@ -822,7 +847,7 @@ export default async function UsersPage({
                 Team burn
               </h2>
               <p className="text-xs text-muted-foreground">
-                Daily spend, last 14 days (Manila) · deactivated accounts included
+                Daily spend, last 14 days (Manila, days start 5 AM) · deactivated accounts included
               </p>
             </div>
             <Link
@@ -840,6 +865,48 @@ export default async function UsersPage({
           ) : (
             <p className="text-sm text-muted-foreground">Team spend is temporarily unavailable.</p>
           )}
+          {weekBars ? (
+            <div className="mt-6 border-t border-border pt-4">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-xs font-semibold text-foreground">This week vs last week</h3>
+                <p className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span aria-hidden="true" className="size-2 rounded-sm bg-muted-foreground/40" />
+                    Last week
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span aria-hidden="true" className="size-2 rounded-sm bg-primary" />
+                    This week
+                  </span>
+                </p>
+              </div>
+              <ul className="flex h-36 items-stretch gap-2">
+                {weekBars.map((day) => (
+                  <li
+                    key={day.label}
+                    className="flex min-w-0 flex-1 flex-col items-center gap-1"
+                    title={`${day.label}: ${day.thisUsd === null ? "not yet" : formatUsd(day.thisUsd)} this week, ${formatUsd(day.lastUsd)} last week`}
+                  >
+                    <div aria-hidden="true" className="flex w-full flex-1 items-end gap-0.5">
+                      <span
+                        className="flex-1 rounded-t-sm bg-muted-foreground/40"
+                        style={{ height: `${(day.lastUsd / weekBarsMaxUsd) * 100}%` }}
+                      />
+                      <span
+                        className="flex-1 rounded-t-sm bg-primary"
+                        style={{ height: `${((day.thisUsd ?? 0) / weekBarsMaxUsd) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{day.label}</span>
+                    <span className="sr-only">
+                      {day.thisUsd === null ? "not yet" : formatUsd(day.thisUsd)} this week,{" "}
+                      {formatUsd(day.lastUsd)} last week
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
         <section
           aria-labelledby="role-spend-heading"
@@ -1064,9 +1131,9 @@ export default async function UsersPage({
                           days: burnDays,
                           weekSpentUsd:
                             spendWindow?.spent_this_week_usd ??
-                            weekSpentFromDays(burnDays, burnNow),
+                            weekSpentFromDays(burnDays, burnDay),
                           weekTotalUsd: effectiveWeeklyCapUsd,
-                          now: burnNow,
+                          now: burnDay,
                         }),
                       }
                     : null;

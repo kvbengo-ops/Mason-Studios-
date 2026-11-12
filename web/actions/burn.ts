@@ -7,7 +7,7 @@
 
 import { requireAdmin } from "@/actions/guard";
 import { runModelLabel } from "@/lib/accounts-control";
-import { manilaDayKeys } from "@/lib/burn";
+import { manilaDayKeys, spendDay } from "@/lib/burn";
 import { getDailySpendByUser, getModelSpendByUser } from "@/lib/burn-data";
 import { createClient } from "@/lib/supabase/server";
 
@@ -50,7 +50,7 @@ export async function getAccountBurn(userId: string, days: number): Promise<Acco
 
     return {
       detail: {
-        dates: manilaDayKeys(now, windowDays),
+        dates: manilaDayKeys(spendDay(now), windowDays),
         days: daily.get(userId) ?? [],
         models: [...byLabel.values()].sort((a, b) => b.costUsd - a.costUsd),
       },

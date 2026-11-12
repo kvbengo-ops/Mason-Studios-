@@ -19,7 +19,7 @@ import {
 import { RoleBadge } from "@/components/role-badge";
 import { cn } from "@/lib/utils";
 import { formatUsd } from "@/lib/format-usd";
-import { computeBurn, shortDateLabel, weekdayLabel } from "@/lib/burn";
+import { computeBurn, shortDateLabel, spendDay, weekdayLabel } from "@/lib/burn";
 import { getAccountBurn, type AccountBurnDetail, type BurnWindowDays } from "@/actions/burn";
 import type { ProfileRole } from "@/types/db";
 
@@ -130,7 +130,7 @@ export function BurnDrawerBody({
         days: detail.days,
         weekSpentUsd: account.weekSpentUsd,
         weekTotalUsd: account.weekTotalUsd,
-        now,
+        now: spendDay(now),
       })
     : null;
   const reach =

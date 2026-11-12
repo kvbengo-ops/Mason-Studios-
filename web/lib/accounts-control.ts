@@ -10,15 +10,14 @@ import {
 } from "@/lib/bin-thumbnails";
 import type { BinCardThumbnail } from "@/components/bin-card";
 import {
+  SPEND_DAY_SHIFT_MS,
   manilaDayKey,
   manilaDayKeys,
   manilaWindowStartIso as manilaMidnightWindowStartIso,
 } from "@/lib/burn";
 
 // A spend day runs 05:00 to 05:00 Manila (0138), the same boundary the caps and
-// the "Today" tile use, so the chart's last bar equals "Today". lib/burn keeps
-// midnight days because the Users burn rate is grouped by midnight in SQL.
-const SPEND_DAY_SHIFT_MS = 5 * 60 * 60 * 1000;
+// the "Today" tile use, so the chart's last bar equals "Today".
 const spendDayKey = (instant: Date): string =>
   manilaDayKey(new Date(instant.getTime() - SPEND_DAY_SHIFT_MS));
 const spendDayKeys = (now: Date, days: number): string[] =>
