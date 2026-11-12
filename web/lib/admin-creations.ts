@@ -76,6 +76,8 @@ export interface EditorVideoClip {
   durationS: number | null;
   createdAt: string;
   url: string;
+  /** The worker's small poster frame, or null. The tile fetches no video until played. */
+  posterUrl: string | null;
   costUsd: number | null;
 }
 
@@ -396,7 +398,7 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
     takes.length > 0
       ? await supabase
           .from("assets")
-          .select("id, storage_key")
+          .select("id, storage_key, created_at")
           .in(
             "id",
             takes.map((v) => v.clip_asset_id!),
@@ -429,7 +431,11 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
     }
   }
 
-  type Candidate = Omit<EditorVideoClip, "url"> & { storageKey: string };
+  type Candidate = Omit<EditorVideoClip, "url" | "posterUrl"> & {
+    storageKey: string;
+    /** The clip asset's own created_at, for pairing it with its poster. */
+    assetCreatedAt: string;
+  };
   const candidates: Candidate[] = [];
   for (const version of takes) {
     const scene = sceneById.get(version.scene_id);
@@ -457,6 +463,7 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
       durationS: version.duration_s ?? scene.duration_s,
       createdAt: version.created_at,
       storageKey: asset.storage_key,
+      assetCreatedAt: asset.created_at,
       costUsd: latestCostBySceneId.get(scene.id) ?? null,
     });
   }
@@ -479,6 +486,7 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
       durationS: scene.duration_s,
       createdAt: asset.created_at,
       storageKey: asset.storage_key,
+      assetCreatedAt: asset.created_at,
       costUsd: latestCostBySceneId.get(scene.id) ?? null,
     });
   }
@@ -487,11 +495,41 @@ export async function loadEditorVideos(userId: string): Promise<EditorVideosData
   const shown = candidates
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, WALL_TAKES);
+
+  // Posters, so the grid paints a still per tile and fetches no video until
+  // one is played: a <video preload="metadata"> per clip, up to WALL_TAKES of
+  // them, froze the Accounts Control tab.
+  const shownSceneIds = [...new Set(shown.map((c) => c.sceneId))];
+  const { data: posterRows } =
+    shownSceneIds.length > 0
+      ? await supabase
+          .from("assets")
+          .select("scene_id, storage_key, created_at")
+          .eq("kind", "poster")
+          .in("scene_id", shownSceneIds)
+      : { data: [] };
+  // The worker saves a clip and its poster in one pass, so they are paired by
+  // nearest created_at within a minute: the rule /create and /ugc use.
+  const posterKeyFor = (sceneId: string, createdAt: string): string | null => {
+    const at = new Date(createdAt).getTime();
+    let best: { key: string; gap: number } | null = null;
+    for (const poster of posterRows ?? []) {
+      if (poster.scene_id !== sceneId) continue;
+      const gap = Math.abs(new Date(poster.created_at).getTime() - at);
+      if (!best || gap < best.gap) best = { key: poster.storage_key, gap };
+    }
+    return best && best.gap <= 60_000 ? best.key : null;
+  };
+
   const clips: EditorVideoClip[] = await Promise.all(
-    shown.map(async ({ storageKey, ...clip }) => ({
-      ...clip,
-      url: await signedUrl(storageKey),
-    })),
+    shown.map(async ({ storageKey, assetCreatedAt, ...clip }) => {
+      const posterKey = posterKeyFor(clip.sceneId, assetCreatedAt);
+      return {
+        ...clip,
+        url: await signedUrl(storageKey),
+        posterUrl: posterKey ? await signedUrl(posterKey).catch(() => null) : null,
+      };
+    }),
   );
 
   return {

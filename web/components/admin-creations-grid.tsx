@@ -187,8 +187,10 @@ export function AdminCreationsGrid(props: AdminCreationsGridProps): JSX.Element 
                     <div className="relative aspect-[9/16] w-full overflow-hidden rounded-md border border-border bg-black">
                       <video
                         src={clip.url}
+                        poster={clip.posterUrl ?? undefined}
                         controls
-                        preload="metadata"
+                        // ponytail: no fetch until played; one metadata request per clip froze the tab.
+                        preload="none"
                         playsInline
                         className="h-full w-full object-contain"
                       />

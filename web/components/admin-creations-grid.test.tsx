@@ -66,6 +66,7 @@ describe("AdminCreationsGrid", () => {
             durationS: 4,
             createdAt: "2026-10-30T11:00:00Z",
             url: "https://signed.example/clip-1.mp4",
+            posterUrl: null,
             costUsd: 0.56,
           },
         ]}

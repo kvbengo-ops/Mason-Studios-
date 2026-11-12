@@ -287,8 +287,10 @@ function VideosSection({ clips }: { clips: readonly EditorVideoClip[] }): JSX.El
                 media={
                   <video
                     src={clip.url}
+                    poster={clip.posterUrl ?? undefined}
                     controls
-                    preload="metadata"
+                    // ponytail: no fetch until played; one metadata request per clip froze the tab.
+                    preload="none"
                     playsInline
                     className="h-full w-full bg-black object-contain"
                   />

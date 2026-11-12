@@ -186,6 +186,7 @@ describe("AccountsControlPage", () => {
           costUsd: 1.12,
           createdAt: "2026-10-31T10:00:00Z",
           url: "https://signed.example/clip-1.mp4?token=abc",
+          posterUrl: null,
         },
       ],
       runs: [],

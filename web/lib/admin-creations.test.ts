@@ -287,8 +287,20 @@ describe("admin-creations loaders", () => {
           },
         ],
         assets: [
-          { id: "clip-asset-a", storage_key: "projects/proj-a/clip-1.mp4" },
+          {
+            id: "clip-asset-a",
+            storage_key: "projects/proj-a/clip-1.mp4",
+            created_at: "2026-10-30T10:01:00Z",
+          },
           { id: "clip-asset-b", storage_key: "projects/proj-b/clip-1.mp4" },
+          // Saved with the clip: paired by nearest created_at within a minute.
+          {
+            id: "poster-a",
+            kind: "poster",
+            scene_id: "scene-a-done",
+            storage_key: "projects/proj-a/poster-1.jpg",
+            created_at: "2026-10-30T10:01:20Z",
+          },
         ],
         runs: [
           {
@@ -332,6 +344,7 @@ describe("admin-creations loaders", () => {
     expect(clips[0]?.modelLabel).toBe("Kling 3.0");
     expect(clips[0]?.costUsd).toBe(0.5);
     expect(clips[0]?.url).toBe("https://signed.example/projects/proj-a/clip-1.mp4");
+    expect(clips[0]?.posterUrl).toBe("https://signed.example/projects/proj-a/poster-1.jpg");
 
     expect(runs).toHaveLength(3);
     expect(runs[0]?.id).toBe("scene-scene-a-queued");
