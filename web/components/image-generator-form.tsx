@@ -262,6 +262,24 @@ export function ImageGeneratorForm({
     return () => window.removeEventListener(IMAGE_REUSE_EVENT, onReuse);
   }, [models]);
 
+  // A wall tile is in the air: the bar shows where it can land, before the
+  // pointer is anywhere near it.
+  const [tileDragging, setTileDragging] = useState(false);
+  useEffect(() => {
+    const onStart = (event: globalThis.DragEvent): void => {
+      if (event.dataTransfer?.types.includes(GENERATED_IMAGE_DRAG_TYPE)) setTileDragging(true);
+    };
+    const onEnd = (): void => setTileDragging(false);
+    window.addEventListener("dragstart", onStart);
+    window.addEventListener("dragend", onEnd);
+    window.addEventListener("drop", onEnd);
+    return () => {
+      window.removeEventListener("dragstart", onStart);
+      window.removeEventListener("dragend", onEnd);
+      window.removeEventListener("drop", onEnd);
+    };
+  }, []);
+
   const DRAFT_KEY = `image-generator:draft:${projectId ?? "personal"}`;
   // Restore happens once, and must not be written back over by the save effect
   // before it has run. STATE, not a ref: a ref flipped inside the restore effect
@@ -549,13 +567,29 @@ export function ImageGeneratorForm({
                 event.dataTransfer.dropEffect = "copy";
                 setDropTarget(true);
               }}
-              onDragLeave={() => setDropTarget(false)}
+              onDragLeave={(event) => {
+                // Crossing onto a child fires dragleave too; only leaving the bar counts.
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                  setDropTarget(false);
+              }}
               onDrop={handleDrop}
               className={cn(
                 "relative rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur",
-                dropTarget && "ring-2 ring-primary",
+                dropTarget && "scale-[1.01] ring-2 ring-primary",
+                "transition-transform duration-150",
               )}
             >
+              {tileDragging ? (
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    "pointer-events-none absolute inset-0 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary text-sm font-semibold text-primary backdrop-blur-sm transition-colors",
+                    dropTarget ? "bg-primary/25" : "bg-background/70 motion-safe:animate-pulse",
+                  )}
+                >
+                  {dropTarget ? "Release to reference this image" : "Drop here to reference"}
+                </div>
+              ) : null}
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <Label htmlFor="image-generator-prompt" required className="sr-only">

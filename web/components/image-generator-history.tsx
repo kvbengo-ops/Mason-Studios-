@@ -405,6 +405,7 @@ function ImageTile({
   // From the tile's own thumbnail, which now keeps the picture's shape — so
   // the badge is right before the viewer is ever opened.
   const [thumbSize, setThumbSize] = useState<{ width: number; height: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
   const ratio = thumbSize ? nearestImageAspectRatio(thumbSize.width, thumbSize.height) : null;
 
   function loadDetails(): void {
@@ -416,13 +417,18 @@ function ImageTile({
 
   return (
     <li
-      className="group relative overflow-hidden bg-muted/60"
+      className={cn(
+        "group relative overflow-hidden bg-muted/60 transition-[opacity,transform]",
+        dragging && "scale-95 opacity-40",
+      )}
       style={tileBox(thumbSize ? thumbSize.width / thumbSize.height : DEFAULT_TILE_RATIO)}
+      onDragEnd={() => setDragging(false)}
       // Drag onto the prompt bar to reference this picture (image-generator-form).
       draggable={!selecting}
       onDragStart={(event) => {
         event.dataTransfer.setData(GENERATED_IMAGE_DRAG_TYPE, image.assetId);
         event.dataTransfer.effectAllowed = "copy";
+        setDragging(true);
       }}
     >
       <ImageLightbox
