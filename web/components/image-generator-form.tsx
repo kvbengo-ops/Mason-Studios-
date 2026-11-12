@@ -678,7 +678,10 @@ export function ImageGeneratorForm({
                               <span className="truncate text-xs text-muted-foreground">
                                 {m.costUsd === null
                                   ? "Pricing verification pending"
-                                  : `${formatUsdRate(m.costUsd)} per image`}
+                                  : m.inputImageCostUsd
+                                    ? // The base rate alone read as the whole price (issue #53).
+                                      `From ${formatUsdRate(m.costUsd)} · +${formatUsdRate(m.inputImageCostUsd)} per reference`
+                                    : `${formatUsdRate(m.costUsd)} per image`}
                                 {m.editId === null
                                   ? m.referenceDisabledReason
                                     ? " · references temporarily unavailable"
