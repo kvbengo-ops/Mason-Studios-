@@ -60,6 +60,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PickerGeneratedImages } from "@/components/picker-generated-images";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1707,6 +1708,8 @@ export function UgcReferencePicker({
                 <TabsTrigger value="elements">
                   Elements{elements.length > 0 ? ` (${elements.length})` : ""}
                 </TabsTrigger>
+                {/* Create history, for callers that can take a tag (the references box). */}
+                {onUseElement ? <TabsTrigger value="images">Images</TabsTrigger> : null}
               </TabsList>
             )}
 
@@ -2769,6 +2772,11 @@ export function UgcReferencePicker({
                 </>
               )}
             </TabsContent>
+            {onUseElement && !elementsOnly ? (
+              <TabsContent value="images" className="flex min-h-0 flex-1 flex-col gap-3">
+                <PickerGeneratedImages onUse={pickIntoBox} />
+              </TabsContent>
+            ) : null}
           </Tabs>
           {costConfirmationDialog}
         </DialogContent>
