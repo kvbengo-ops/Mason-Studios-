@@ -560,6 +560,50 @@ function ReferenceThumbs({
   );
 }
 
+/**
+ * A take's prompt as typed, a Copy button, and its references. The viewer's
+ * card here, and the Prompt dialog on /ugc/[id] (clip-prompt-button.tsx).
+ */
+export function ClipPromptSection({
+  prompt,
+  referenceTags,
+  elements,
+}: {
+  prompt: string;
+  referenceTags: readonly string[];
+  elements: readonly ElementTag[];
+}): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  return (
+    <section className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-sans text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          Prompt
+        </h3>
+        <button
+          type="button"
+          onClick={() =>
+            navigator.clipboard.writeText(prompt).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            })
+          }
+          className="inline-flex h-7 items-center gap-1 rounded-md bg-muted px-2 text-xs font-medium transition-colors hover:bg-muted/70"
+        >
+          <Copy aria-hidden="true" className="size-3" />
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {prompt || "No prompt was recorded for this take."}
+      </p>
+      {referenceTags.length > 0 ? (
+        <ReferenceThumbs tags={referenceTags} elements={elements} />
+      ) : null}
+    </section>
+  );
+}
+
 function ClipViewer({
   item,
   elements,
@@ -571,7 +615,6 @@ function ClipViewer({
 }): JSX.Element {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [size, setSize] = useState<{ width: number; height: number } | null>(null);
@@ -631,32 +674,11 @@ function ClipViewer({
       </div>
       <aside className="flex max-h-[45%] min-h-0 shrink-0 flex-col overflow-hidden rounded-xl bg-card md:max-h-none md:w-[22rem]">
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-          <section className="flex flex-col gap-2 rounded-xl bg-muted/40 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-sans text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                Prompt
-              </h3>
-              <button
-                type="button"
-                onClick={() =>
-                  navigator.clipboard.writeText(item.prompt).then(() => {
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  })
-                }
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-muted px-2 text-xs font-medium transition-colors hover:bg-muted/70"
-              >
-                <Copy aria-hidden="true" className="size-3" />
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-              {item.prompt || "No prompt was recorded for this take."}
-            </p>
-            {item.referenceTags.length > 0 ? (
-              <ReferenceThumbs tags={item.referenceTags} elements={elements} />
-            ) : null}
-          </section>
+          <ClipPromptSection
+            prompt={item.prompt}
+            referenceTags={item.referenceTags}
+            elements={elements}
+          />
           <section className="flex flex-col gap-1.5 rounded-xl bg-muted/40 p-3">
             <h3 className="font-sans text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Details

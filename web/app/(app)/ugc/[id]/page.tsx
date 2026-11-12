@@ -41,6 +41,7 @@ import { UgcTitle } from "@/components/ugc-title";
 import { UgcSceneStrip, type UgcScene } from "@/components/ugc-scene-strip";
 import type { UgcVersion } from "@/components/ugc-version-rail";
 import { IterateButton } from "@/components/iterate-button";
+import { ClipPromptButton } from "@/components/clip-prompt-button";
 import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
 import { UgcDeletedScenes, type UgcDeletedScene } from "@/components/ugc-deleted-scenes";
 import { binRetentionCutoffIso } from "@/lib/bin-thumbnails";
@@ -920,17 +921,27 @@ export default async function UgcPage({
                     (selected && versions.length > 1 ? ` · v${shownVersion.n}` : "")
                   : "Result — the clip lands here"}
               </p>
-              {selected && isOwner ? (
-                // Another take, not a replacement: refills the bar below.
-                <IterateButton
-                  detail={{
-                    prompt: shownVersion?.videoPrompt ?? selected.prompt,
-                    referenceTags: selected.referenceTags,
-                    modelId: selectedModelId,
-                    resolution: selectedSettings?.resolution ?? null,
-                    durationS: shownVersion?.durationS ?? selected.durationS,
-                  }}
-                />
+              {selected ? (
+                <div className="flex items-center gap-1.5">
+                  {/* Reading the prompt is a read: a non-owning admin gets it too. */}
+                  <ClipPromptButton
+                    prompt={shownVersion?.videoPrompt ?? selected.prompt}
+                    referenceTags={selected.referenceTags}
+                    elements={elements}
+                  />
+                  {isOwner ? (
+                    // Another take, not a replacement: refills the bar below.
+                    <IterateButton
+                      detail={{
+                        prompt: shownVersion?.videoPrompt ?? selected.prompt,
+                        referenceTags: selected.referenceTags,
+                        modelId: selectedModelId,
+                        resolution: selectedSettings?.resolution ?? null,
+                        durationS: shownVersion?.durationS ?? selected.durationS,
+                      }}
+                    />
+                  ) : null}
+                </div>
               ) : null}
             </div>
             <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 xl:pb-48">
