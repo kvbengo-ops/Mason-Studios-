@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Trash2,
   ListChecks,
+  VideoIcon,
 } from "lucide-react";
 import { shareClipLink } from "@/actions/clip-actions";
 import { deleteClipScene, deleteClipVersion, regenerateClip } from "@/actions/ugc";
@@ -30,7 +31,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatAverageBitrate } from "@/lib/average-bitrate";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { asAttachment } from "@/lib/download-url";
-import { findElementByTag, type ElementTag } from "@/lib/elements";
+import { findElementByTag, splitPromptIntoTagSegments, type ElementTag } from "@/lib/elements";
 import { DEFAULT_TILE_RATIO, WALL_CLASS, tileBox } from "@/lib/tile-box";
 import { requestVideoIterate } from "@/lib/video-iterate";
 import { cn } from "@/lib/utils";
@@ -510,49 +511,43 @@ function FailedTile({ item }: { item: WallItem & { kind: "failed" } }): JSX.Elem
 }
 
 /**
- * A take's references as thumbnails: picture, a video's first frame, or a
- * voice tile. Resolved against the operator's CURRENT library by tag name, so
- * a reference whose element was deleted since falls back to its @name.
+ * A take's references as the prompt bar's chips: thumbnail plus @name.
+ * Resolved against the operator's CURRENT library by tag name, so a reference
+ * whose element was deleted since shows an empty thumbnail.
  */
-function ReferenceThumbs({
+function ReferenceChips({
   tags,
   elements,
 }: {
   tags: readonly string[];
   elements: readonly ElementTag[];
 }): JSX.Element {
-  const THUMB = "size-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted";
+  const THUMB = "size-6 shrink-0 rounded-sm border bg-muted/50";
   return (
-    <ul aria-label="References" className="flex flex-wrap gap-2">
+    <ul aria-label="References" className="flex flex-wrap gap-1.5">
       {tags.map((tag) => {
         const element = findElementByTag(elements, tag);
-        const label = `@${tag}`;
         return (
-          <li key={tag} title={label}>
+          <li
+            key={tag}
+            title={`@${tag}`}
+            className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border bg-card pl-1 pr-2 text-xs"
+          >
             {!element ? (
-              <span className="inline-flex h-7 items-center rounded-md bg-muted px-2 text-xs">
-                {label}
-              </span>
+              <span className={THUMB} />
             ) : element.assetKind === "audio" ? (
               <span className={cn(THUMB, "grid place-items-center")}>
-                <MusicIcon aria-hidden="true" className="size-5 text-muted-foreground" />
-                <span className="sr-only">{label}</span>
+                <MusicIcon aria-hidden="true" className="size-3 text-muted-foreground" />
               </span>
             ) : element.assetKind === "video_ref" ? (
-              // One viewer open at a time, so a metadata-only fetch for the
-              // first frame is cheap here (unlike the prompt bar's menu).
-              <video
-                src={element.previewUrl}
-                muted
-                playsInline
-                preload="metadata"
-                aria-label={label}
-                className={cn(THUMB, "object-cover")}
-              />
+              <span className={cn(THUMB, "grid place-items-center")}>
+                <VideoIcon aria-hidden="true" className="size-3 text-muted-foreground" />
+              </span>
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- signed Storage URL
-              <img src={element.previewUrl} alt={label} className={cn(THUMB, "object-cover")} />
+              <img src={element.previewUrl} alt="" className={cn(THUMB, "object-cover")} />
             )}
+            <span className="max-w-[9rem] truncate font-medium">@{tag}</span>
           </li>
         );
       })}
@@ -594,12 +589,31 @@ export function ClipPromptSection({
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-        {prompt || "No prompt was recorded for this take."}
-      </p>
       {referenceTags.length > 0 ? (
-        <ReferenceThumbs tags={referenceTags} elements={elements} />
+        <ReferenceChips tags={referenceTags} elements={elements} />
       ) : null}
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+        {prompt
+          ? // Same highlight as the prompt bar's @tags (ugc-prompt-editor.tsx's TagSpan).
+            splitPromptIntoTagSegments(prompt, elements).map((segment, i) =>
+              segment.tag ? (
+                <span
+                  key={i}
+                  className={cn(
+                    "rounded-[3px] font-semibold underline decoration-2 underline-offset-2",
+                    segment.tag.element
+                      ? "bg-primary/25 decoration-primary"
+                      : "bg-destructive/25 decoration-destructive decoration-wavy",
+                  )}
+                >
+                  {segment.text}
+                </span>
+              ) : (
+                <span key={i}>{segment.text}</span>
+              ),
+            )
+          : "No prompt was recorded for this take."}
+      </p>
     </section>
   );
 }
