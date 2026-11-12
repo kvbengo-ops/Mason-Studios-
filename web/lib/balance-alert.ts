@@ -1,11 +1,12 @@
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { isDev } from "@/lib/mode";
-import { formatUsd } from "@/lib/format-usd";
+import { buildBalanceAlertEmail } from "@/lib/balance-alert-email";
 
 export type BalanceVendor = "kie" | "byteplus";
 
 const VENDOR_LABEL: Record<BalanceVendor, string> = { kie: "Kie", byteplus: "BytePlus" };
-const DEFAULT_FROM = "VBG Studio <no-reply@vbgstudio.site>";
+const DEFAULT_FROM = "Maison Studios <no-reply@vbgstudio.site>";
+const DEFAULT_APP_URL = "https://app.vbgstudio.site";
 
 /**
  * Emails the chosen admins once when a vendor balance drops below its threshold
@@ -72,20 +73,22 @@ export async function checkLowBalance(vendor: BalanceVendor, balanceUsd: number)
     const to = (recipients ?? []).flatMap((row) => (row.email ? [row.email] : []));
     if (to.length === 0) throw new Error("no admin recipient has an email");
 
-    const label = VENDOR_LABEL[vendor];
+    const email = buildBalanceAlertEmail({
+      vendorLabel: VENDOR_LABEL[vendor],
+      balanceUsd,
+      thresholdUsd: threshold,
+      appUrl: process.env.NEXT_PUBLIC_APP_URL?.trim() || DEFAULT_APP_URL,
+      sentAt: new Date(),
+    });
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: process.env.RESEND_FROM?.trim() || DEFAULT_FROM,
         to,
-        subject: `${label} balance is low: ${formatUsd(balanceUsd)}`,
-        text:
-          `The ${label} account balance is ${formatUsd(balanceUsd)}, below the alert ` +
-          `threshold of ${formatUsd(threshold)}.\n\nTop it up before renders start failing. ` +
-          `You will get one email per dip; it re-arms once the balance is back above ` +
-          `the threshold.\n\n` +
-          `Change the threshold or recipients in Accounts Control.`,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
       }),
       signal: AbortSignal.timeout(10_000),
     });
