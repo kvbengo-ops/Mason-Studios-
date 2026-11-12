@@ -171,9 +171,9 @@ func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio str
 	}
 	args = append(args,
 		"-vf", fmt.Sprintf("scale=%[1]d:%[2]d:force_original_aspect_ratio=increase,crop=%[1]d:%[2]d,fps=24", w, h),
-		// superfast, not veryfast: about half the CPU per clip on the one-CPU
-		// worker, for a file about 60% bigger at the same crf.
-		"-c:v", "libx264", "-preset", "superfast", "-crf", strconv.Itoa(crf),
+		// ultrafast, not veryfast: about a quarter of the CPU per clip, for a
+		// much bigger file at the same crf (superfast measured 2.2x on prod).
+		"-c:v", "libx264", "-preset", "ultrafast", "-crf", strconv.Itoa(crf),
 		"-c:a", "aac", "-ar", audioSampleRateHz, "-ac", audioChannels, "-b:a", audioBitrate,
 	)
 	if !hasAudio {
