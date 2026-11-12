@@ -60,8 +60,10 @@ import {
   ImageIcon,
   Loader2,
   MoreHorizontal,
+  ListChecks,
   Pencil,
   Plus,
+  Share2,
   Trash2,
   VideoIcon,
   Volume2,
@@ -95,6 +97,7 @@ import type { ElementTag } from "@/lib/elements";
 import type { ElementCategory } from "@/types/db";
 import { saveSharedElement } from "@/actions/save-shared-element";
 import { deleteElement, updateElement } from "@/actions/elements";
+import { deleteElements, shareElements } from "@/actions/element-bulk";
 import { getElementLibraryUrl, loadElementLibraryPageAction } from "@/actions/element-library";
 import type { ElementLibraryFilter, ElementLibraryPage } from "@/lib/element-library";
 import { useAsyncAction } from "@/components/use-async-action";
@@ -292,6 +295,7 @@ function ElementActionsMenu({
   canDelete,
   onRename,
   onRemoved,
+  onShare,
 }: {
   element: ElementTag;
   own: boolean;
@@ -299,6 +303,8 @@ function ElementActionsMenu({
   canDelete: boolean;
   onRename: () => void;
   onRemoved: () => void;
+  /** Asks the library to confirm sharing this one element with everyone. */
+  onShare: () => void;
 }): JSX.Element {
   const { pending, run } = useAsyncAction();
   const [confirming, setConfirming] = useState(false);
@@ -386,6 +392,12 @@ function ElementActionsMenu({
             <DropdownMenuItem onSelect={onRename}>
               <Pencil aria-hidden="true" />
               Edit
+            </DropdownMenuItem>
+          ) : null}
+          {own && !element.isShared ? (
+            <DropdownMenuItem onSelect={onShare}>
+              <Share2 aria-hidden="true" />
+              Share to all
             </DropdownMenuItem>
           ) : null}
           {canDelete ? (
@@ -576,6 +588,11 @@ export function ElementsLibrary({
   const [retryToken, setRetryToken] = useState(0);
   const [retryIsFirstPage, setRetryIsFirstPage] = useState(false);
   const [editing, setEditing] = useState<ElementTag | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  // What the open confirm dialog will act on: a bulk selection, or one card's "Share to all".
+  const [confirm, setConfirm] = useState<{ kind: "share" | "delete"; ids: string[] } | null>(null);
+  const { pending: bulkPending, run: runBulk } = useAsyncAction();
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const requestRef = useRef(0);
   const loadMoreInFlightRef = useRef(false);
@@ -657,6 +674,55 @@ export function ElementsLibrary({
    */
   const isOwn = (element: ElementTag): boolean => element.userId === viewerId;
 
+  // Only cards the viewer may remove can be selected: owner, or an admin.
+  const isSelectable = (element: ElementTag): boolean => isOwn(element) || viewerIsAdmin;
+  // Derived from what is loaded, so an id left over from before a filter change counts for nothing.
+  const selectedElements = elements.filter((element) => selected.has(element.id));
+  const shareableIds = selectedElements
+    .filter((element) => isOwn(element) && !element.isShared)
+    .map((element) => element.id);
+
+  function toggleSelected(id: string): void {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode(): void {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
+  function runConfirmed(): void {
+    if (!confirm) return;
+    const { kind, ids } = confirm;
+    runBulk(async () => {
+      try {
+        const result = kind === "share" ? await shareElements(ids) : await deleteElements(ids);
+        if ("error" in result) {
+          toast.error(result.error);
+          return;
+        }
+        const verb = kind === "share" ? "Shared" : "Removed";
+        toast.success(
+          result.skipped > 0
+            ? `${verb} ${result.done}; ${result.skipped} skipped${kind === "share" ? " (tag already used by a shared element, or not yours)" : ""}.`
+            : `${verb} ${result.done}.`,
+        );
+        setConfirm(null);
+        exitSelectMode();
+        setRetryIsFirstPage(true);
+        setRetryToken((value) => value + 1);
+      } catch {
+        toast.error(
+          kind === "share" ? "Could not share those elements." : "Could not remove those elements.",
+        );
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="self-start">
@@ -696,6 +762,16 @@ export function ElementsLibrary({
             {FILTER_LABEL[value]}
           </Button>
         ))}
+        <Button
+          type="button"
+          size="sm"
+          variant={selectMode ? "secondary" : "outline"}
+          aria-pressed={selectMode}
+          onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+        >
+          <ListChecks className="size-4" aria-hidden="true" />
+          Select
+        </Button>
         <span className="ml-auto text-xs text-muted-foreground">{elements.length} loaded</span>
       </div>
 
@@ -723,6 +799,7 @@ export function ElementsLibrary({
             // rule reads as one statement and matches 0091's policies verbatim.
             const canEdit = own || viewerIsAdmin;
             const canDelete = own || viewerIsAdmin;
+            const isSelected = selected.has(element.id);
             const savedBy = element.userId ? creatorNames[element.userId] : undefined;
             const MediaIcon = isAudioElement(element)
               ? Volume2
@@ -732,8 +809,17 @@ export function ElementsLibrary({
             return (
               <li
                 key={element.id}
-                className={`group relative flex min-w-0 flex-col rounded-xl border bg-card shadow-sm transition-[transform,box-shadow,border-color] duration-200 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 motion-reduce:transition-none sm:hover:-translate-y-1 sm:hover:border-foreground/20 sm:hover:shadow-lg ${isAudioElement(element) ? "col-span-2 sm:col-span-1" : ""}`}
+                className={`group relative flex min-w-0 flex-col rounded-xl border bg-card shadow-sm transition-[transform,box-shadow,border-color] duration-200 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 motion-reduce:transition-none sm:hover:-translate-y-1 sm:hover:border-foreground/20 sm:hover:shadow-lg ${isAudioElement(element) ? "col-span-2 sm:col-span-1" : ""} ${isSelected ? "border-primary ring-2 ring-primary/40" : ""}`}
               >
+                {selectMode && isSelectable(element) ? (
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelected(element.id)}
+                    aria-label={`Select ${element.name}`}
+                    className="absolute left-2 top-2 z-10 size-5 cursor-pointer accent-primary"
+                  />
+                ) : null}
                 <ElementActionsMenu
                   element={element}
                   own={own}
@@ -743,6 +829,7 @@ export function ElementsLibrary({
                   onRemoved={() =>
                     setElements((current) => current.filter((item) => item.id !== element.id))
                   }
+                  onShare={() => setConfirm({ kind: "share", ids: [element.id] })}
                 />
                 <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-t-xl border-b bg-muted/60">
                   <ElementThumbnail element={element} />
@@ -755,10 +842,17 @@ export function ElementsLibrary({
                       they refer to it, and it is what a description is written
                       about); the '@' is what would be a lie. */}
                     <CopyElementTag name={element.name} />
-                    <Badge variant="secondary" className="shrink-0 gap-1 text-[10px] font-medium">
-                      <MediaIcon className="size-3" aria-hidden="true" />
-                      {CATEGORY_LABEL[element.category]}
-                    </Badge>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {own && element.isShared ? (
+                        <Badge variant="outline" className="text-[10px] font-medium">
+                          Shared
+                        </Badge>
+                      ) : null}
+                      <Badge variant="secondary" className="gap-1 text-[10px] font-medium">
+                        <MediaIcon className="size-3" aria-hidden="true" />
+                        {CATEGORY_LABEL[element.category]}
+                      </Badge>
+                    </div>
                   </div>
 
                   {/* Only on other people's. "saved by you" on every one of your own
@@ -844,6 +938,100 @@ export function ElementsLibrary({
       ) : elements.length > 0 ? (
         <p className="text-center text-xs text-muted-foreground">All references loaded.</p>
       ) : null}
+
+      {selectMode ? (
+        <div
+          role="toolbar"
+          aria-label="Selected elements"
+          className="sticky bottom-4 z-20 flex flex-wrap items-center gap-2 self-center rounded-xl border bg-card px-4 py-2 shadow-lg"
+        >
+          <span className="text-sm font-medium">{selectedElements.length} selected</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              setSelected(
+                new Set(elements.filter((element) => isSelectable(element)).map((e) => e.id)),
+              )
+            }
+          >
+            Select all loaded
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={shareableIds.length === 0}
+            onClick={() => setConfirm({ kind: "share", ids: shareableIds })}
+          >
+            <Share2 className="size-4" aria-hidden="true" />
+            Share to all
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={selectedElements.length === 0}
+            onClick={() =>
+              setConfirm({ kind: "delete", ids: selectedElements.map((element) => element.id) })
+            }
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Delete
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={exitSelectMode}>
+            Done
+          </Button>
+        </div>
+      ) : null}
+
+      <Dialog
+        open={confirm !== null}
+        onOpenChange={(open) => !bulkPending && !open && setConfirm(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirm?.kind === "share"
+                ? `Share ${confirm.ids.length} element${confirm.ids.length === 1 ? "" : "s"} with everyone?`
+                : `Remove ${confirm?.ids.length ?? 0} element${confirm?.ids.length === 1 ? "" : "s"}?`}
+            </DialogTitle>
+            <DialogDescription>
+              {confirm?.kind === "share"
+                ? "Everyone can view, download and save a copy. There is no unshare button, though you can still delete one later."
+                : "This removes them from active libraries and prompts. Their records and source files are kept for recovery."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={bulkPending}
+              onClick={() => setConfirm(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant={confirm?.kind === "delete" ? "destructive" : "default"}
+              disabled={bulkPending}
+              onClick={runConfirmed}
+            >
+              {bulkPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Working…
+                </>
+              ) : confirm?.kind === "share" ? (
+                "Share to all"
+              ) : (
+                "Yes, remove"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <EditElementDialog
         element={editing}

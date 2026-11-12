@@ -52,7 +52,6 @@ import { removeStorageObjects, signedUrl, uploadFromUrl, getImageUrl } from "@/l
 import { guardResult } from "@/lib/action-result";
 import { isImageAspectRatio } from "@/lib/image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, isImageResolution } from "@/lib/image-resolutions";
-import { saveGeneratedImageAsElement } from "@/lib/generated-image-element";
 import { descriptionFor, substituteElementTags, tagsInOrder } from "@/lib/element-tags";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import type { Database } from "@/types/db";
@@ -895,16 +894,6 @@ async function settleAndStore(
     }
     revalidatePath(imagePathFor(owner));
     return { image: winner };
-  }
-
-  // FILED AS A PRIVATE ELEMENT, so the picture is @-taggable at once. Never
-  // fatal: the image is already stored, charged and linked, and a missing
-  // element only costs a "Save as element" press.
-  try {
-    await saveGeneratedImageAsElement(admin, owner.userId, asset.id);
-    revalidatePath("/elements");
-  } catch (error) {
-    console.warn(`settleAndStore: could not file ${asset.id} as an element`, error);
   }
 
   // "unknown" falls through with the image kept. The bookkeeping write failed,
