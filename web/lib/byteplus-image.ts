@@ -67,6 +67,8 @@ export async function generateBytePlusSeedreamImage(args: {
   resolution: ImageResolutionId;
   /** Reference images, in prompt order. Seedream 5.0 Pro takes 1, or 2-10. */
   refImageUrls?: readonly string[];
+  /** Only a caller that is not holding a request open may pass more than the default. */
+  timeoutMs?: number;
 }): Promise<{ url: string; costUsd: number }> {
   const refs = args.refImageUrls ?? [];
   if (refs.length > 10) {
@@ -93,7 +95,7 @@ export async function generateBytePlusSeedreamImage(args: {
         response_format: "url",
         watermark: false,
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(args.timeoutMs ?? TIMEOUT_MS),
     });
   } catch (error) {
     // shortcut: a lost connection after BytePlus started may still bill one image, and

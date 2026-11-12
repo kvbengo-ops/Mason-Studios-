@@ -8,6 +8,7 @@
 // actions/image-generator.ts's header for the money path's design.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import type { AccountCapProfile } from "@/lib/spend";
 import {
@@ -410,6 +411,9 @@ async function imageForRun(owner: ImageDestination, runId: string): Promise<Gene
  * @param formData `prompt` (string) and `idempotencyKey` (string, one per
  *                 Generate press, stable across retries of that same press).
  */
+/** Under STALE_RESERVATION_MS (5 min), so the sweep never settles a call still running. */
+const BYTEPLUS_BACKGROUND_TIMEOUT_MS = 240_000;
+
 export async function generateImageFor(
   owner: ImageOwner,
   formData: FormData,
@@ -707,10 +711,22 @@ export async function generateImageFor(
   // watched work.
   const inline = !handOff && blocksInline(imageModel, refImageUrls.length > 0);
 
+  // SEEDREAM 5.0 PRO FINISHES AFTER THE RESPONSE (issue #49).
+  //
+  // BytePlus is one synchronous call with no task id, so it used to block this
+  // request under a 90s cap chosen to beat Cloudflare's 100s cut — and 120 of
+  // 334 production calls died at exactly 90s while the ones that landed ran up
+  // to 90s. With a page that can finish the attempt, answer now and let the call
+  // run in after(): the row stays unsettled, the panel polls it, and the longer
+  // cap stays under STALE_RESERVATION_MS so the sweep never settles a live call.
+  const background = handOff && model === SEEDREAM_PRO_ID && !isDev();
+
+  const run = async (): Promise<GenerateProjectImageResult> => {
   let generated;
   try {
     generated = await generateImage({
       ...args,
+      byteplusTimeoutMs: background ? BYTEPLUS_BACKGROUND_TIMEOUT_MS : undefined,
       pollBudgetMs: inline ? undefined : 0,
       onTaskCreated: async (taskId) => {
         submitted = true;
@@ -765,6 +781,17 @@ export async function generateImageFor(
 
   revalidatePath(imagePathFor(owner));
   return stored;
+  };
+
+  if (background) {
+    after(() =>
+      run().catch((error) =>
+        console.error(`generateImageFor: background run ${runId} failed`, error),
+      ),
+    );
+    return { pendingRunId: runId };
+  }
+  return run();
 }
 
 /**

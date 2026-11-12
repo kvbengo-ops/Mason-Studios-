@@ -154,6 +154,8 @@ export interface GenerateImageArgs {
    * server worker for 100s to discover what was already measured.
    */
   pollBudgetMs?: number;
+  /** Seedream 5.0 Pro only: how long the BytePlus call may run (default 90s). */
+  byteplusTimeoutMs?: number;
 }
 
 export interface GenerateImageResult {
@@ -533,6 +535,7 @@ export async function generateImage(args: GenerateImageArgs): Promise<GenerateIm
         aspectRatio: args.aspectRatio ?? ASPECT_RATIO,
         resolution: args.resolution ?? "1K",
         refImageUrls: refImageUrls ?? [],
+        timeoutMs: args.byteplusTimeoutMs,
       });
       return { url: image.url, vendor: "byteplus", costUsd: image.costUsd };
     } catch (error) {
