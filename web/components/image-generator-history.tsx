@@ -39,7 +39,11 @@ import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { tagsInOrder } from "@/lib/element-tags";
 import { findElementByTag, type ElementTag } from "@/lib/elements";
 import { cn } from "@/lib/utils";
-import { nearestImageAspectRatio, requestImageReuse } from "@/lib/image-reuse";
+import {
+  nearestImageAspectRatio,
+  requestImageReuse,
+  GENERATED_IMAGE_DRAG_TYPE,
+} from "@/lib/image-reuse";
 import { DEFAULT_TILE_RATIO, WALL_CLASS, tileBox } from "@/lib/tile-box";
 import { CreationLoading } from "@/components/creation-loading";
 import { useImageAttempts } from "@/components/image-attempt-panel";
@@ -414,6 +418,12 @@ function ImageTile({
     <li
       className="group relative overflow-hidden bg-muted/60"
       style={tileBox(thumbSize ? thumbSize.width / thumbSize.height : DEFAULT_TILE_RATIO)}
+      // Drag onto the prompt bar to reference this picture (image-generator-form).
+      draggable={!selecting}
+      onDragStart={(event) => {
+        event.dataTransfer.setData(GENERATED_IMAGE_DRAG_TYPE, image.assetId);
+        event.dataTransfer.effectAllowed = "copy";
+      }}
     >
       <ImageLightbox
         src={image.url}

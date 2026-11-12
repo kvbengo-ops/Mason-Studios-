@@ -17,3 +17,12 @@ describe("nearestImageAspectRatio", () => {
     expect(nearestImageAspectRatio(0, 0)).toBeNull();
   });
 });
+
+describe("dragReferenceName", () => {
+  it("is a valid element tag, the same every time for one picture", async () => {
+    const { dragReferenceName } = await import("./image-reuse");
+    const name = dragReferenceName("3f2a9c1e-77aa-4b1c-9d2e-000000000000");
+    expect(name).toBe("img-3f2a9c1e");
+    expect(name).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
+  });
+});

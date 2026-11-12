@@ -20,6 +20,18 @@ export function requestImageReuse(detail: ImageReuseDetail): void {
 }
 
 /**
+ * Dragging a wall tile onto the prompt bar references that picture. The drag
+ * carries the generated image's asset id under this type; the bar saves it to
+ * the dragger's own elements (a prompt can only @tag a saved element) and tags it.
+ */
+export const GENERATED_IMAGE_DRAG_TYPE = "application/x-generated-image";
+
+/** One fixed tag per picture, so dropping it twice reuses the element it made. */
+export function dragReferenceName(assetId: string): string {
+  return `img-${assetId.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`;
+}
+
+/**
  * The standard ratio a picture's pixel size is closest to, by log distance so
  * 16:9 vs 9:16 and 3:2 vs 2:3 are judged on the same scale. Models return
  * sizes a few pixels off the nominal ratio, hence nearest rather than equal.

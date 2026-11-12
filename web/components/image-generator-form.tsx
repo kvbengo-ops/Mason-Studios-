@@ -2,7 +2,7 @@
 import { formatUsdRate } from "@/lib/format-usd";
 
 import { useEffect, useState, useTransition } from "react";
-import type { FormEvent, JSX } from "react";
+import type { DragEvent, FormEvent, JSX } from "react";
 import { useRouter } from "next/navigation";
 import type { GenerateProjectImageResult, ImageAttempt } from "@/actions/image-generator";
 import { PendingButton } from "@/components/pending-button";
@@ -41,7 +41,13 @@ import {
 import { removeTagFromPrompt } from "@/lib/rename-tag";
 import { MAX_REFERENCES } from "@/lib/ugc-references";
 import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
-import { IMAGE_REUSE_EVENT, type ImageReuseDetail } from "@/lib/image-reuse";
+import {
+  GENERATED_IMAGE_DRAG_TYPE,
+  IMAGE_REUSE_EVENT,
+  dragReferenceName,
+  type ImageReuseDetail,
+} from "@/lib/image-reuse";
+import { saveGeneratedElement } from "@/actions/save-generated-element";
 
 /** A control on the prompt bar: model, ratio. Radix menus keep the keyboard behaviour. */
 const PILL =
@@ -345,6 +351,41 @@ export function ImageGeneratorForm({
     });
   }
 
+  /**
+   * A wall tile dropped on the bar: save the picture to the user's own
+   * elements under its fixed tag, then tag it. "Already used" means an earlier
+   * drop of the same picture saved it, so the tag is simply added again.
+   */
+  const [dropTarget, setDropTarget] = useState(false);
+  function handleDrop(event: DragEvent<HTMLFormElement>): void {
+    const assetId = event.dataTransfer.getData(GENERATED_IMAGE_DRAG_TYPE);
+    if (!assetId) return;
+    event.preventDefault();
+    setDropTarget(false);
+    if (taggedPictures.length >= MAX_REFERENCES) {
+      setErrorMessage(`A prompt can reference up to ${MAX_REFERENCES} pictures.`);
+      return;
+    }
+    const name = dragReferenceName(assetId);
+    const formData = new FormData();
+    formData.set("assetId", assetId);
+    formData.set("name", name);
+    formData.set("destination", "mine");
+    setErrorMessage(null);
+    void saveGeneratedElement(formData).then(
+      (result) => {
+        const error = result?.error;
+        if (error && !error.includes("already used")) {
+          setErrorMessage(error);
+          return;
+        }
+        insertTag({ kind: "element", elementId: "", name, previewUrl: "" });
+        startRefresh(() => router.refresh());
+      },
+      () => setErrorMessage("Could not reference that image. Try again."),
+    );
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     handleGenerate();
@@ -502,7 +543,18 @@ export function ImageGeneratorForm({
               aria-label="Generate image"
               aria-busy={pending}
               onSubmit={handleSubmit}
-              className="relative rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur"
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes(GENERATED_IMAGE_DRAG_TYPE)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setDropTarget(true);
+              }}
+              onDragLeave={() => setDropTarget(false)}
+              onDrop={handleDrop}
+              className={cn(
+                "relative rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur",
+                dropTarget && "ring-2 ring-primary",
+              )}
             >
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
