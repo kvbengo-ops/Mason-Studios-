@@ -447,3 +447,52 @@ describe("the placeholder tile stands in while Generate is in flight", () => {
     expect(screen.queryByText("Queued")).toBeNull();
   });
 });
+
+describe("organising the strip (0142)", () => {
+  it("orders by the dragged position, keeps each scene's number, and shows its name", () => {
+    render(
+      <UgcSceneStrip
+        projectId="proj-1"
+        scenes={[
+          aScene({ id: "scene-3", idx: 3, position: 1, title: "Hook" }),
+          aScene({ id: "scene-2", idx: 2 }),
+          aScene({ id: "scene-1", idx: 1, position: 3, commentCount: 2 }),
+        ]}
+        selectedSceneId={null}
+      />,
+    );
+
+    // scene 3 was dragged to the top; scene 1 to the bottom. Numbers unchanged.
+    expect(
+      screen
+        .getAllByRole("link")
+        .slice(1)
+        .map((link) => link.getAttribute("href")),
+    ).toEqual([
+      "/ugc/proj-1?scene=scene-3",
+      "/ugc/proj-1?scene=scene-2",
+      "/ugc/proj-1?scene=scene-1",
+    ]);
+    expect(screen.getAllByTitle("Rename scene")[0]?.textContent).toBe("Hook");
+    expect(screen.getByLabelText("2 comments")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Drag scene 3 to reorder" })).toBeTruthy();
+  });
+
+  it("offers a read-only viewer no grip and no rename", () => {
+    render(
+      <UgcSceneStrip
+        projectId="proj-1"
+        scenes={[
+          aScene({ id: "scene-2", idx: 2, title: "Hook" }),
+          aScene({ id: "scene-1", idx: 1 }),
+        ]}
+        selectedSceneId={null}
+        readOnly
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /reorder/i })).toBeNull();
+    expect(screen.queryByTitle("Rename scene")).toBeNull();
+    expect(screen.getByText("Hook")).toBeTruthy();
+  });
+});

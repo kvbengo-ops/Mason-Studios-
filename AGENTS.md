@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0141`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0142`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;
@@ -122,6 +122,10 @@ refuses any model missing from `spend_category_totals`'s render list.
   `scene_references` via `referenceTags` (`ugc/[id]/page.tsx`, user-scoped read).
 - **Kling is start+end frame, no `@tags`** — `klingTagRefusal` blocks any `@tag`; frames
   must be PNG/JPG (`KLING_FRAME_EXTS`), kie 422s on WebP, unbilled.
+- **Scenes can be named, dragged and commented on** (0142, `actions/scene-organize.ts`).
+  A drag writes `scenes.position` only; **`idx` is never renumbered** (owner, 2026-11-13),
+  so order by `compareSceneOrder` (`lib/scene-position.ts`), not `idx`. `scene_comments`
+  is the one write a non-owning admin makes on a project (`requireProjectReadable`).
 - **Retry is gone** — `regenerateClip` refuses queued/rendering, calls `rerenderScene`
   for `done`, `retryScene(…, versionMode)` for `failed`.
 - **Generate is optimistic** — an external store (not `useTransition`, which can starve

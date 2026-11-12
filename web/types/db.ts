@@ -1534,6 +1534,30 @@ export type Database = {
           },
         ];
       };
+      scene_comments: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          scene_id: string;
+          user_id: string;
+        };
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          scene_id: string;
+          user_id: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          scene_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       /**
        * One attempt at a scene — the prompt, the frame generated from it, and
        * the clip rendered from that frame, kept together. A new row per
@@ -1675,6 +1699,8 @@ export type Database = {
           prepare_started_at: string | null;
           prepare_token: string | null;
           project_id: string;
+          // Display order on the studio strip; null = never dragged (0142).
+          position: number | null;
           ref_frame_asset_id: string | null;
           // PARTIAL per-scene render settings — typically just {"model": ...} — written by a
           // retry re-rendering this scene on a different model than the project's. The effective
@@ -1690,6 +1716,8 @@ export type Database = {
           render_settings_override: unknown;
           script_line: string | null;
           status: SceneStatus;
+          // Optional scene name (0142).
+          title: string | null;
           submitted_at: string | null;
           template_id: string | null;
           video_prompt: string | null;
@@ -1718,11 +1746,15 @@ export type Database = {
           prepare_started_at?: string | null;
           prepare_token?: string | null;
           project_id: string;
+          // Display order on the studio strip; null = never dragged (0142).
+          position?: number | null;
           ref_frame_asset_id?: string | null;
           // See the Row comment above / 0045_scene_render_settings_override.sql.
           render_settings_override?: unknown;
           script_line?: string | null;
           status?: SceneStatus;
+          // Optional scene name (0142).
+          title?: string | null;
           submitted_at?: string | null;
           template_id?: string | null;
           video_prompt?: string | null;
@@ -1746,11 +1778,15 @@ export type Database = {
           prepare_started_at?: string | null;
           prepare_token?: string | null;
           project_id?: string;
+          // Display order on the studio strip; null = never dragged (0142).
+          position?: number | null;
           ref_frame_asset_id?: string | null;
           // See the Row comment above / 0045_scene_render_settings_override.sql.
           render_settings_override?: unknown;
           script_line?: string | null;
           status?: SceneStatus;
+          // Optional scene name (0142).
+          title?: string | null;
           submitted_at?: string | null;
           template_id?: string | null;
           video_prompt?: string | null;

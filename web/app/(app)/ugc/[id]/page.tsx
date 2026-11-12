@@ -24,7 +24,7 @@ import {
 import { ImageGeneratorConsole } from "@/components/image-generator-console";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
 import type { RenderBudgetFigures } from "@/lib/render-budget";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { signedUrl, extFromFilename, getImageUrl } from "@/lib/storage";
 import { selectInChunks } from "@/lib/in-chunks";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
@@ -42,6 +42,7 @@ import { UgcSceneStrip, type UgcScene } from "@/components/ugc-scene-strip";
 import type { UgcVersion } from "@/components/ugc-version-rail";
 import { IterateButton } from "@/components/iterate-button";
 import { ClipPromptButton } from "@/components/clip-prompt-button";
+import { SceneCommentsButton, type SceneComment } from "@/components/scene-comments-button";
 import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
 import { UgcDeletedScenes, type UgcDeletedScene } from "@/components/ugc-deleted-scenes";
 import { binRetentionCutoffIso } from "@/lib/bin-thumbnails";
@@ -232,9 +233,11 @@ export default async function UgcPage({
   // expanded into one tile per version — a TAKE.
   let stripScenes: UgcScene[] = [];
   let versions: UgcVersion[] = [];
+  let selectedComments: SceneComment[] = [];
   let selected: {
     id: string;
     idx: number;
+    title: string | null;
     prompt: string;
     active_version_id: string | null;
     /** The scene's effective render settings — what rerenderScene will price and submit. */
@@ -280,7 +283,7 @@ export default async function UgcPage({
     const { data: sceneRows } = await supabase
       .from("scenes")
       .select(
-        "id, idx, duration_s, status, video_prompt, active_version_id, render_settings_override, is_talking_head, script_line, ref_frame_asset_id",
+        "id, idx, title, position, duration_s, status, video_prompt, active_version_id, render_settings_override, is_talking_head, script_line, ref_frame_asset_id",
       )
       .eq("project_id", project.id)
       .order("idx", { ascending: false })
@@ -305,6 +308,7 @@ export default async function UgcPage({
       { data: posterAssetRows },
       { data: sceneRunRows },
       { data: sceneReferenceRows },
+      { data: commentRows },
     ] = await Promise.all([
       supabase
         .from("scene_versions")
@@ -331,6 +335,13 @@ export default async function UgcPage({
       // Editing the prompt afterwards changes the tags and not these, which
       // is precisely why the retry control cannot be priced off the column.
       supabase.from("scene_references").select("scene_id, asset_id, kind").in("scene_id", sceneIds),
+      // Every listed scene's thread in one read (0142): the tiles show a
+      // count, the selected scene shows the thread.
+      supabase
+        .from("scene_comments")
+        .select("id, scene_id, user_id, body, created_at")
+        .in("scene_id", sceneIds)
+        .order("created_at", { ascending: true }),
     ]);
 
     // Only live scene_references rows participate in a retry. Superseded
@@ -413,6 +424,9 @@ export default async function UgcPage({
         return {
           id: row.id,
           idx: row.idx,
+          title: row.title,
+          position: row.position,
+          commentCount: (commentRows ?? []).filter((c) => c.scene_id === row.id).length,
           duration_s: row.duration_s,
           status: row.status,
           versionCount: counts.get(row.id) ?? 1,
@@ -491,9 +505,28 @@ export default async function UgcPage({
         .map((row) => row.tag)
         .filter((tag): tag is string => tag !== null);
 
+      const ownComments = (commentRows ?? []).filter((c) => c.scene_id === match.id);
+      if (ownComments.length > 0) {
+        // Usernames through the service role, after the readable guard above:
+        // an owner's own RLS need not show them the commenting admin's profile.
+        const { data: authorRows } = await createAdminClient()
+          .from("profiles")
+          .select("id, username")
+          .in("id", [...new Set(ownComments.map((c) => c.user_id))]);
+        const nameById = new Map((authorRows ?? []).map((a) => [a.id, a.username]));
+        selectedComments = ownComments.map((c) => ({
+          id: c.id,
+          author: nameById.get(c.user_id) ?? "Unknown",
+          body: c.body,
+          createdAt: c.created_at,
+          mine: c.user_id === user.id,
+        }));
+      }
+
       selected = {
         id: match.id,
         idx: match.idx,
+        title: match.title,
         prompt: match.video_prompt ?? "",
         active_version_id: match.active_version_id,
         // What this scene will ACTUALLY render with. rerenderScene merges
@@ -918,11 +951,19 @@ export default async function UgcPage({
               <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
                 {shownVersion
                   ? `Result — scene ${selected?.idx}` +
+                    (selected?.title ? ` · ${selected.title}` : "") +
                     (selected && versions.length > 1 ? ` · v${shownVersion.n}` : "")
                   : "Result — the clip lands here"}
               </p>
               {selected ? (
                 <div className="flex items-center gap-1.5">
+                  {/* Owner and admins both post: requireProjectReadable admitted them. */}
+                  <SceneCommentsButton
+                    projectId={project.id}
+                    sceneId={selected.id}
+                    sceneLabel={`scene ${selected.idx}`}
+                    comments={selectedComments}
+                  />
                   {/* Reading the prompt is a read: a non-owning admin gets it too. */}
                   <ClipPromptButton
                     prompt={shownVersion?.videoPrompt ?? selected.prompt}

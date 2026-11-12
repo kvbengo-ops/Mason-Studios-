@@ -16,8 +16,10 @@
 // disagree with each other. It is also linkable, which matters the first time
 // someone asks "which clip did you mean".
 //
-// Order carries no meaning — CapCut does the assembly — so tiles are numbered
-// by when they were made.
+// Order carries no meaning to the render — CapCut does the assembly — so
+// tiles are numbered by when they were made. The operator can still NAME a
+// scene, DRAG it into place and read its comment count (0142): the number
+// never changes, only where the tile sits (scenes.position).
 
 import type { JSX } from "react";
 import Link from "next/link";
@@ -30,10 +32,20 @@ import { deleteClipScene, deleteClipVersion } from "@/actions/ugc";
 import type { SceneStatus } from "@/types/db";
 import { cn } from "@/lib/utils";
 import { formatUsd } from "@/lib/format-usd";
+import { MessageSquare } from "lucide-react";
+import { SceneSortList, type SceneSortGroup } from "@/components/scene-sort-list";
+import { SceneTitle } from "@/components/scene-title";
+import { compareSceneOrder } from "@/lib/scene-position";
 
 export interface UgcScene {
   id: string;
   idx: number;
+  /** The scene's name (0142), or null/absent when it has none. */
+  title?: string | null;
+  /** Where the scene was dragged to (0142); null/absent = never dragged, ordered by idx. */
+  position?: number | null;
+  /** Comments on the scene (0142). */
+  commentCount?: number;
   /**
    * Set on a TAKE tile: one rendered version of a scene that has several.
    * Takes replace the versions rail — every old version is a tile of its own.
@@ -63,6 +75,20 @@ export interface UgcScene {
    * failed before a vendor call completed).
    */
   usdBilled: number | null;
+}
+
+/** One sortable group per scene, so every take of a scene moves with it. */
+function groupTiles(
+  sorted: readonly UgcScene[],
+  tiles: readonly JSX.Element[],
+): SceneSortGroup[] {
+  const groups = new Map<string, { label: string; nodes: JSX.Element[] }>();
+  sorted.forEach((scene, i) => {
+    const group = groups.get(scene.id) ?? { label: `scene ${scene.idx}`, nodes: [] };
+    group.nodes.push(tiles[i]!);
+    groups.set(scene.id, group);
+  });
+  return [...groups].map(([id, group]) => ({ id, label: group.label, node: group.nodes }));
 }
 
 export function UgcSceneStrip({
@@ -98,6 +124,11 @@ export function UgcSceneStrip({
     if (scene.usdBilled !== null) usdByScene.set(scene.id, scene.usdBilled);
   }
   const totalUsdBilled = [...usdByScene.values()].reduce((sum, usd) => sum + usd, 0);
+  // "+ New scene" first, then the scenes in the operator's order (dragged
+  // position, else scene number); the page reads them newest-first.
+  const sorted = [...scenes].sort(
+    (a, b) => compareSceneOrder(a, b) || (a.take ?? 0) - (b.take ?? 0),
+  );
 
   return (
     <section
@@ -151,12 +182,14 @@ export function UgcSceneStrip({
           </p>
         ) : (
           <>
-            {/* "+ New scene" first, then scene 1, 2, 3… — the page reads
-                scenes newest-first, so they are re-sorted here. */}
             <UgcNewSceneTile projectId={projectId} selected={selectedSceneId === null} />
-            {[...scenes]
-              .sort((a, b) => a.idx - b.idx || (a.take ?? 0) - (b.take ?? 0))
-              .map((scene) => {
+            <SceneSortList
+              projectId={projectId}
+              vertical={vertical}
+              disabled={readOnly}
+              groups={groupTiles(
+                sorted,
+                sorted.map((scene) => {
                 // A take is selected by scene AND version; a scene's single
                 // tile (no versionId) by scene alone.
                 const selected =
@@ -173,7 +206,10 @@ export function UgcSceneStrip({
                   <div
                     key={scene.versionId ?? scene.id}
                     className={cn(
-                      "relative flex w-[176px] shrink-0 flex-col gap-1 rounded-md border p-1.5",
+                      "relative flex shrink-0 flex-col gap-1 rounded-md border p-1.5",
+                      // The sortable group is the strip's direct child now, so
+                      // the tile sizes itself instead of inheriting it.
+                      vertical ? "min-h-24 w-full" : "w-[176px]",
                       "hover:border-foreground/40",
                       // Selected is a ring around the whole tile — "what you are
                       // looking at". Deliberately a different signal from the
@@ -256,8 +292,20 @@ export function UgcSceneStrip({
                         <span className="truncate text-muted-foreground">
                           {STATUS_LABEL[scene.status]}
                         </span>
+                        {scene.commentCount ? (
+                          <span
+                            className="ml-auto flex shrink-0 items-center gap-0.5 font-mono tabular-nums text-muted-foreground"
+                            aria-label={`${scene.commentCount} comment${scene.commentCount === 1 ? "" : "s"}`}
+                          >
+                            <MessageSquare aria-hidden="true" className="size-3" />
+                            {scene.commentCount}
+                          </span>
+                        ) : null}
                       </span>
                     </Link>
+                    {/* Beside the link, not inside it: a name field in an anchor
+                        would select the scene on every click into it. */}
+                    <SceneTitle sceneId={scene.id} title={scene.title ?? null} readOnly={readOnly} />
 
                     {/* Same menu as the version rail, for the same reason: the
                   tile itself selects the scene, so everything else has to sit
@@ -318,7 +366,9 @@ export function UgcSceneStrip({
                     />
                   </div>
                 );
-              })}
+              }),
+              )}
+            />
 
             {/* Left alone for a read-only viewer, deliberately: this creates
             nothing. New scene is a DESELECT — there is no draft row to
