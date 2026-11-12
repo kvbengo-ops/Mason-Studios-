@@ -203,6 +203,48 @@ export type Database = {
           },
         ];
       };
+      balance_alert_settings: {
+        // 0140_balance_alerts.sql — low-balance email alerts. One row, admin-read.
+        Row: {
+          id: boolean;
+          kie_threshold_usd: number | null;
+          byteplus_threshold_usd: number | null;
+          recipient_ids: string[];
+          kie_alerted_at: string | null;
+          byteplus_alerted_at: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: boolean;
+          kie_threshold_usd?: number | null;
+          byteplus_threshold_usd?: number | null;
+          recipient_ids?: string[];
+          kie_alerted_at?: string | null;
+          byteplus_alerted_at?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: boolean;
+          kie_threshold_usd?: number | null;
+          byteplus_threshold_usd?: number | null;
+          recipient_ids?: string[];
+          kie_alerted_at?: string | null;
+          byteplus_alerted_at?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "balance_alert_settings_updated_by_fkey";
+            columns: ["updated_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       issue_reports: {
         // 0082_issue_reports.sql — one row per report sent from the in-app
         // "Report a problem" dialog. The issue itself lives on GitHub; this

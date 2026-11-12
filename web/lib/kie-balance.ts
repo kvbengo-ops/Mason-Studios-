@@ -191,6 +191,13 @@ export async function getKieAccountBalanceUsd(now: number = Date.now()): Promise
 
   const balanceUsd = creditsRemaining * CREDIT_USD;
   cache = { balanceUsd, fetchedAtMs: now };
+  // A fresh read is also when the low-balance alert is checked (lib/balance-alert.ts).
+  // Loaded lazily and never awaited: the alert must not slow or break this read.
+  if (process.env.RESEND_API_KEY) {
+    void import("@/lib/balance-alert")
+      .then(({ checkLowBalance }) => checkLowBalance("kie", balanceUsd))
+      .catch(() => undefined);
+  }
   return balanceUsd;
 }
 

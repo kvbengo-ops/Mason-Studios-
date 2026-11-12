@@ -35,6 +35,10 @@ vi.mock("@/lib/accounts-control", async (importOriginal) => {
   };
 });
 
+vi.mock("@/lib/balance-alert", () => ({
+  loadBalanceAlertSettings: vi.fn(async () => null),
+}));
+
 vi.mock("@/lib/anthropic-spend", () => ({
   getAnthropicMonthlySpend: vi.fn(async () => ({ status: "not_configured" })),
 }));

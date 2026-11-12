@@ -88,6 +88,13 @@ export async function getBytePlusBalanceUsd(now: number = Date.now()): Promise<n
       return null;
     }
     cache = { balanceUsd, fetchedAtMs: now };
+    // A fresh read is also when the low-balance alert is checked (lib/balance-alert.ts).
+    // Loaded lazily and never awaited: the alert must not slow or break this read.
+    if (process.env.RESEND_API_KEY) {
+      void import("@/lib/balance-alert")
+        .then(({ checkLowBalance }) => checkLowBalance("byteplus", balanceUsd))
+        .catch(() => undefined);
+    }
     return balanceUsd;
   } catch (err) {
     console.error("getBytePlusBalanceUsd: failed —", err instanceof Error ? err.message : err);

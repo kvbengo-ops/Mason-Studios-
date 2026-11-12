@@ -834,6 +834,51 @@ export async function setGlobalSpendCap(
 }
 
 /**
+ * The low-balance email alerts (0140, lib/balance-alert.ts): a USD threshold per
+ * vendor (null = off) and the admins to email. Saving clears both latches, so a
+ * balance already under a new threshold is emailed on its next fresh read.
+ */
+export async function setBalanceAlerts(input: {
+  kieThresholdUsd: number | null;
+  bytePlusThresholdUsd: number | null;
+  recipientIds: string[];
+}): Promise<ActionResult> {
+  const { user } = await requireAdmin();
+  for (const value of [input.kieThresholdUsd, input.bytePlusThresholdUsd]) {
+    if (value !== null && (!Number.isFinite(value) || value < 0)) {
+      return { error: "A threshold must be blank or zero or more." };
+    }
+  }
+  const ids = [...new Set(input.recipientIds)];
+
+  const admin = createAdminClient();
+  // Only admins can be paged: anyone else in the list is dropped, not stored.
+  const { data: admins, error: adminsError } =
+    ids.length > 0
+      ? await admin.from("profiles").select("id").in("id", ids).eq("role", "admin")
+      : { data: [], error: null };
+  if (adminsError) throw new Error(`Failed to check the alert recipients: ${adminsError.message}`);
+
+  const { data, error } = await admin
+    .from("balance_alert_settings")
+    .update({
+      kie_threshold_usd: input.kieThresholdUsd,
+      byteplus_threshold_usd: input.bytePlusThresholdUsd,
+      recipient_ids: (admins ?? []).map((row) => row.id),
+      kie_alerted_at: null,
+      byteplus_alerted_at: null,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", true)
+    .select("id");
+  if (error) throw new Error(`Failed to save the balance alerts: ${error.message}`);
+  if (!data?.length) return { error: "The alert settings row is missing. Apply migration 0140." };
+
+  revalidatePath(ACCOUNTS_CONTROL_PATH);
+}
+
+/**
  * setAllEditorsWeeklyCap's daily twin: sets, or clears, the daily burst
  * guard on every account in `scope` at once.
  *

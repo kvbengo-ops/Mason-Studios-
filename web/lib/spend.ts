@@ -81,6 +81,7 @@ import { isDev } from "@/lib/mode";
 import { createAdminClient } from "@/lib/supabase/server";
 import { guardResult, type ActionResult } from "@/lib/action-result";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
+import { getBytePlusBalanceUsd } from "@/lib/byteplus-balance";
 import { estimateCost } from "@/lib/estimate";
 import { isAudioEnabled, mergeRenderSettings } from "@/lib/models";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -1714,6 +1715,9 @@ export async function assertWithinSpendCaps(
   }
 
   if (!mockedRender && estimatedUsd > 0) {
+    // Not awaited and not a gate: re-reading BytePlus here (cached 60s) is what lets
+    // its low-balance alert (lib/balance-alert.ts) see renders, not only admin pages.
+    void getBytePlusBalanceUsd();
     const balanceUsd = await getKieAccountBalanceUsd();
     if (balanceUsd !== null) {
       const balanceResult = guardResult(() =>
@@ -1851,6 +1855,9 @@ export async function queueScenesIfWithinCaps(params: {
   const totalEstimateUsd = estimatesUsd.reduce((sum, v) => sum + v, 0);
 
   if (!isDev() && totalEstimateUsd > 0) {
+    // Not awaited and not a gate: re-reading BytePlus here (cached 60s) is what lets
+    // its low-balance alert (lib/balance-alert.ts) see renders, not only admin pages.
+    void getBytePlusBalanceUsd();
     const balanceUsd = await getKieAccountBalanceUsd();
     if (balanceUsd !== null) {
       const balanceResult = guardResult(() =>

@@ -29,6 +29,8 @@ import { RoleBadge } from "@/components/role-badge";
 import { PresenceDot } from "@/components/presence-dot";
 import { RoleSelect } from "@/components/role-select";
 import { GlobalSpendCapControl } from "@/components/global-spend-cap-control";
+import { BalanceAlertControl } from "@/components/balance-alert-control";
+import { loadBalanceAlertSettings } from "@/lib/balance-alert";
 import { ChangeLine, KpiTile, PANEL } from "@/components/kpi-tile";
 import { AreaChart } from "@/components/area-chart";
 import { AvatarThumb } from "@/components/avatar-thumb";
@@ -543,6 +545,7 @@ export default async function AccountsControlPage({
     failedRunErrors,
     pendingAllowanceRequests,
     monthlySeries,
+    balanceAlerts,
   ] = await Promise.all([
     loadAccountsControlOverview(windowDays, now),
     spending ? getAnthropicMonthlySpend() : null,
@@ -569,6 +572,7 @@ export default async function AccountsControlPage({
           return null;
         })
       : null,
+    spending ? loadBalanceAlertSettings() : null,
   ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
   const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
@@ -753,6 +757,8 @@ export default async function AccountsControlPage({
           spentUsd={overview.teamGlobalSpendUsd}
         />
       </section>
+
+      {balanceAlerts ? <BalanceAlertControl settings={balanceAlerts} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
         <nav aria-label="Sections" className={SEGMENTED}>
