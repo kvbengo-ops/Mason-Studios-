@@ -762,16 +762,20 @@ export function ElementsLibrary({
             {FILTER_LABEL[value]}
           </Button>
         ))}
-        <Button
-          type="button"
-          size="sm"
-          variant={selectMode ? "secondary" : "outline"}
-          aria-pressed={selectMode}
-          onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-        >
-          <ListChecks className="size-4" aria-hidden="true" />
-          Select
-        </Button>
+        {/* Only when something loaded is yours (or you are an admin): a non-admin has
+            nothing to select in the shared view, so the control would do nothing. */}
+        {selectMode || elements.some(isSelectable) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={selectMode ? "secondary" : "outline"}
+            aria-pressed={selectMode}
+            onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+          >
+            <ListChecks className="size-4" aria-hidden="true" />
+            Select
+          </Button>
+        ) : null}
         <span className="ml-auto text-xs text-muted-foreground">{elements.length} loaded</span>
       </div>
 
