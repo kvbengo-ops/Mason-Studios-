@@ -84,8 +84,8 @@ export function BalanceAlertControl({
           </p>
           {settings.emailConfigured ? null : (
             <p className="text-xs text-destructive">
-              Email is not set up: add RESEND_API_KEY to the web app's env (web/.env.local on the
-              server). Settings save, but nothing sends until then.
+              Email is not set up: add RESEND_API_KEY to web/.env.local on the server. Settings
+              save, but nothing sends until then.
             </p>
           )}
         </div>
