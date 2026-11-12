@@ -29,6 +29,7 @@ vi.mock("@/lib/accounts-control", async (importOriginal) => {
     ...actual,
     loadAccountsControlOverview: vi.fn(),
     loadAccountControlDeleted: vi.fn(),
+    loadAccountAllTimeSpendUsd: vi.fn(async () => 0),
     loadAccountsRunLog: vi.fn(async () => ({ rows: [], total: 0 })),
     parseWindowDays: actual.parseWindowDays,
   };
@@ -159,11 +160,9 @@ describe("AccountsControlPage", () => {
           username: "maya_editor",
           role: "editor",
           status: "active",
-          projectCount: 3,
           rangeRenderUsd: 10.0,
           rangeIterateUsd: 2.0,
           rangeTotalUsd: 12.0,
-          allTimeSpendUsd: 30.0,
         },
       ],
     });
@@ -238,11 +237,9 @@ describe("AccountsControlPage", () => {
           username: "maya_editor",
           role: "editor",
           status: "active",
-          projectCount: 1,
           rangeRenderUsd: 5.0,
           rangeIterateUsd: 0,
           rangeTotalUsd: 5.0,
-          allTimeSpendUsd: 15.0,
         },
       ],
     });
@@ -311,11 +308,9 @@ describe("AccountsControlPage", () => {
           username: "maya_editor",
           role: "editor",
           status: "active",
-          projectCount: 1,
           rangeRenderUsd: 0,
           rangeIterateUsd: 0.04,
           rangeTotalUsd: 0.04,
-          allTimeSpendUsd: 0.04,
         },
       ],
     });

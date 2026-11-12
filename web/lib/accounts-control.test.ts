@@ -55,7 +55,7 @@ describe("buildDailySpendSeries", () => {
 });
 
 describe("mergeAccountSpendRanking", () => {
-  it("includes admins and orders accounts by range spend then all-time spend", () => {
+  it("includes admins and orders accounts by range spend then username", () => {
     const directory: AccountControlDirectoryRow[] = [
       {
         id: "admin-1",
@@ -64,8 +64,8 @@ describe("mergeAccountSpendRanking", () => {
         role: "admin",
         status: "active",
         created_at: "2026-10-01T00:00:00Z",
-        project_count: 1,
-        spend_usd: 50,
+        last_seen_at: null,
+        avatar_storage_key: null,
       },
       {
         id: "ed-1",
@@ -74,8 +74,8 @@ describe("mergeAccountSpendRanking", () => {
         role: "editor",
         status: "active",
         created_at: "2026-10-01T00:00:00Z",
-        project_count: 2,
-        spend_usd: 10,
+        last_seen_at: null,
+        avatar_storage_key: null,
       },
       {
         id: "ed-2",
@@ -84,8 +84,8 @@ describe("mergeAccountSpendRanking", () => {
         role: "trusted_editor",
         status: "active",
         created_at: "2026-10-01T00:00:00Z",
-        project_count: 5,
-        spend_usd: 8,
+        last_seen_at: null,
+        avatar_storage_key: null,
       },
     ];
 
@@ -113,8 +113,8 @@ describe("mergeAccountSpendRanking keeps every role", () => {
       role,
       status: "active",
       created_at: "2026-10-01T00:00:00Z",
-      project_count: 0,
-      spend_usd: 0,
+      last_seen_at: null,
+      avatar_storage_key: null,
     });
     const ranked = mergeAccountSpendRanking(
       [row("hybrid-1", "hybrid_editor"), row("animator-1", "ai_animator")],

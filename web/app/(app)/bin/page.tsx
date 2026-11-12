@@ -31,7 +31,7 @@
 // in one Promise.all second) for why this stays a single round-trip to
 // Storage no matter how many projects, scenes and versions are in the bin.
 
-import type { JSX } from "react";
+import { Suspense, type JSX } from "react";
 import { ImageBin } from "@/components/image-bin";
 import { DownloadIcon, Trash2 } from "lucide-react";
 import { isAdmin, requireUser } from "@/actions/guard";
@@ -668,7 +668,13 @@ export default async function BinPage({
 
       {viewerIsAdmin ? <BinBulkBar shown={shownScenes.length + shownVersions.length} /> : null}
 
-      {typeFilter === "all" || typeFilter === "images" ? <ImageBin userId={user.id} /> : null}
+      {typeFilter === "all" || typeFilter === "images" ? (
+        <Suspense
+          fallback={<p className="text-sm text-muted-foreground">Loading generated images…</p>}
+        >
+          <ImageBin userId={user.id} />
+        </Suspense>
+      ) : null}
 
       {orderedGroups.length === 0 ? (
         // A real, calm empty state — this page is one click away in the

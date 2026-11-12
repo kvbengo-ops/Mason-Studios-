@@ -353,16 +353,12 @@ export default async function UsersPage({
   // and page 3, or on neither, if Postgres orders the tied group
   // differently between requests. `id` is unique, so this makes every page
   // boundary deterministic regardless of which column is being sorted.
-  const { data, error, count } = await filteredQuery
+  // Not awaited here: the builder runs inside the Promise.all below, alongside
+  // the counts, team and vendor reads that don't depend on it.
+  const tableQuery = filteredQuery
     .order(SORT_COLUMN_TO_DB[sort.column], { ascending: sort.direction === "asc" })
     .order("id", { ascending: true })
     .range(from, to);
-
-  if (error) {
-    throw new Error(`Failed to load users: ${error.message}`);
-  }
-
-  const totalCount = count ?? 0;
 
   // How many accounts the bulk allowance control would touch. `head: true`
   // so this is a COUNT, not a page of rows — the number is only ever read
@@ -380,6 +376,7 @@ export default async function UsersPage({
   // 14 days: the Team burn chart, and this week vs the same days last week.
   const teamDates = manilaDayKeys(burnNow, 14);
   const [
+    { data, error, count },
     { count: plainEditorCount },
     { count: trustedEditorCount },
     { count: hybridEditorCount },
@@ -393,6 +390,7 @@ export default async function UsersPage({
     kieBalanceUsd,
     bytePlusBalanceUsd,
   ] = await Promise.all([
+    tableQuery,
     supabase
       .from("profiles")
       .select("id", { count: "exact", head: true })
@@ -442,6 +440,10 @@ export default async function UsersPage({
     getKieAccountBalanceUsd(),
     getBytePlusBalanceUsd(),
   ]);
+  if (error) {
+    throw new Error(`Failed to load users: ${error.message}`);
+  }
+  const totalCount = count ?? 0;
   const totalPages = totalPageCount(totalCount, pageSize);
 
   // Same stale-bookmark guard /projects, /library, and /spend all use: land

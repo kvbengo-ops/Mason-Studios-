@@ -32,6 +32,7 @@ import {
   getSpendCategoryTotals,
   getSpendCategoryTotalsByUser,
   getSpendTotalUsd,
+  getUserSpendUsd,
   type SpendCategoryTotals,
   type UserSpendCategoryTotal,
 } from "@/lib/db-aggregates";
@@ -78,8 +79,8 @@ export interface AccountControlDirectoryRow {
   role: ProfileRole;
   status: ProfileStatus;
   created_at: string;
-  project_count: number;
-  spend_usd: number;
+  last_seen_at: string | null;
+  avatar_storage_key: string | null;
 }
 
 export interface AccountSpendSummary {
@@ -94,11 +95,9 @@ export interface AccountSpendSummary {
   avatarStorageKey?: string | null;
   /** Billed runs in the window (runs table only; deleted projects' archive has no rows to count). */
   rangeRunCount?: number;
-  projectCount: number;
   rangeRenderUsd: number;
   rangeIterateUsd: number;
   rangeTotalUsd: number;
-  allTimeSpendUsd: number;
 }
 
 export interface AccountsControlOverview {
@@ -364,9 +363,9 @@ export function buildModelUsage(
 }
 
 /**
- * Merges `user_directory` rows with per-user spend category totals for the
+ * Merges `profiles` rows with per-user spend category totals for the
  * selected date window and sorts accounts by window spend (highest first),
- * then all-time spend.
+ * then username.
  */
 export function mergeAccountSpendRanking(
   directoryRows: readonly AccountControlDirectoryRow[],
@@ -385,16 +384,15 @@ export function mergeAccountSpendRanking(
         username: row.username,
         role: row.role,
         status: row.status,
-        projectCount: row.project_count,
+        lastSeenAt: row.last_seen_at,
+        avatarStorageKey: row.avatar_storage_key,
         rangeRenderUsd: range?.renderUsd ?? 0,
         rangeIterateUsd: range?.iterateUsd ?? 0,
         rangeTotalUsd: range?.totalUsd ?? 0,
-        allTimeSpendUsd: row.spend_usd,
       };
     })
     .sort((a, b) => {
       if (b.rangeTotalUsd !== a.rangeTotalUsd) return b.rangeTotalUsd - a.rangeTotalUsd;
-      if (b.allTimeSpendUsd !== a.allTimeSpendUsd) return b.allTimeSpendUsd - a.allTimeSpendUsd;
       return a.username.localeCompare(b.username);
     });
 }
@@ -450,7 +448,6 @@ export async function loadAccountsControlOverview(
     kieBalanceUsd,
     bytePlusBalanceUsd,
     { data: directoryData, error: directoryError },
-    { data: presenceData },
   ] = await Promise.all([
     getSpendTotalUsd(supabase, todayStart.toISOString(), tomorrowStart.toISOString()),
     getSpendTotalUsd(
@@ -476,15 +473,15 @@ export async function loadAccountsControlOverview(
     getSpendCategoryTotalsByUser(supabase, windowStart.toISOString(), tomorrowStart.toISOString()),
     getKieAccountBalanceUsd(),
     getBytePlusBalanceUsd(),
+    // profiles, not user_directory: that view sums every run ever made on each
+    // read, and all-time spend is only shown for the selected account
+    // (loadAccountAllTimeSpendUsd).
     supabase
-      .from("user_directory")
-      .select("id, email, username, role, status, created_at, project_count, spend_usd")
+      .from("profiles")
+      .select("id, email, username, role, status, created_at, last_seen_at, avatar_storage_key")
       // Every role: hybrid_editor and ai_animator (0131) were missing, so most
       // of the team never appeared in Top accounts.
-      .in("role", ["admin", ...BULK_ALLOWANCE_SCOPE_ROLES.all])
-      .order("spend_usd", { ascending: false }),
-    // user_directory predates last_seen_at; an admin's session reads profiles directly.
-    supabase.from("profiles").select("id, last_seen_at, avatar_storage_key"),
+      .in("role", ["admin", ...BULK_ALLOWANCE_SCOPE_ROLES.all]),
   ]);
 
   if (directoryError) {
@@ -524,7 +521,6 @@ export async function loadAccountsControlOverview(
   const dailySeries = buildDailySpendSeries(windowRuns, windowDays, now);
   // The window is at least 7 days, so it always covers the last 24 hours.
   const hourlySeries = buildHourlySpendSeries(windowRuns, now);
-  const presenceById = new Map((presenceData ?? []).map((row) => [row.id, row]));
   // Billed runs per owner, resolved like every spend read: coalesce(runs.user_id, project owner).
   const runCountByUserId = new Map<string, number>();
   const billedRuns = windowRuns.filter((run) => (run.cost_usd ?? 0) > 0);
@@ -537,8 +533,6 @@ export async function loadAccountsControlOverview(
     userCategoryTotals,
   ).map((account) => ({
     ...account,
-    lastSeenAt: presenceById.get(account.id)?.last_seen_at ?? null,
-    avatarStorageKey: presenceById.get(account.id)?.avatar_storage_key ?? null,
     rangeRunCount: runCountByUserId.get(account.id) ?? 0,
   }));
   if (rendersTodayError)
@@ -631,6 +625,27 @@ export function runPreviewSource(
 
 export function sceneTimeKey(sceneId: string, createdAt: string): string {
   return `${sceneId}|${new Date(createdAt).getTime()}`;
+}
+
+/**
+ * One account's all-time spend, for the selected-account panel only. Fail-soft:
+ * null shows "—" rather than taking the page down.
+ */
+export async function loadAccountAllTimeSpendUsd(
+  userId: string,
+  now: Date = new Date(),
+): Promise<number | null> {
+  try {
+    return await getUserSpendUsd(
+      await createClient(),
+      userId,
+      new Date(0).toISOString(),
+      endOfManilaDayIso(now),
+    );
+  } catch (error) {
+    console.error(`Failed to load all-time spend for ${userId}`, error);
+    return null;
+  }
 }
 
 /**
@@ -800,34 +815,33 @@ export async function loadAccountControlDeleted(
     ),
   );
   const projectSettingsById = new Map<string, unknown>();
-  if (projectIds.length > 0) {
-    const { data: projectRows } = await supabase
-      .from("projects")
-      .select("id, render_settings")
-      .in("id", projectIds);
-    for (const row of projectRows ?? []) {
-      projectSettingsById.set(row.id, row.render_settings);
-    }
-  }
-
   const runByAssetId = new Map<
     string,
     { prompt: string | null; model: string; cost_usd: number | null }
   >();
-  if (imageRows.length > 0) {
-    const { data: runRows } = await supabase
-      .from("runs")
-      .select("asset_id, prompt, model, cost_usd")
-      .eq("user_id", userId)
-      .is("project_id", null)
-      .in(
-        "asset_id",
-        imageRows.map((img) => img.id),
-      );
-    for (const run of runRows ?? []) {
-      if (run.asset_id && !runByAssetId.has(run.asset_id)) {
-        runByAssetId.set(run.asset_id, run);
-      }
+  // Independent of each other, so one round trip's wait, not two.
+  const [projectsResult, runsResult] = await Promise.all([
+    projectIds.length > 0
+      ? supabase.from("projects").select("id, render_settings").in("id", projectIds)
+      : null,
+    imageRows.length > 0
+      ? supabase
+          .from("runs")
+          .select("asset_id, prompt, model, cost_usd")
+          .eq("user_id", userId)
+          .is("project_id", null)
+          .in(
+            "asset_id",
+            imageRows.map((img) => img.id),
+          )
+      : null,
+  ]);
+  for (const row of projectsResult?.data ?? []) {
+    projectSettingsById.set(row.id, row.render_settings);
+  }
+  for (const run of runsResult?.data ?? []) {
+    if (run.asset_id && !runByAssetId.has(run.asset_id)) {
+      runByAssetId.set(run.asset_id, run);
     }
   }
 

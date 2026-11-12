@@ -53,6 +53,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  loadAccountAllTimeSpendUsd,
   loadAccountControlDeleted,
   loadAccountsControlOverview,
   manilaWindowStartIso,
@@ -579,7 +580,10 @@ export default async function AccountsControlPage({
     null;
 
   let inspectorContent: JSX.Element | null = null;
+  let allTimeSpendUsd: number | null = null;
   if (view === "accounts" && selectedAccount) {
+    // Started first so it overlaps the tab's own loads below.
+    const allTimeSpendPromise = loadAccountAllTimeSpendUsd(selectedAccount.id, now);
     if (tab === "videos") {
       const { clips } = await loadEditorVideos(selectedAccount.id);
       inspectorContent = <VideosSection clips={clips} />;
@@ -590,6 +594,7 @@ export default async function AccountsControlPage({
       const deleted = await loadAccountControlDeleted(selectedAccount.id);
       inspectorContent = <DeletedSection deleted={deleted} />;
     }
+    allTimeSpendUsd = await allTimeSpendPromise;
   }
 
   // The Spend chart's series: last 24 hours, the page window, or last 12 months.
@@ -1351,12 +1356,12 @@ export default async function AccountsControlPage({
                       { label: `${windowDays}-day spend`, usd: selectedAccount.rangeTotalUsd },
                       { label: "Video", usd: selectedAccount.rangeRenderUsd },
                       { label: "Images", usd: selectedAccount.rangeIterateUsd },
-                      { label: "All-time spend", usd: selectedAccount.allTimeSpendUsd },
+                      { label: "All-time spend", usd: allTimeSpendUsd },
                     ].map((stat) => (
                       <div key={stat.label} className="min-w-0 bg-card p-4">
                         <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
                         <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
-                          {formatUsd(stat.usd)}
+                          {stat.usd === null ? "—" : formatUsd(stat.usd)}
                         </dd>
                       </div>
                     ))}
