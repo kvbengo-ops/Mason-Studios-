@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { requireUser } from "@/actions/guard";
+import { updateElement } from "@/actions/elements";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { elementUploadNameError } from "@/lib/element-upload-name";
 import { extFromFilename, getImageUrl } from "@/lib/storage";
@@ -18,8 +19,9 @@ const inputSchema = z.object({
  * and described by the operator, used as an @tag. A tag is how a reference
  * reaches a prompt, so the image becomes a private element the FIRST time it is
  * used, not when it is generated. That keeps the Elements Library to pictures
- * someone chose. An image already tagged comes back as it is: renaming goes
- * through updateElement, which rewrites the prompts that use the old tag.
+ * someone chose. An image that already has an element (filed automatically
+ * before that stopped, or tagged earlier) takes the tag and description typed
+ * here through updateElement, which also rewrites prompts using the old tag.
  */
 export async function tagGeneratedImage(input: {
   assetId: string;
@@ -55,6 +57,26 @@ export async function tagGeneratedImage(input: {
     .maybeSingle();
 
   let row = found;
+  let unchanged = found !== null;
+  if (found) {
+    const nextDescription = description || found.description || "";
+    if (name !== found.name || nextDescription !== (found.description ?? "")) {
+      const form = new FormData();
+      form.set("elementId", found.id);
+      form.set("name", name);
+      form.set("category", found.category);
+      form.set("description", nextDescription);
+      const result = await updateElement(form);
+      if (result?.error) return { error: result.error };
+      unchanged = false;
+      const { data: fresh } = await admin
+        .from("elements")
+        .select(columns)
+        .eq("id", found.id)
+        .single();
+      row = fresh ?? found;
+    }
+  }
   if (!row) {
     const nameError = await elementUploadNameError(admin, user.id, name, false);
     if (nameError) return { error: nameError };
@@ -82,7 +104,7 @@ export async function tagGeneratedImage(input: {
   }
 
   return {
-    existing: found !== null,
+    existing: unchanged,
     element: {
       id: row.id,
       name: row.name,
