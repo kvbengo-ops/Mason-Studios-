@@ -519,7 +519,7 @@ the next clip is still 3 minutes away, so it costs zero additional wall-clock:
 ```bash
 # on webhook, per clip
 ffmpeg -i clip.mp4 -vf scale=1080:1920,fps=24 \
-  -c:v libx264 -preset veryfast -crf 20 -c:a aac -ar 48000 normalized.mp4
+  -c:v libx264 -preset superfast -crf 20 -c:a aac -ar 48000 normalized.mp4
 
 # at the end, all clips now identical — stream copy
 ffmpeg -f concat -safe 0 -i list.txt -c copy final.mp4    # ~2 seconds
