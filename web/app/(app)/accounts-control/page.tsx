@@ -572,7 +572,7 @@ export default async function AccountsControlPage({
           return null;
         })
       : null,
-    spending ? loadBalanceAlertSettings() : null,
+    loadBalanceAlertSettings(),
   ]);
   const totalPages = runLog ? totalPageCount(runLog.total, RUNS_PAGE_SIZE) : 1;
   const runEmailByUserId = new Map(overview.accounts.map((account) => [account.id, account.email]));
@@ -680,14 +680,23 @@ export default async function AccountsControlPage({
             Understand your team’s spending. Set limits. Review what gets made.
           </p>
         </div>
-        <Link
-          href="/users"
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <SlidersHorizontal aria-hidden="true" className="size-4" />
-          Manage accounts
-          <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground" />
-        </Link>
+        <div className="flex flex-col items-stretch gap-2 sm:items-end">
+          <Link
+            href="/users"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <SlidersHorizontal aria-hidden="true" className="size-4" />
+            Manage accounts
+            <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground" />
+          </Link>
+          {balanceAlerts ? (
+            <BalanceAlertControl
+              settings={balanceAlerts}
+              kieBalanceUsd={overview.kieBalanceUsd}
+              bytePlusBalanceUsd={overview.bytePlusBalanceUsd}
+            />
+          ) : null}
+        </div>
       </header>
 
       {kieEmpty || runwayShort ? (
@@ -758,7 +767,6 @@ export default async function AccountsControlPage({
         />
       </section>
 
-      {balanceAlerts ? <BalanceAlertControl settings={balanceAlerts} /> : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
         <nav aria-label="Sections" className={SEGMENTED}>

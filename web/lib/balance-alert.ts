@@ -104,6 +104,9 @@ export interface BalanceAlertSettings {
   kieThresholdUsd: number | null;
   bytePlusThresholdUsd: number | null;
   recipientIds: string[];
+  /** When each vendor's alert last went out; null = armed (or off). */
+  kieAlertedAt: string | null;
+  bytePlusAlertedAt: string | null;
   /** Every active admin, the only accounts that can be picked. */
   admins: { id: string; label: string }[];
   /** False until RESEND_API_KEY is in the web env (web/.env.local): nothing sends. */
@@ -120,7 +123,9 @@ export async function loadBalanceAlertSettings(): Promise<BalanceAlertSettings |
     const [{ data: settings, error }, { data: admins }] = await Promise.all([
       supabase
         .from("balance_alert_settings")
-        .select("kie_threshold_usd, byteplus_threshold_usd, recipient_ids")
+        .select(
+          "kie_threshold_usd, byteplus_threshold_usd, recipient_ids, kie_alerted_at, byteplus_alerted_at",
+        )
         .eq("id", true)
         .maybeSingle(),
       supabase
@@ -135,6 +140,8 @@ export async function loadBalanceAlertSettings(): Promise<BalanceAlertSettings |
       kieThresholdUsd: settings.kie_threshold_usd,
       bytePlusThresholdUsd: settings.byteplus_threshold_usd,
       recipientIds: settings.recipient_ids,
+      kieAlertedAt: settings.kie_alerted_at,
+      bytePlusAlertedAt: settings.byteplus_alerted_at,
       admins: (admins ?? []).map((row) => ({
         id: row.id,
         label: row.email ?? row.username ?? row.id,
