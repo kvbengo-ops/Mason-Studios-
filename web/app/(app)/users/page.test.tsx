@@ -5,7 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import UsersPage from "./page";
 import { createClient } from "@/lib/supabase/server";
-import { manilaDayKey } from "@/lib/burn";
+import { manilaDayKey, spendDay } from "@/lib/burn";
 
 vi.mock("@/actions/guard", () => ({
   requireAdmin: vi.fn(async () => ({
@@ -123,7 +123,7 @@ describe("UsersPage row actions", () => {
     vi.mocked(createClient).mockResolvedValue({
       // spend_daily_by_user: editor-1 spent $70 today, nobody else spent anything.
       rpc: vi.fn(async () => ({
-        data: [{ user_id: "editor-1", day: manilaDayKey(new Date()), total_usd: 70 }],
+        data: [{ user_id: "editor-1", day: manilaDayKey(spendDay(new Date())), total_usd: 70 }],
         error: null,
       })),
       from: vi.fn((table: string) => {
@@ -214,7 +214,7 @@ describe("UsersPage row actions", () => {
     const rows = [row("editor-1", 10), row("editor-2", 0)];
     vi.mocked(createClient).mockResolvedValue({
       rpc: vi.fn(async () => ({
-        data: [{ user_id: "editor-1", day: manilaDayKey(new Date()), total_usd: 70 }],
+        data: [{ user_id: "editor-1", day: manilaDayKey(spendDay(new Date())), total_usd: 70 }],
         error: null,
       })),
       from: vi.fn((table: string) => {
