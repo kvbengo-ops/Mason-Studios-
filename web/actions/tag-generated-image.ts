@@ -14,7 +14,7 @@ import type { ElementTag } from "@/lib/elements";
  * keeps the Elements Library to pictures someone chose. A second use finds the
  * element made by the first.
  */
-export async function useGeneratedImage(
+export async function tagGeneratedImage(
   assetId: string,
 ): Promise<{ element: ElementTag } | { error: string }> {
   const { user } = await requireUser();

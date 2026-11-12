@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { JSX } from "react";
-import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { loadPersonalImageHistory } from "@/actions/image-generator";
-import { useGeneratedImage } from "@/actions/use-generated-image";
-import { Button } from "@/components/ui/button";
+import { tagGeneratedImage } from "@/actions/tag-generated-image";
+import { PendingButton } from "@/components/pending-button";
 import { useAsyncAction } from "@/components/use-async-action";
 import type { GeneratedImage } from "@/lib/image-generation";
 import type { ImageHistoryCursor } from "@/components/image-generator-history";
@@ -14,7 +13,7 @@ import type { ElementTag } from "@/lib/elements";
 
 /**
  * The reference picker's Images tab: the operator's own Create history. Using
- * one tags it (files it as a private element, see actions/use-generated-image.ts)
+ * one tags it (files it as a private element, see actions/tag-generated-image.ts)
  * and hands the element to the picker's own "use" path, so the references box,
  * its limit and its duplicate check all apply unchanged.
  */
@@ -63,7 +62,7 @@ export function PickerGeneratedImages({ onUse }: { onUse: (el: ElementTag) => vo
   function use(assetId: string): void {
     run(async () => {
       try {
-        const result = await useGeneratedImage(assetId);
+        const result = await tagGeneratedImage(assetId);
         if ("error" in result) {
           toast.error(result.error);
           return;
@@ -119,24 +118,25 @@ export function PickerGeneratedImages({ onUse }: { onUse: (el: ElementTag) => vo
       ) : null}
       <div className="flex items-center gap-2">
         {cursor ? (
-          <Button
+          <PendingButton
             type="button"
             size="sm"
             variant="ghost"
-            disabled={loading}
+            pending={loading}
             onClick={() => void loadMore(cursor)}
           >
-            {loading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : "Load more"}
-          </Button>
+            Load more
+          </PendingButton>
         ) : null}
-        <Button
+        <PendingButton
           type="button"
           className="ml-auto"
-          disabled={selectedId === null || pending}
+          pending={pending}
+          disabled={selectedId === null}
           onClick={() => selectedId && use(selectedId)}
         >
-          {pending ? "Tagging…" : "Use image"}
-        </Button>
+          Use image
+        </PendingButton>
       </div>
     </div>
   );
