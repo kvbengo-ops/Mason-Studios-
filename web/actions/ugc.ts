@@ -57,7 +57,6 @@ import {
   uploadFile,
 } from "@/lib/storage";
 import {
-  binRetentionCutoffIso,
   extractArchivedStorageKeys,
   isBinEntryExpired,
 } from "@/lib/bin-thumbnails";
@@ -3058,55 +3057,6 @@ async function removeUnreferencedArchivedAssets(
     }
   } catch (cleanupError) {
     console.error("Could not clean up purged bin storage objects", cleanupError);
-  }
-}
-
-/**
- * Hard-deletes any `deleted_scenes` and `deleted_scene_versions` rows that
- * have passed the 3-day bin retention window (or were previously
- * soft-marked with `hard_deleted_at`), along with their unreferenced Storage
- * objects.
- */
-export async function reapExpiredBinEntries(): Promise<void> {
-  await requireUser();
-  const admin = createAdminClient();
-  const cutoffIso = binRetentionCutoffIso();
-
-  try {
-    const [
-      { data: expiredScenes },
-      { data: legacyPurgedScenes },
-      { data: expiredVersions },
-      { data: legacyPurgedVersions },
-    ] = await Promise.all([
-      admin.from("deleted_scenes").delete().lt("deleted_at", cutoffIso).select("assets"),
-      admin.from("deleted_scenes").delete().not("hard_deleted_at", "is", null).select("assets"),
-      admin
-        .from("deleted_scene_versions")
-        .delete()
-        .lt("deleted_at", cutoffIso)
-        .select("clip_asset"),
-      admin
-        .from("deleted_scene_versions")
-        .delete()
-        .not("hard_deleted_at", "is", null)
-        .select("clip_asset"),
-    ]);
-
-    const keys = new Set<string>();
-    for (const row of [...(expiredScenes ?? []), ...(legacyPurgedScenes ?? [])]) {
-      for (const key of extractArchivedStorageKeys(row.assets)) {
-        keys.add(key);
-      }
-    }
-    for (const row of [...(expiredVersions ?? []), ...(legacyPurgedVersions ?? [])]) {
-      for (const key of extractArchivedStorageKeys(undefined, row.clip_asset)) {
-        keys.add(key);
-      }
-    }
-    await removeUnreferencedArchivedAssets(admin, Array.from(keys));
-  } catch (reapError) {
-    console.error("reapExpiredBinEntries: failed to reap expired bin rows", reapError);
   }
 }
 

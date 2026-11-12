@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { requireAdmin } from "@/actions/guard";
-import { purgeDeletedScene, purgeDeletedVersion, reapExpiredBinEntries } from "@/actions/ugc";
+import { purgeDeletedScene, purgeDeletedVersion } from "@/actions/ugc";
 import { AccountStatusBadge } from "@/components/account-status-badge";
 import { ActionForm } from "@/components/action-form";
 import { BinCard } from "@/components/bin-card";
@@ -520,7 +520,6 @@ export default async function AccountsControlPage({
   }>;
 }): Promise<JSX.Element> {
   const { user: viewer, profile: viewerProfile } = await requireAdmin();
-  await reapExpiredBinEntries();
 
   const resolvedParams = await searchParams;
   const view = parseView(resolvedParams.view);

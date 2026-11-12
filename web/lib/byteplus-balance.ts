@@ -14,6 +14,7 @@ import { createHash, createHmac } from "node:crypto";
 import { isDev } from "@/lib/mode";
 
 const CACHE_TTL_MS = 60_000;
+const FETCH_TIMEOUT_MS = 3_000;
 const HOST = "billing.byteplusapi.com";
 const REGION = "ap-singapore-1";
 const SERVICE = "billing";
@@ -72,6 +73,8 @@ export async function getBytePlusBalanceUsd(now: number = Date.now()): Promise<n
       method: "POST",
       headers: signBalanceRequest(ak, sk, xDate),
       body: BODY,
+      // Admin pages await this; a hung BytePlus must not hang them.
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     const body = (await response.json()) as {
       ResponseMetadata?: { Error?: { Code?: string } };

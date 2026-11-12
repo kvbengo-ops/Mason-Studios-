@@ -35,6 +35,7 @@
 import { isDev } from "@/lib/mode";
 
 const BALANCE_CACHE_TTL_MS = 60_000;
+const BALANCE_FETCH_TIMEOUT_MS = 3_000;
 
 const KIE_CREDIT_URL = "https://api.kie.ai/api/v1/chat/credit";
 
@@ -136,6 +137,8 @@ export async function getKieAccountBalanceUsd(now: number = Date.now()): Promise
   try {
     response = await fetchImpl(KIE_CREDIT_URL, {
       headers: { Authorization: `Bearer ${key}` },
+      // Admin pages and the render gate await this; a hung kie must not hang them.
+      signal: AbortSignal.timeout(BALANCE_FETCH_TIMEOUT_MS),
     });
   } catch (err) {
     console.error(

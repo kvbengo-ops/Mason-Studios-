@@ -58,7 +58,6 @@ import {
 import {
   purgeDeletedScene,
   purgeDeletedVersion,
-  reapExpiredBinEntries,
   restoreClipVersion,
   restoreScene,
 } from "@/actions/ugc";
@@ -179,7 +178,6 @@ export default async function BinPage({
 }): Promise<JSX.Element> {
   const { user, profile } = await requireUser();
   const viewerIsAdmin = isAdmin(profile);
-  await reapExpiredBinEntries();
 
   // Filters, all from the URL so a filtered view can be linked and refreshed.
   // Account is admin only: everyone else only ever sees their own entries.

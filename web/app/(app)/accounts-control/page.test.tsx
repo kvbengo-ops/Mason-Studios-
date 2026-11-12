@@ -19,7 +19,6 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/actions/ugc", () => ({
-  reapExpiredBinEntries: vi.fn(async () => undefined),
   purgeDeletedScene: vi.fn(async () => undefined),
   purgeDeletedVersion: vi.fn(async () => undefined),
 }));
