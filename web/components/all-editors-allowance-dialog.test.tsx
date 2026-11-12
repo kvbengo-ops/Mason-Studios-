@@ -103,7 +103,7 @@ describe("Spending limits", () => {
     await user.clear(input("USD per week"));
     await user.type(input("USD per week"), "99");
     await user.click(screen.getByRole("combobox", { name: "Applies to" }));
-    await user.click(screen.getByRole("option", { name: "Newly onboard only (1)" }));
+    await user.click(screen.getByRole("option", { name: "Newly onboarded only (1)" }));
     await waitFor(() => expect(input("USD per week").value).toBe("12"));
     await user.clear(input("USD per week"));
     await user.type(input("USD per week"), "77");

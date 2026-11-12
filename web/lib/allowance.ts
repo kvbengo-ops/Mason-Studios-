@@ -365,7 +365,7 @@ export const BULK_ALLOWANCE_SCOPE_ROLES: Record<BulkAllowanceScope, readonly Pro
 
 /** What each scope is called on screen. Singular-agnostic — the dialog adds its own counts. */
 export const BULK_ALLOWANCE_SCOPE_LABELS: Record<BulkAllowanceScope, string> = {
-  editor: "Newly onboard only",
+  editor: "Newly onboarded only",
   trusted_editor: "Trusted editors only",
   hybrid_editor: "Hybrid Editors only",
   ai_animator: "AI Animators only",

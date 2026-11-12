@@ -51,7 +51,7 @@ describe("roleChoices", () => {
 describe("ChangeRoleDialog", () => {
   it("marks the current role and does not let it be picked", () => {
     setup("editor");
-    const current = screen.getByRole("radio", { name: /^Newly onboard/ }) as HTMLInputElement;
+    const current = screen.getByRole("radio", { name: /^Newly onboarded/ }) as HTMLInputElement;
     expect(current.disabled).toBe(true);
     expect(screen.getByText("Current")).toBeTruthy();
   });
