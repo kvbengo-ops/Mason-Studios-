@@ -126,7 +126,7 @@ export function SceneCommentsButton({
             disabled={pending || !body.trim()}
             className="inline-flex h-8 items-center justify-center self-end rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {pending ? "Saving…" : "Post"}
+            Post
           </button>
         </form>
       </DialogContent>
