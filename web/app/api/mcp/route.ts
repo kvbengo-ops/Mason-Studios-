@@ -235,6 +235,10 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const { id = null, method, params = {} } = message;
+  // Which step of the handshake a client reached; never the token or arguments.
+  console.info(
+    `mcp rpc method=${String(method)} id=${message.id === undefined ? "none" : "set"} protocol=${String(params.protocolVersion ?? "-")} accept=${request.headers.get("accept") ?? "-"}`,
+  );
 
   // tools/call is authorized by the /api/v1 handler it reaches (with that
   // endpoint's own scope and rate bucket); everything else is checked here,
