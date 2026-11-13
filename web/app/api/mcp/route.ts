@@ -205,7 +205,20 @@ async function withKey(response: Response, key: string): Promise<Response> {
   return new Response(`${text}\nidempotency_key: ${key}`, { status: response.status });
 }
 
+// What the client was answered: the status, or the error if the handler threw (a throw is a 500
+// that no other mcp log line shows). shortcut: remove with the other mcp logs once connecting works.
 export async function POST(request: Request): Promise<Response> {
+  try {
+    const response = await handle(request);
+    console.info(`mcp reply status=${response.status}`);
+    return response;
+  } catch (error) {
+    console.error("mcp threw", error);
+    throw error;
+  }
+}
+
+async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url);
   // Connector setup was failing with no trace on the server; this is the only evidence that a
   // client's request arrived. Never the token itself. shortcut: remove once connecting works.
