@@ -391,7 +391,22 @@ candidates AS (
     -- must reach kie before reconcile's 45s staleAfter, and kie submits are
     -- spaced, so a tick may only hold what it can submit in that time. Inside
     -- the same LIMIT so it shares the statement's snapshot.
-    LIMIT least($6, greatest(0, $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1)))
+    --
+    -- A render waiting longer than staleSlotAfter (45 minutes) stops holding a
+    -- slot. On 2026-11-14 kie queued renders ~90 minutes before starting them,
+    -- and with reconcile now waiting up to 6 hours for kie's answer, ten such
+    -- renders would have blocked the whole team for hours while kie was not
+    -- even working on them. The second term is the hard cap: never more than
+    -- twice the ceiling in flight, so a kie stall cannot snowball. A kie limit
+    -- this exceeds comes back as a rate-limit, which dispatch requeues.
+    -- coalesce: a render with no submitted_at still holds its slot (NULL > x
+    -- is NULL, which would quietly free it).
+    LIMIT least(
+      $6,
+      greatest(0, $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1
+                          AND coalesce(submitted_at, now()) > now() - interval '45 minutes')),
+      greatest(0, 2 * $4 - (SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = $1))
+    )
 )
 UPDATE scenes
 SET status = 'rendering', submitted_at = now()

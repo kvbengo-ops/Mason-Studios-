@@ -55,10 +55,18 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 	// is exact without owning the whole table. The dev filter mirrors the
 	// one inside the claim's own LIMIT — counting both modes here would
 	// make this test disagree with the statement it is testing.
-	var rendering int
+	//
+	// Only renders inside the 45-minute window hold a slot, and the claim
+	// also stops at twice the ceiling in total, so measure both the way the
+	// claim's LIMIT does. A clean database makes both terms agree on 2.
+	var rendering, total int
 	if err := s.pool.QueryRow(ctx,
-		`SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&rendering); err != nil {
+		`SELECT count(*) FILTER (WHERE coalesce(submitted_at, now()) > now() - interval '45 minutes'), count(*)
+		 FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&rendering, &total); err != nil {
 		t.Fatalf("count rendering: %v", err)
+	}
+	if 2*(rendering+2)-total < 2 {
+		t.Skipf("shared database holds %d stale renders, past the claim's hard cap; this test needs a cleaner one", total-rendering)
 	}
 
 	claimed, err := s.ClaimQueuedScenes(ctx, rendering+2, 0, 0)
@@ -127,5 +135,77 @@ INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, project
 	}
 	if len(claimed) != 3 {
 		t.Fatalf("ceiling with 3 free slots claimed %d scenes, want 3 — perTick must not widen the ceiling", len(claimed))
+	}
+}
+
+// A render that has waited past the 45-minute window no longer holds a slot,
+// so a kie queue stall cannot block every new render behind it; and the claim
+// still never puts more than twice the ceiling in flight.
+func TestClaimStaleRendersFreeTheirSlotUpToTwiceTheCeiling(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL not set; skipping database-backed test")
+	}
+	ctx := context.Background()
+	s, err := New(ctx, dsn, false)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	projectID, sceneID := seedRenderingScene(ctx, t, s)
+	for idx := 1; idx <= 6; idx++ {
+		if _, err := s.pool.Exec(ctx, `
+INSERT INTO scenes (project_id, idx, status) VALUES ($1, $2, 'queued')`, projectID, idx); err != nil {
+			t.Fatalf("seed queued scene %d: %v", idx, err)
+		}
+	}
+
+	var fresh, total int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FILTER (WHERE coalesce(submitted_at, now()) > now() - interval '45 minutes'), count(*)
+		 FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&fresh, &total); err != nil {
+		t.Fatalf("count rendering: %v", err)
+	}
+	if fresh != total {
+		t.Skip("shared database already holds stale renders; this test needs to own the window")
+	}
+	ceiling := total // full: nothing is claimable while every render is fresh
+
+	if claimed, err := s.ClaimQueuedScenes(ctx, ceiling, 0, 0); err != nil || len(claimed) != 0 {
+		t.Fatalf("claim at a full ceiling = %d scenes (err %v), want 0", len(claimed), err)
+	}
+
+	// The seeded render has now waited an hour in kie's queue.
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE scenes SET submitted_at = now() - interval '1 hour' WHERE id = $1`, sceneID); err != nil {
+		t.Fatalf("age the seeded render: %v", err)
+	}
+	claimed, err := s.ClaimQueuedScenes(ctx, ceiling, 0, 0)
+	if err != nil {
+		t.Fatalf("ClaimQueuedScenes: %v", err)
+	}
+	if len(claimed) != 1 {
+		t.Fatalf("after one render went stale, claim = %d scenes, want 1 (its freed slot)", len(claimed))
+	}
+
+	// Age everything: fresh slots are all free again, but the hard cap of
+	// twice the ceiling in flight still bounds the claim.
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE scenes SET submitted_at = now() - interval '1 hour' WHERE status = 'rendering' AND dev = false AND project_id = $1`, projectID); err != nil {
+		t.Fatalf("age the project's renders: %v", err)
+	}
+	var inFlight int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM scenes WHERE status = 'rendering' AND dev = false`).Scan(&inFlight); err != nil {
+		t.Fatalf("count in flight: %v", err)
+	}
+	claimed, err = s.ClaimQueuedScenes(ctx, ceiling, 0, 0)
+	if err != nil {
+		t.Fatalf("ClaimQueuedScenes (capped): %v", err)
+	}
+	want := min(5, ceiling, max(0, 2*ceiling-inFlight)) // 5 still queued
+	if len(claimed) != want {
+		t.Errorf("claim with all renders stale = %d scenes, want %d (twice-the-ceiling cap)", len(claimed), want)
 	}
 }
