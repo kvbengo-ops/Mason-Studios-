@@ -205,6 +205,11 @@ async function withKey(response: Response, key: string): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const url = new URL(request.url);
+  // Connector setup was failing with no trace on the server; this is the only evidence that a
+  // client's request arrived. Never the token itself. shortcut: remove once connecting works.
+  console.info(
+    `mcp POST ua=${request.headers.get("user-agent") ?? "-"} query_token=${url.searchParams.has("token")} bearer=${request.headers.has("authorization")}`,
+  );
   const queryToken = url.searchParams.get("token")?.trim();
   const authorization = queryToken
     ? `Bearer ${queryToken}`
@@ -285,6 +290,7 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 /** No server-initiated stream: this server only answers POSTs. */
-export function GET(): Response {
+export function GET(request: Request): Response {
+  console.info(`mcp GET ua=${request.headers.get("user-agent") ?? "-"}`);
   return new Response(null, { status: 405, headers: { Allow: "POST" } });
 }
