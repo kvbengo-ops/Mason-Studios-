@@ -178,6 +178,81 @@ async function readPassHistory(userId: string): Promise<JSX.Element> {
   }
 }
 
+/**
+ * The viewer's own allowance requests with both sides of the conversation in full: what they
+ * wrote when asking and what the approver replied. Notifications link here (#request-<id>), so
+ * the message that was cut short in the dropdown can be read whole. Own rows through RLS.
+ */
+async function readOwnAllowanceMessages(userId: string): Promise<JSX.Element> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("allowance_requests")
+      .select("id, requested_usd, reason, status, decision_note, decided_at, created_at")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Allowance messages</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {data?.length ? (
+            data.map((request) => (
+              <section
+                key={request.id}
+                id={`request-${request.id}`}
+                className="scroll-mt-24 rounded-lg border border-border p-4 target:ring-2 target:ring-primary"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">
+                    Requested {formatUsd(request.requested_usd)}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    {dateTimeFormatter.format(new Date(request.created_at))}
+                    <AllowanceStatusBadge status={request.status} />
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-medium text-muted-foreground">You wrote</p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+                  {request.reason?.trim() || "No message."}
+                </p>
+                {request.status !== "pending" && request.status !== "cancelled" ? (
+                  <>
+                    <p className="mt-3 text-xs font-medium text-muted-foreground">
+                      Reply
+                      {request.decided_at
+                        ? ` · ${dateTimeFormatter.format(new Date(request.decided_at))}`
+                        : ""}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap break-words rounded-md bg-muted/60 px-3 py-2 text-sm">
+                      {request.decision_note?.trim() || "No message from the approver."}
+                    </p>
+                  </>
+                ) : null}
+              </section>
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">No allowance requests yet.</p>
+          )}
+        </CardContent>
+      </Card>
+    );
+  } catch (error) {
+    console.error("Failed to load own allowance messages", error);
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Allowance messages</CardTitle>
+        </CardHeader>
+        <CardContent>Messages could not be loaded. Refresh to try again.</CardContent>
+      </Card>
+    );
+  }
+}
+
 export default async function AllowancesPage({
   searchParams,
 }: {
@@ -190,7 +265,12 @@ export default async function AllowancesPage({
   }>;
 }): Promise<JSX.Element> {
   const { user, profile } = await requireUser();
-  const passHistory = !isAdmin(profile) ? await readPassHistory(user.id) : null;
+  const passHistory = !isAdmin(profile) ? (
+    <>
+      {await readOwnAllowanceMessages(user.id)}
+      {await readPassHistory(user.id)}
+    </>
+  ) : null;
   // Editors get only their own history. The existing worklist still passes
   // requireApprover before any queue, requester, or account-funds reads.
   if (!isApprover(profile)) {
