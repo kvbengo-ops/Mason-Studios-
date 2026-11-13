@@ -68,14 +68,15 @@ const (
 // The video bitrate ceiling Normalize encodes under. ultrafast stays (speed on
 // the one-CPU worker), but at a fixed CRF it inflates the file: a 31.7 MiB,
 // 30s kie clip came out at 117.8 MiB, past Storage's 100 MB limit, with no
-// visible gain (the source is 480p/720p scaled up). Capped at 10 Mbps the same
-// clip is 38 MiB at 42.9 dB PSNR against the source, and encodes faster.
-// Measured locally 2026-11-14 with ffmpeg 9.0.2. 10 Mbps x 30s is ~38 MiB, so
-// ShrinkCRF is now only a backstop. CRF still governs below the cap, so a
-// simple clip stays small.
+// visible gain. 20 Mbps with the lanczos scaler keeps the upscale nearly as
+// sharp as uncapped (44.8 vs 45.2 dB PSNR against a lanczos upscale of the
+// source) at 74.6 MiB for 30s; 10 Mbps was 38 MiB but visibly softer (41.8
+// dB, owner asked for the quality back, 2026-11-14). Measured locally with
+// ffmpeg 9.0.2. 20 Mbps x 30s stays under MaxClipBytes, so ShrinkCRF is only
+// a backstop; CRF still governs below the cap, so a simple clip stays small.
 const (
-	videoMaxRate = "10M"
-	videoBufSize = "20M"
+	videoMaxRate = "20M"
+	videoBufSize = "40M"
 )
 
 // FrameSize is the normalized width x height for an aspect ratio.
@@ -206,7 +207,7 @@ func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio str
 			fmt.Sprintf("anullsrc=channel_layout=stereo:sample_rate=%s", audioSampleRateHz))
 	}
 	args = append(args,
-		"-vf", fmt.Sprintf("scale=%[1]d:%[2]d:force_original_aspect_ratio=increase,crop=%[1]d:%[2]d,fps=24", w, h),
+		"-vf", fmt.Sprintf("scale=%[1]d:%[2]d:flags=lanczos:force_original_aspect_ratio=increase,crop=%[1]d:%[2]d,fps=24", w, h),
 		// ultrafast, not veryfast: about a quarter of the CPU per clip, for a
 		// much bigger file at the same crf (superfast measured 2.2x on prod).
 		"-c:v", "libx264", "-preset", "ultrafast", "-crf", strconv.Itoa(crf),
