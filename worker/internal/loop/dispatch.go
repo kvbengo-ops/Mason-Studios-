@@ -19,10 +19,12 @@ import (
 )
 
 // signedURLExpiry is how long the reference-frame URL handed to kie stays
-// valid. Sized generously relative to how quickly kie actually starts a
-// job — a submission racing an expiring signed URL would fail the render
-// for no good reason.
-const signedURLExpiry = 1 * time.Hour
+// valid. It must outlast kie's QUEUE, not just its start: kie downloads the
+// inputs when it begins work, and on 2026-11-14 a Seedance task queued 93
+// minutes then failed "content[0].image_url.url ... resource download
+// failed" against a one-hour URL. 24 hours covers reconcile's timeoutAfter
+// with room to spare.
+const signedURLExpiry = 24 * time.Hour
 
 // recoveryWriteTimeout bounds a compensating write. Deliberately short: these
 // writes happen on the way out of a dispatch that is usually being cancelled,

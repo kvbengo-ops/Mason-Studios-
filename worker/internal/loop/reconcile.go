@@ -48,7 +48,15 @@ const staleAfter = 45 * time.Second
 // LOSES the result: MarkDone only accepts a scene still in 'rendering', so
 // kie's late success lands on a 'failed' row and is dropped, after kie has
 // already billed it. Holding a concurrency slot longer is the cheaper error.
-const timeoutAfter = 90 * time.Minute
+//
+// 6 HOURS, up from 90 minutes (2026-11-14). Kie resolves a task on its own,
+// success or failure, and 90 minutes still cut off real successes: a 10s
+// Seedance render was failed at 02:46:53 and kie completed it at 02:47:02,
+// billed; the editor regenerated and paid twice. On 2026-11-14 three renders
+// sat in kie's queue ~90 minutes and all three resolved by 93. This stays a
+// backstop for a task kie never resolves. BytePlus is unaffected: it expires
+// its own tasks at one hour, unbilled (byteplus.executionExpiresAfterS).
+const timeoutAfter = 6 * time.Hour
 
 // finalVersionLeaseStaleAfter is how long a final_versions lease
 // (claimed_at) may stand before reconcile assumes the worker holding it
