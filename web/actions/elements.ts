@@ -85,6 +85,7 @@ import type { ActionResult } from "@/lib/action-result";
 import type { ElementCategory } from "@/types/db";
 import { elementUploadNameError } from "@/lib/element-upload-name";
 import { parseMp4DurationSeconds } from "@/lib/mp4-duration";
+import { parseAudioDurationSeconds } from "@/lib/audio-duration";
 import { promptMentionsTag, renameTagInPrompt } from "@/lib/rename-tag";
 
 // Mirrors 0073's CHECK. A category the database refuses is a 500 the operator
@@ -275,6 +276,13 @@ export async function registerElement(formData: FormData): Promise<ActionResult>
   if (kind === "video" && measuredVideoDurationS === null) {
     return { error: "That MP4 has no supported movie duration." };
   }
+  // WAV/MP3 only; null when unreadable, which generate lets through (kie decides) rather than
+  // refusing a voice on a guess. Stored so /ugc can refuse a clip outside 2-30 s before kie does.
+  const audioExt = image.name.split(".").pop()?.toLowerCase();
+  const measuredAudioDurationS =
+    kind === "audio" && (audioExt === "wav" || audioExt === "mp3")
+      ? parseAudioDurationSeconds(new Uint8Array(await image.arrayBuffer()), audioExt)
+      : null;
   // WHERE THE BYTES GO follows the same owner split as the guard above:
   // `projects/<id>/...` when the picker supplied a project, `users/<id>/...`
   // when the Elements Library did (0085 added the second shape). The element
@@ -322,7 +330,7 @@ export async function registerElement(formData: FormData): Promise<ActionResult>
       // a scene that tags this element needs exactly this number — see
       // measuredVideoDurationS's own comment above for where it came from
       // and what a null here tells the pricing code to do.
-      duration_s: kind === "video" ? measuredVideoDurationS : null,
+      duration_s: kind === "video" ? measuredVideoDurationS : measuredAudioDurationS,
     })
     .select("id")
     .single();

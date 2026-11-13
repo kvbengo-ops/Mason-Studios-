@@ -56,10 +56,7 @@ import {
   signedUrl,
   uploadFile,
 } from "@/lib/storage";
-import {
-  extractArchivedStorageKeys,
-  isBinEntryExpired,
-} from "@/lib/bin-thumbnails";
+import { extractArchivedStorageKeys, isBinEntryExpired } from "@/lib/bin-thumbnails";
 import { estimateCost } from "@/lib/estimate";
 import { KLING_FRAME_EXTS } from "@/lib/elements";
 import { selectInChunks } from "@/lib/in-chunks";
@@ -69,7 +66,7 @@ import { selectInChunks } from "@/lib/in-chunks";
 // scene_references allowlist can't quietly drift apart the way a hand-picked
 // second copy eventually would.
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
-import { MAX_REFERENCES, maxReferencesFor } from "@/lib/ugc-references";
+import { MAX_REFERENCES, maxReferencesFor, referenceDurationRefusal } from "@/lib/ugc-references";
 import { supportsPromptOnlyVideo } from "@/lib/prompt-only-video";
 import { getModel, isAudioEnabled, mergeRenderSettings } from "@/lib/models";
 import { assertWithinSpendCaps, type queueScenesIfWithinCaps } from "@/lib/spend";
@@ -748,6 +745,7 @@ async function taggedVideoInputDurationsS(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
   prompt: string,
+  kind: "video_ref" | "audio" = "video_ref",
 ): Promise<(number | null)[]> {
   const tags = tagsInOrder(prompt);
   if (tags.length === 0) return [];
@@ -775,7 +773,7 @@ async function taggedVideoInputDurationsS(
   const durations: (number | null)[] = [];
   for (const element of tagged) {
     const asset = byId.get(element.asset_id);
-    if (asset?.kind !== "video_ref") continue;
+    if (asset?.kind !== kind) continue;
     durations.push(asset.duration_s);
   }
   return durations;
@@ -1871,15 +1869,23 @@ export async function generateClip(formData: FormData): Promise<GenerateClipResu
   // reason maxPromptChars exists at all) — so a Kling submission's
   // submittedPrompt is the prompt exactly as typed, and promptTooLongForModel
   // below checks exactly that length.
-  const [videoReferenceDurationsS, submittedPrompt, unknownTags] = await Promise.all([
-    taggedVideoInputDurationsS(admin, user.id, prompt),
-    isKlingSubmission ? Promise.resolve(prompt) : resolveElementTags(admin, user.id, prompt),
-    unknownElementTags(admin, user.id, prompt),
-  ]);
+  const [videoReferenceDurationsS, audioReferenceDurationsS, submittedPrompt, unknownTags] =
+    await Promise.all([
+      taggedVideoInputDurationsS(admin, user.id, prompt),
+      taggedVideoInputDurationsS(admin, user.id, prompt, "audio"),
+      isKlingSubmission ? Promise.resolve(prompt) : resolveElementTags(admin, user.id, prompt),
+      unknownElementTags(admin, user.id, prompt),
+    ]);
   const allVideoReferenceDurationsS =
     hasUpload && image instanceof File && isAcceptedReferenceVideo(image)
       ? [...videoReferenceDurationsS, primaryVideoDurationS]
       : videoReferenceDurationsS;
+  // Before the cap check and before anything is written: kie 422s a reference video outside
+  // 2-30 s, and by then the scene exists and fails.
+  const clipLengthRefusal =
+    referenceDurationRefusal(chosen.model.id, "video", allVideoReferenceDurationsS) ??
+    referenceDurationRefusal(chosen.model.id, "audio", audioReferenceDurationsS);
+  if (clipLengthRefusal) return { error: clipLengthRefusal };
   const estimate = estimateCost(
     {
       character: "",

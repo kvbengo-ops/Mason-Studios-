@@ -55,6 +55,34 @@ export function referenceLimitsFor(modelId: string) {
   };
 }
 
+const SEEDANCE_25_MIN_CLIP_S = 2;
+
+/**
+ * Refuses a Seedance 2.5 reference video or audio clip kie would reject with 422 ("Each
+ * reference video must be between 2 and 30 seconds"): each clip 2-30 s, 30 s combined per type.
+ * Checked before the scene is written, so it costs a message instead of a failed scene. A null
+ * duration (not measured: audio saved before the app stored it, or a browser that could not
+ * read it) passes through; the spend cap already refuses to price an unmeasured video.
+ */
+export function referenceDurationRefusal(
+  modelId: string,
+  kind: "video" | "audio",
+  durationsS: readonly (number | null)[],
+): string | null {
+  if (modelId !== "seedance-2.5" && modelId !== "seedance-2.5-byteplus") return null;
+  const max = kind === "video" ? SEEDANCE_25_LIMITS.videoSeconds : SEEDANCE_25_LIMITS.audioSeconds;
+  const measured = durationsS.filter((s): s is number => typeof s === "number");
+  const bad = measured.find((s) => s < SEEDANCE_25_MIN_CLIP_S || s > max);
+  if (bad !== undefined) {
+    return `Seedance 2.5 needs each reference ${kind} to be ${SEEDANCE_25_MIN_CLIP_S} to ${max} seconds. One is ${bad.toFixed(1)} s: trim it, then generate again.`;
+  }
+  const total = measured.reduce((sum, s) => sum + s, 0);
+  if (total > max) {
+    return `Seedance 2.5 allows ${max} seconds of reference ${kind} in total. These add up to ${total.toFixed(1)} s: trim or remove one.`;
+  }
+  return null;
+}
+
 /**
  * The /ugc References box's total for this model: Seedance 2.5 holds 12, every other model
  * the original ten. Kling is excluded on purpose: it takes its start/end frame pair, not the

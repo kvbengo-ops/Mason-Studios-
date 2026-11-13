@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MAX_REFERENCES, maxReferencesFor, referenceLimitsFor } from "./ugc-references";
+import {
+  MAX_REFERENCES,
+  maxReferencesFor,
+  referenceLimitsFor,
+  referenceDurationRefusal,
+} from "./ugc-references";
 
 describe("reference limits", () => {
   it("gives Seedance 2.5 on BOTH routes 12 references: up to 12 images, 1 video, 3 voices", () => {
@@ -37,5 +42,25 @@ describe("reference limits", () => {
     ]) {
       expect(maxReferencesFor(id), id).toBe(MAX_REFERENCES);
     }
+  });
+});
+
+describe("referenceDurationRefusal", () => {
+  it.each(["video", "audio"] as const)(
+    "refuses a Seedance 2.5 reference %s outside 2-30 s, or over 30 s combined",
+    (kind) => {
+      expect(referenceDurationRefusal("seedance-2.5", kind, [1.5])).toMatch(/2 to 30 seconds/);
+      expect(referenceDurationRefusal("seedance-2.5-byteplus", kind, [31])).toMatch(
+        /2 to 30 seconds/,
+      );
+      expect(referenceDurationRefusal("seedance-2.5", kind, [20, 15])).toMatch(/in total/);
+    },
+  );
+
+  it("passes a valid clip, an unmeasured one, and every other model", () => {
+    expect(referenceDurationRefusal("seedance-2.5", "audio", [2, 28])).toBeNull();
+    expect(referenceDurationRefusal("seedance-2.5", "audio", [null])).toBeNull();
+    expect(referenceDurationRefusal("seedance-2.5", "video", [])).toBeNull();
+    expect(referenceDurationRefusal("wan-3.0", "video", [1.5])).toBeNull();
   });
 });
