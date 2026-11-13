@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -206,6 +207,12 @@ func reconcileCompleted(ctx context.Context, deps Deps, logger *slog.Logger, sce
 
 	if err := ingest.FromResult(ctx, ingest.Deps{Store: deps.Store, Config: deps.Config, Media: deps.Media, Logger: logger}, *fresh, result); err != nil {
 		logger.Error("reconcile: ingest failed", slog.String("error", err.Error()))
+		// Not a retry: Storage refuses the same bytes every time, so waiting
+		// out the give-up window only shows "Rendering" for hours first.
+		if errors.Is(err, store.ErrObjectTooLarge) {
+			markFailed(ctx, deps, logger, *fresh, clipTooLargeReason)
+			return
+		}
 		giveUp(ctx, deps, logger, *fresh, "ingest kept failing", err)
 		return
 	}
@@ -217,6 +224,10 @@ func reconcileCompleted(ctx context.Context, deps Deps, logger *slog.Logger, sce
 	// the old wording would go looking at kie for a silence that was ours.
 	logger.Info("reconcile: ingested a render the webhook path had not")
 }
+
+// clipTooLargeReason is what the operator reads on a scene whose finished
+// clip Storage refused for its size (store.ErrObjectTooLarge).
+const clipTooLargeReason = "the rendered clip is too large to store; try a shorter duration"
 
 // giveUp is the shared backstop for every reconcile step that can fail
 // repeatedly against the same scene without ever reaching a terminal

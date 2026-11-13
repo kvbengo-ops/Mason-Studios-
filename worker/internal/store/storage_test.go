@@ -83,3 +83,24 @@ func TestKeySegmentsCannotEscapeTheProjectFolder(t *testing.T) {
 		t.Errorf("key left the project folder: %q", key)
 	}
 }
+
+// Supabase Storage answers 400 with the real status in the body; both that
+// and a plain 413 are the permanent "too large" refusal, and nothing else is.
+func TestObjectTooLarge(t *testing.T) {
+	supabase := `{"statusCode":"413","error":"Payload too large","message":"The object exceeded the maximum allowed size","code":"EntityTooLarge"}`
+	cases := []struct {
+		status int
+		body   string
+		want   bool
+	}{
+		{400, supabase, true},
+		{413, "", true},
+		{400, `{"statusCode":"400","error":"InvalidKey"}`, false},
+		{503, "upstream unavailable", false},
+	}
+	for _, c := range cases {
+		if got := objectTooLarge(c.status, c.body); got != c.want {
+			t.Errorf("objectTooLarge(%d, %q) = %v, want %v", c.status, c.body, got, c.want)
+		}
+	}
+}

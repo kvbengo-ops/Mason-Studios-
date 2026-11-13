@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -66,9 +67,26 @@ func UploadObject(ctx context.Context, cfg *config.Config, bucket, path string, 
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
+		if objectTooLarge(resp.StatusCode, string(respBody)) {
+			return fmt.Errorf("store: upload object %s: status %d: %s: %w", path, resp.StatusCode, string(respBody), ErrObjectTooLarge)
+		}
 		return fmt.Errorf("store: upload object %s: status %d: %s", path, resp.StatusCode, string(respBody))
 	}
 	return nil
+}
+
+// ErrObjectTooLarge is Storage refusing an upload for its size. PERMANENT:
+// the same bytes are refused every time, so a caller must not retry it. On
+// 2026-11-13 two finished 30s clips hit this, and reconcile retried each for
+// its whole give-up window — four hours of "Rendering" for a clip that could
+// never land.
+var ErrObjectTooLarge = errors.New("object exceeds the storage size limit")
+
+// objectTooLarge recognises that refusal. Supabase Storage answers HTTP 400
+// with the real status in the body ({"statusCode":"413",...,"code":
+// "EntityTooLarge"}), so the HTTP status alone does not say it.
+func objectTooLarge(status int, body string) bool {
+	return status == http.StatusRequestEntityTooLarge || strings.Contains(body, "EntityTooLarge")
 }
 
 // deleteBatch is how many keys go in one Storage delete call.
