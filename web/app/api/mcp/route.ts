@@ -30,7 +30,9 @@ export const dynamic = "force-dynamic";
  * app; generated images are filed as Elements automatically.
  */
 
-const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+// Newest first. claude.ai's connector asks for 2025-11-25 and drops the connection when the
+// answer is an older version (it never sent notifications/initialized), so it must be listed.
+const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 type JsonRpcId = string | number | null;
 type ToolArgs = Record<string, unknown>;

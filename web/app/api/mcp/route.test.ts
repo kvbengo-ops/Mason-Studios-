@@ -42,6 +42,19 @@ describe("POST /api/mcp", () => {
     expect(res.status).toBe(401);
   });
 
+  it("answers claude.ai's 2025-11-25 initialize with that same version", async () => {
+    vi.mocked(requireApiToken).mockResolvedValue({ ok: true } as never);
+    const init = await POST(
+      rpc({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-11-25" },
+      }),
+    );
+    expect((await init.json()).result.protocolVersion).toBe("2025-11-25");
+  });
+
   it("authenticates the ?token= on connect and lists the tools", async () => {
     vi.mocked(requireApiToken).mockResolvedValue({ ok: true } as never);
     const init = await POST(
