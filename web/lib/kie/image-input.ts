@@ -9,17 +9,25 @@
 //   google/nano-banana-edit      image_urls   separate -edit model id
 //   nano-banana-2                image_input  SAME id as text-to-image
 //   nano-banana-2-1              image_input  SAME id as text-to-image
-//   gpt-image-2-5-*-image-to-image input_urls separate model id
+//   gpt-image-2-6/*-image-to-image input_urls separate model id
 //
 // scripts/measure-image-model.ts calls this too. That is the point: a receipt is
 // only worth anything if the measured request is byte-for-byte the shape the app
 // actually sends, and a second copy of this dispatch would drift from it quietly.
 import type { ImageAspectRatio } from "../image-aspect-ratios";
 import type { ImageResolutionId } from "../image-resolutions";
-import { gptImage25Input, isGptImage25Id } from "./gpt-image-2-5";
 
 export const GPT_IMAGE_2_6_ECONOMY_TEXT = "gpt-image-2-6/economy-text-to-image";
 export const GPT_IMAGE_2_6_ECONOMY_EDIT = "gpt-image-2-6/economy-image-to-image";
+/** https://docs.kie.ai/market/gpt/gpt-image-2-6-sunburst-image-to-image: same shape as Economy, up to 16 input_urls. */
+export const GPT_IMAGE_2_6_SUNBURST_TEXT = "gpt-image-2-6/sunburst-text-to-image";
+export const GPT_IMAGE_2_6_SUNBURST_EDIT = "gpt-image-2-6/sunburst-image-to-image";
+const GPT_IMAGE_2_6_IDS: readonly string[] = [
+  GPT_IMAGE_2_6_ECONOMY_TEXT,
+  GPT_IMAGE_2_6_ECONOMY_EDIT,
+  GPT_IMAGE_2_6_SUNBURST_TEXT,
+  GPT_IMAGE_2_6_SUNBURST_EDIT,
+];
 
 /**
  * Nano Banana 2 — https://docs.kie.ai/market/google/nanobanana2
@@ -61,19 +69,17 @@ export function kieImageInput(
   if (model === SEEDREAM_5_5_EDIT_ID) {
     return { prompt, image_urls: refImageUrls, aspect_ratio: aspectRatio, size: resolution };
   }
-  if (model === GPT_IMAGE_2_6_ECONOMY_TEXT || model === GPT_IMAGE_2_6_ECONOMY_EDIT) {
-    if (resolution !== "1K") throw new Error("GPT Image 2.6 Economy offers 1K only.");
-    if ((model === GPT_IMAGE_2_6_ECONOMY_EDIT) !== refImageUrls.length > 0) {
-      throw new Error("GPT Image 2.6 Economy references require the image-to-image endpoint.");
+  if (GPT_IMAGE_2_6_IDS.includes(model)) {
+    // 1K only: Sunburst is billed per token, and only its 1K default has a receipt.
+    if (resolution !== "1K") throw new Error("GPT Image 2.6 offers 1K only.");
+    if (model.endsWith("image-to-image") !== refImageUrls.length > 0) {
+      throw new Error("GPT Image 2.6 references require the image-to-image endpoint.");
     }
     return {
       prompt,
       aspect_ratio: aspectRatio,
       ...(refImageUrls.length ? { input_urls: [...refImageUrls] } : {}),
     };
-  }
-  if (isGptImage25Id(model)) {
-    return gptImage25Input(model, prompt, aspectRatio, refImageUrls, resolution);
   }
   const hasTiers = model === NANO_BANANA_2_ID || model === NANO_BANANA_2_1_ID;
   // google/nano-banana documents no resolution at all, and kie ignores unknown

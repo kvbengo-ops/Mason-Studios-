@@ -17,20 +17,20 @@ Per account, per minute: **60 writes** (`upload`, `generate`) and **120 reads**.
 
 ## Routes
 
-| Method | Path | Scope | What it does |
-|---|---|---|---|
-| GET | `/elements` | read | List your elements: `id, name, category, asset_kind, duration_s, created_at` |
-| POST | `/elements` | upload | Upload an element (multipart, below) |
-| GET | `/elements/{id}` | read | Your element metadata and a 1-hour `download_url` |
-| PATCH | `/elements/{id}` | upload | Update your element's name, description or category |
-| DELETE | `/elements/{id}` | upload | Soft-delete your element |
-| POST | `/elements/upload-url` | upload | Get a signed URL for a large file (staged upload) |
-| GET | `/allowance` | read | Remaining daily and weekly USD allowance |
-| POST | `/quote` | read | Price a clip and show the prompt the provider will get — spends nothing |
-| POST | `/generate` | generate | Start a clip; returns `job_id` |
-| GET | `/jobs/{job_id}` | read | Status, costs and, when done, `download_url` |
-| POST | `/images` | generate | Generate an image |
-| GET | `/images/{id}` | read | Image status and download |
+| Method | Path                   | Scope    | What it does                                                                 |
+| ------ | ---------------------- | -------- | ---------------------------------------------------------------------------- |
+| GET    | `/elements`            | read     | List your elements: `id, name, category, asset_kind, duration_s, created_at` |
+| POST   | `/elements`            | upload   | Upload an element (multipart, below)                                         |
+| GET    | `/elements/{id}`       | read     | Your element metadata and a 1-hour `download_url`                            |
+| PATCH  | `/elements/{id}`       | upload   | Update your element's name, description or category                          |
+| DELETE | `/elements/{id}`       | upload   | Soft-delete your element                                                     |
+| POST   | `/elements/upload-url` | upload   | Get a signed URL for a large file (staged upload)                            |
+| GET    | `/allowance`           | read     | Remaining daily and weekly USD allowance                                     |
+| POST   | `/quote`               | read     | Price a clip and show the prompt the provider will get — spends nothing      |
+| POST   | `/generate`            | generate | Start a clip; returns `job_id`                                               |
+| GET    | `/jobs/{job_id}`       | read     | Status, costs and, when done, `download_url`                                 |
+| POST   | `/images`              | generate | Generate an image                                                            |
+| GET    | `/images/{id}`         | read     | Image status and download                                                    |
 
 MCP (Claude connectors): `https://app.vbgstudio.site/api/mcp?token=ms_live_…` exposes the same calls as tools.
 
@@ -38,14 +38,14 @@ MCP (Claude connectors): `https://app.vbgstudio.site/api/mcp?token=ms_live_…` 
 
 `POST /elements`, multipart fields:
 
-| Field | Required | Notes |
-|---|---|---|
-| `file` | one of `file` / `staged_key` | JPG, PNG, WebP, MP3, WAV or MP4, detected from the bytes |
-| `name` | yes | 1–64 characters; becomes the `@tag` |
-| `category` | no | `image`, `character`, `product`, `location` for images; audio and video are set automatically |
-| `description` | no | Up to 2,000 characters. Substituted for the `@tag` in Kie prompts |
-| `shared` | no | `true` publishes the element to the shared library; default `false`. Shared names must be unique across the shared library and your own elements |
-| `staged_key`, `filename`, `content_type` | with staged upload | From `/elements/upload-url` |
+| Field                                    | Required                     | Notes                                                                                                                                            |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `file`                                   | one of `file` / `staged_key` | JPG, PNG, WebP, MP3, WAV or MP4, detected from the bytes                                                                                         |
+| `name`                                   | yes                          | 1–64 characters; becomes the `@tag`                                                                                                              |
+| `category`                               | no                           | `image`, `character`, `product`, `location` for images; audio and video are set automatically                                                    |
+| `description`                            | no                           | Up to 2,000 characters. Substituted for the `@tag` in Kie prompts                                                                                |
+| `shared`                                 | no                           | `true` publishes the element to the shared library; default `false`. Shared names must be unique across the shared library and your own elements |
+| `staged_key`, `filename`, `content_type` | with staged upload           | From `/elements/upload-url`                                                                                                                      |
 
 Limits: images **10 MB**, audio and video **15 MB**. A direct upload over 16 MB is refused with `413 file_too_large`. Voice clips must be **2–30 seconds** (`422 invalid_audio_duration`). If the length can't be read, the clip is accepted and the provider decides.
 
@@ -59,16 +59,16 @@ Staged upload: `POST /elements/upload-url` → `PUT` the file to `upload_url` �
 
 `POST /quote` and `POST /generate` take the same JSON body. Unknown fields are refused (`400 unknown_field`).
 
-| Field | Required | Notes |
-|---|---|---|
-| `prompt` | yes | 1–20,000 characters; a lower model limit still applies after reference descriptions are expanded. Refer to elements by `@tag` |
-| `model_id` | yes | Table below |
-| `resolution` | yes | Any case (`480p` = `480P`) |
-| `duration_s` | yes | Integer, from the model's list |
-| `aspect_ratio` | no | Defaults to `9:16`; must be offered by the model |
-| `sound` | no | Boolean, defaults to `true`. Controls native-audio Kling sound. Models with fixed sound, including Seedance, refuse `false` |
-| `is_talking_head` | no | Legacy alias for `sound`; if both are sent they must agree |
-| `image_refs`, `video_refs`, `audio_refs` | no | Element ids, in `@Image 1…`, `@Video 1…`, `@Audio 1…` order |
+| Field                                    | Required | Notes                                                                                                                         |
+| ---------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `prompt`                                 | yes      | 1–20,000 characters; a lower model limit still applies after reference descriptions are expanded. Refer to elements by `@tag` |
+| `model_id`                               | yes      | Table below                                                                                                                   |
+| `resolution`                             | yes      | Any case (`480p` = `480P`)                                                                                                    |
+| `duration_s`                             | yes      | Integer, from the model's list                                                                                                |
+| `aspect_ratio`                           | no       | Defaults to `9:16`; must be offered by the model                                                                              |
+| `sound`                                  | no       | Boolean, defaults to `true`. Controls native-audio Kling sound. Models with fixed sound, including Seedance, refuse `false`   |
+| `is_talking_head`                        | no       | Legacy alias for `sound`; if both are sent they must agree                                                                    |
+| `image_refs`, `video_refs`, `audio_refs` | no       | Element ids, in `@Image 1…`, `@Video 1…`, `@Audio 1…` order                                                                   |
 
 Seedance 2.5, on both Kie and BytePlus, accepts up to **12 images, 1 video and 3 audio clips**, 12 total in any mix. Video references must each be at most 30 seconds and total at most 30 seconds; audio has the same time limits. The same 12 apply in the `/ugc` References box (10 on every other model). The 20,000-character prompt cap applies to the text actually sent, so `@tag` descriptions count toward it; a prompt that only exceeds it after expansion gets `422 prompt_too_long`. Kling takes 1–2 PNG/JPG images only and no `@tags`. Wan 3.0 takes up to 10 images, 5 videos and 5 audio clips (10 total), each clip at most 15 seconds and 15 seconds combined per type. Other models accept at most 10 references total, subject to their own media rules. Per-type or total overflow returns `422 too_many_references` with the offending limit.
 
@@ -76,21 +76,21 @@ Seedance 2.5, on both Kie and BytePlus, accepts up to **12 images, 1 video and 3
 
 ### Models
 
-| `model_id` | Name | Resolutions | `duration_s` | Prompt limit |
-|---|---|---|---|---|
-| `seedance-2.5` | Seedance 2.5 · Kie | 480p, 720p, 1080p | 4–30 | 20,000 site cap; vendor cap unpublished |
-| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus | 480p only | 4–30 | 20,000 site cap; vendor cap unpublished |
-| `kling-4.0` | Kling 4.0 | 720p, 1080p | 3–30 | 8,000 |
-| `kling-4.0-reference` | Kling 4.0 Reference | 720p, 1080p | 3–30 | 8,000 |
-| `wan-3.0` | Wan 3.0 | 480p, 720p, 1080p | 4–30 | Vendor cap unpublished |
-| `gemini-omni-video` | Gemini Omni Video | 720p, 1080p, 4k | 4, 6, 8, 10 | Vendor cap unpublished |
-| `gemini-omni-1.2` | Gemini Omni 1.2 Flash | 360p, 720p, 1080p, 4k | 3–15 | 20,000 |
+| `model_id`              | Name                    | Resolutions           | `duration_s` | Prompt limit                            |
+| ----------------------- | ----------------------- | --------------------- | ------------ | --------------------------------------- |
+| `seedance-2.5`          | Seedance 2.5 · Kie      | 480p, 720p, 1080p     | 4–30         | 20,000 site cap; vendor cap unpublished |
+| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus | 480p only             | 4–30         | 20,000 site cap; vendor cap unpublished |
+| `kling-4.0`             | Kling 4.0               | 720p, 1080p           | 3–30         | 8,000                                   |
+| `kling-4.0-reference`   | Kling 4.0 Reference     | 720p, 1080p           | 3–30         | 8,000                                   |
+| `wan-3.0`               | Wan 3.0                 | 480p, 720p, 1080p     | 4–30         | Vendor cap unpublished                  |
+| `gemini-omni-video`     | Gemini Omni Video       | 720p, 1080p, 4k       | 4, 6, 8, 10  | Vendor cap unpublished                  |
+| `gemini-omni-1.2`       | Gemini Omni 1.2 Flash   | 360p, 720p, 1080p, 4k | 3–15         | 20,000                                  |
 
 A refused resolution or duration gets `422`, and the error lists what the model accepts. `/quote` is the final word on whether a combination can be sold right now (`422 unavailable_rate` if not).
 
 `seedance-2.5` (Kie) and `seedance-2.5-byteplus` are separate models: you pick one, and neither stands in for the other. Use BytePlus for faces made with Seedream 5.0 Pro. BytePlus dispatch is limited by `BYTEPLUS_MAX_INFLIGHT` (default 3), and does not fall back to Kie.
 
-Image model IDs for `POST /images`: `nano-banana-2-1` (default), `seedream-5.0-pro`, `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, and `gpt-image-2.6-economy` (1K only).
+Image model IDs for `POST /images`: `nano-banana-2-1` (default), `seedream-5.0-pro`, `gpt-image-2.6-sunburst` (1K only), and `gpt-image-2.6-economy` (1K only).
 
 `GET /allowance` reports `daily_remaining_usd`, `weekly_remaining_usd`, the corresponding caps, and whether the per-user daily cap is enabled. These are current headroom under spend ceilings, not a stored balance.
 

@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { IMAGE_MODELS, imageCostUsd } from "@/lib/models";
-import { GPT_IMAGE_2_5_IDS } from "./gpt-image-2-5";
 import {
   GPT_IMAGE_2_6_ECONOMY_EDIT,
   GPT_IMAGE_2_6_ECONOMY_TEXT,
+  GPT_IMAGE_2_6_SUNBURST_EDIT,
+  GPT_IMAGE_2_6_SUNBURST_TEXT,
   NANO_BANANA_2_ID,
   kieImageInput,
 } from "./image-input";
@@ -21,9 +22,12 @@ describe("the image resolution tier on kie's payload", () => {
     expect(input(NANO_BANANA_2_ID, "4K")).toMatchObject({ resolution: "4K" });
   });
 
-  it("sends GPT Image 2.5's tier as `resolution`", () => {
-    expect(input(GPT_IMAGE_2_5_IDS.flare.text)).toMatchObject({ resolution: "1K" });
-    expect(input(GPT_IMAGE_2_5_IDS.sunburst.text, "2K")).toMatchObject({ resolution: "2K" });
+  it("sends GPT Image 2.6 Sunburst the same 1K shape as Economy", () => {
+    expect(input(GPT_IMAGE_2_6_SUNBURST_TEXT)).toEqual({ prompt: "a fox", aspect_ratio: "1:1" });
+    expect(
+      kieImageInput(GPT_IMAGE_2_6_SUNBURST_EDIT, "edit", "9:16", ["https://example.com/a.png"]),
+    ).toEqual({ prompt: "edit", aspect_ratio: "9:16", input_urls: ["https://example.com/a.png"] });
+    expect(() => input(GPT_IMAGE_2_6_SUNBURST_TEXT, "2K")).toThrow(/1K only/);
   });
 
   it("sends GPT Image 2.6 Economy's documented 1K shape and refuses other tiers", () => {

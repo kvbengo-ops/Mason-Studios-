@@ -38,10 +38,11 @@ import {
   NANO_BANANA_2_1_ID,
   GPT_IMAGE_2_6_ECONOMY_EDIT,
   GPT_IMAGE_2_6_ECONOMY_TEXT,
+  GPT_IMAGE_2_6_SUNBURST_EDIT,
+  GPT_IMAGE_2_6_SUNBURST_TEXT,
   SEEDREAM_5_5_EDIT_ID,
   SEEDREAM_5_5_TEXT_ID,
 } from "./kie/image-input";
-import { GPT_IMAGE_2_5_ASPECT_RATIOS, GPT_IMAGE_2_5_IDS } from "./kie/gpt-image-2-5";
 import { KIE_POLL_BUDGET_MS } from "./kie/poll-budget";
 import {
   CREDITS_PER_USD,
@@ -1583,34 +1584,21 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     resolutionCostsUsd: { "2K": 0.03, "4K": 0.045 },
   },
   {
-    id: "gpt-image-2.5-flare",
-    label: "ChatGPT 2.5 Flare",
-    textToImageId: GPT_IMAGE_2_5_IDS.flare.text,
-    editId: GPT_IMAGE_2_5_IDS.flare.edit,
-    // 6 credits both paths (tasks 437032f4…, 3dbe6653…).
+    id: "gpt-image-2.6-sunburst",
+    label: "ChatGPT 2.6 Sunburst",
+    textToImageId: GPT_IMAGE_2_6_SUNBURST_TEXT,
+    editId: GPT_IMAGE_2_6_SUNBURST_EDIT,
+    // MEASURED 2026-11-13 at 1K, 9:16, short prompt: text 5.02 credits (task 4945d637…,
+    // 18.0s), one reference 6.9 credits (task c821a5d3…, 31.1s), so ~1.88 per reference.
+    // kie bills 2.6 per token, so both figures are rounded up to whole credits.
+    // shortcut: prompt tokens are not priced; a 20,000-character prompt adds up to
+    // ~4.5 credits ($0.0225) unquoted. Price per prompt length if long prompts get common.
     costUsd: 0.03,
-    observedSeconds: 49.9,
-    editObservedSeconds: 30,
-    aspectRatios: GPT_IMAGE_2_5_ASPECT_RATIOS,
-    resolutions: ["1K", "2K", "4K"],
-    // kie.ai/gpt-image-2-5 (Flare and Sunburst share it): 10 credits at 2K, 16 at 4K.
-    resolutionCostsUsd: { "2K": 0.05, "4K": 0.08 },
-  },
-  {
-    id: "gpt-image-2.5-sunburst",
-    label: "ChatGPT 2.5 Sunburst",
-    textToImageId: GPT_IMAGE_2_5_IDS.sunburst.text,
-    editId: GPT_IMAGE_2_5_IDS.sunburst.edit,
-    // 6 credits both paths (tasks 3bb755ca…, 44b4a492…). 59.2s on the
-    // reference path is inside blocksInline's 80s, but with the least margin
-    // of any model here.
-    costUsd: 0.03,
-    observedSeconds: 53.2,
-    editObservedSeconds: 59.2,
-    aspectRatios: GPT_IMAGE_2_5_ASPECT_RATIOS,
-    resolutions: ["1K", "2K", "4K"],
-    // kie.ai/gpt-image-2-5 (Flare and Sunburst share it): 10 credits at 2K, 16 at 4K.
-    resolutionCostsUsd: { "2K": 0.05, "4K": 0.08 },
+    inputImageCostUsd: 0.01,
+    observedSeconds: 18,
+    editObservedSeconds: 31.1,
+    aspectRatios: IMAGE_ASPECT_RATIOS,
+    resolutions: ["1K"],
   },
   {
     id: "gpt-image-2.6-economy",
@@ -1632,7 +1620,26 @@ export const DEFAULT_IMAGE_MODEL_ID = "nano-banana-2-1";
  * name an old run (runs.model keeps the kie id it was billed under); never selectable.
  */
 const RETIRED_IMAGE_MODEL_LABELS: readonly { label: string; kieIds: readonly string[] }[] = [
-  { label: "Nano Banana", kieIds: ["nano-banana", "google/nano-banana", "google/nano-banana-edit"] },
+  {
+    label: "Nano Banana",
+    kieIds: ["nano-banana", "google/nano-banana", "google/nano-banana-edit"],
+  },
+  {
+    label: "ChatGPT 2.5 Flare",
+    kieIds: [
+      "gpt-image-2.5-flare",
+      "gpt-image-2-5-flare-text-to-image",
+      "gpt-image-2-5-flare-image-to-image",
+    ],
+  },
+  {
+    label: "ChatGPT 2.5 Sunburst",
+    kieIds: [
+      "gpt-image-2.5-sunburst",
+      "gpt-image-2-5-sunburst-text-to-image",
+      "gpt-image-2-5-sunburst-image-to-image",
+    ],
+  },
 ];
 
 /** The display name for a run's `runs.model` (a kie id or a picker id), retired models included. */

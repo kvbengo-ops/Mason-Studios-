@@ -173,7 +173,7 @@ const ALREADY_COMPLETED_MESSAGE =
 /**
  * Upper bound on a prompt, enforced before anything is reserved: the same
  * 20,000 as /ugc (lib/prompt-limits.ts). kie documents 20,000 characters for
- * Nano Banana 2.1, GPT Image 2.5 and GPT Image 2.6 (checked 2026-11-10);
+ * Nano Banana 2.1 and GPT Image 2.6 (checked 2026-11-10; Sunburst 32,000);
  * BytePlus publishes no Seedream limit. Checked again after @tags expand into
  * element descriptions, since that longer text is what the vendor receives.
  */
@@ -722,65 +722,65 @@ export async function generateImageFor(
   const background = handOff && model === SEEDREAM_PRO_ID && !isDev();
 
   const run = async (): Promise<GenerateProjectImageResult> => {
-  let generated;
-  try {
-    generated = await generateImage({
-      ...args,
-      byteplusTimeoutMs: background ? BYTEPLUS_BACKGROUND_TIMEOUT_MS : undefined,
-      pollBudgetMs: inline ? undefined : 0,
-      onTaskCreated: async (taskId) => {
-        submitted = true;
-        await attachKieTaskId(runId, taskId);
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    let generated;
+    try {
+      generated = await generateImage({
+        ...args,
+        byteplusTimeoutMs: background ? BYTEPLUS_BACKGROUND_TIMEOUT_MS : undefined,
+        pollBudgetMs: inline ? undefined : 0,
+        onTaskCreated: async (taskId) => {
+          submitted = true;
+          await attachKieTaskId(runId, taskId);
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
 
-    // WE STOPPED WAITING; KIE DID NOT STOP DRAWING.
-    //
-    // This branch used to fall through to holdRunBillingUnknown below, and that
-    // is what lost the image: a held row is SETTLED, settled is terminal, and
-    // isImageAttemptUnfinished therefore reads false — so the attempt panel,
-    // whose entire job is to finish exactly this attempt, stopped asking kie one
-    // tick after the timeout. The account was charged for a picture nothing ever
-    // collected. With a measured 149s generation against a 100s budget that is
-    // the ordinary outcome, not an edge case.
-    //
-    // So: leave the row UNSETTLED. The estimate stays counted meanwhile (only
-    // releaseRun ever frees money, and nothing here has evidence to free any),
-    // the panel keeps calling reconcilePersonalImageAttempt until kie reaches a
-    // terminal state — settling the real cost and storing the image if it lands
-    // — and sweepStaleImageReservations is still the backstop that holds the row
-    // if it never does.
-    //
-    // keyExhausted is deliberately ABSENT, which means KEEP the key. It is the
-    // handle that makes the next press resolve to this in-flight attempt through
-    // the duplicate branch above instead of submitting a second paid task.
-    if (error instanceof KieTaskPendingError) {
-      if (handOff) return { pendingRunId: runId };
-      return { error: inline ? ALREADY_PROCESSING_MESSAGE : handedOffMessage(imageModel) };
+      // WE STOPPED WAITING; KIE DID NOT STOP DRAWING.
+      //
+      // This branch used to fall through to holdRunBillingUnknown below, and that
+      // is what lost the image: a held row is SETTLED, settled is terminal, and
+      // isImageAttemptUnfinished therefore reads false — so the attempt panel,
+      // whose entire job is to finish exactly this attempt, stopped asking kie one
+      // tick after the timeout. The account was charged for a picture nothing ever
+      // collected. With a measured 149s generation against a 100s budget that is
+      // the ordinary outcome, not an edge case.
+      //
+      // So: leave the row UNSETTLED. The estimate stays counted meanwhile (only
+      // releaseRun ever frees money, and nothing here has evidence to free any),
+      // the panel keeps calling reconcilePersonalImageAttempt until kie reaches a
+      // terminal state — settling the real cost and storing the image if it lands
+      // — and sweepStaleImageReservations is still the backstop that holds the row
+      // if it never does.
+      //
+      // keyExhausted is deliberately ABSENT, which means KEEP the key. It is the
+      // handle that makes the next press resolve to this in-flight attempt through
+      // the duplicate branch above instead of submitting a second paid task.
+      if (error instanceof KieTaskPendingError) {
+        if (handOff) return { pendingRunId: runId };
+        return { error: inline ? ALREADY_PROCESSING_MESSAGE : handedOffMessage(imageModel) };
+      }
+
+      if (submitted) {
+        await holdRunBillingUnknown(runId, message);
+      } else {
+        await releaseRun(runId, message);
+      }
+      // The row is reserved and now settled either way, so this key is spent.
+      return {
+        error:
+          error instanceof ImageGenerationError
+            ? message
+            : "The image could not be generated. Try again in a moment.",
+        keyExhausted: true,
+      };
     }
 
-    if (submitted) {
-      await holdRunBillingUnknown(runId, message);
-    } else {
-      await releaseRun(runId, message);
-    }
-    // The row is reserved and now settled either way, so this key is spent.
-    return {
-      error:
-        error instanceof ImageGenerationError
-          ? message
-          : "The image could not be generated. Try again in a moment.",
-      keyExhausted: true,
-    };
-  }
+    const stored = await settleAndStore(owner, runId, generated);
+    if (stored.error !== undefined) return stored;
 
-  const stored = await settleAndStore(owner, runId, generated);
-  if (stored.error !== undefined) return stored;
-
-  revalidatePath(imagePathFor(owner));
-  return stored;
+    revalidatePath(imagePathFor(owner));
+    return stored;
   };
 
   if (background) {
