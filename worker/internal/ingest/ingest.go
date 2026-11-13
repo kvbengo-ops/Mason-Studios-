@@ -169,8 +169,32 @@ func FromResult(ctx context.Context, deps Deps, scene store.Scene, result kie.Re
 	outFile.Close()
 	defer os.Remove(outPath)
 
-	if err := deps.Media.Normalize(ctx, inPath, outPath, model.AspectRatio, media.CRFFor(settings.Quality)); err != nil {
+	crf := media.CRFFor(settings.Quality)
+	if err := deps.Media.Normalize(ctx, inPath, outPath, model.AspectRatio, crf); err != nil {
 		return fmt.Errorf("ingest: scene %s: %w", scene.ID, err)
+	}
+	// A clip over Storage's upload limit would be refused for good (a 30s clip
+	// can run past it), so encode it smaller until it fits rather than fail a
+	// render that is already paid for. Quality drops only for the clip that
+	// would otherwise have been lost.
+	for {
+		info, statErr := os.Stat(outPath)
+		if statErr != nil || info.Size() <= media.MaxClipBytes {
+			break
+		}
+		next, ok := media.ShrinkCRF(crf)
+		if !ok {
+			break // uploaded as it is; Storage's refusal fails it with a clear reason.
+		}
+		deps.Logger.Warn("ingest: clip over the upload limit, re-encoding smaller",
+			slog.String("scene_id", scene.ID),
+			slog.Int64("bytes", info.Size()),
+			slog.Int("crf_from", crf),
+			slog.Int("crf_to", next))
+		crf = next
+		if err := deps.Media.Normalize(ctx, inPath, outPath, model.AspectRatio, crf); err != nil {
+			return fmt.Errorf("ingest: scene %s: %w", scene.ID, err)
+		}
 	}
 
 	f, err := os.Open(outPath)

@@ -438,3 +438,26 @@ func TestEscapeFilterValue(t *testing.T) {
 		}
 	}
 }
+
+// A clip over the upload limit is re-encoded at ever-higher CRF, in steps, and
+// stops at the floor rather than looping forever.
+func TestShrinkCRF(t *testing.T) {
+	crf, steps := CRFFor("max"), 0
+	for {
+		next, ok := ShrinkCRF(crf)
+		if !ok {
+			break
+		}
+		if next <= crf {
+			t.Fatalf("ShrinkCRF(%d) = %d, want a higher CRF (smaller file)", crf, next)
+		}
+		crf = next
+		steps++
+		if steps > 10 {
+			t.Fatal("ShrinkCRF never reached its floor")
+		}
+	}
+	if crf != maxShrinkCRF {
+		t.Errorf("shrink floor = %d, want %d", crf, maxShrinkCRF)
+	}
+}

@@ -151,6 +151,26 @@ func CRFFor(quality string) int {
 	}
 }
 
+// MaxClipBytes is the largest normalized clip ingest uploads as it is. Storage
+// refuses an object past its upload limit (50 MiB while this was written: every
+// 30s clip stored on 2026-11-13 was 44-47 MiB, and two that came out larger
+// were refused), so a bigger clip is re-encoded smaller first (ShrinkCRF).
+// ponytail: a constant, not config; raise it with the Supabase limit.
+const MaxClipBytes = 48 << 20
+
+// maxShrinkCRF is the lowest quality a shrink will go to. Past it a clip is
+// uploaded as it is and Storage's refusal fails it honestly.
+const maxShrinkCRF = 36
+
+// ShrinkCRF is the next, smaller-file CRF to try after crf produced a clip over
+// MaxClipBytes. ok is false once there is nowhere lower to go.
+func ShrinkCRF(crf int) (next int, ok bool) {
+	if crf >= maxShrinkCRF {
+		return crf, false
+	}
+	return min(crf+4, maxShrinkCRF), true
+}
+
 // aspectRatio picks the frame (FrameSize): 1080x1920 for 9:16 and anything
 // unrecognised, 1920x1080 for 16:9, 1080x1080 for 1:1. crf is x264's quality
 // (lower = higher bitrate); callers take it from CRFFor.
