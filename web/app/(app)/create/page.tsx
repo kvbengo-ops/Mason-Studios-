@@ -9,10 +9,22 @@ import { CreateVideoConsole } from "@/components/create-video-console";
 import { ImageGeneratorConsole } from "@/components/image-generator-console";
 import { getAccountBudgetSnapshot } from "@/lib/spend";
 
-async function CreateVideoTab({ scene }: { scene?: string }): Promise<JSX.Element> {
+async function CreateVideoTab({
+  scene,
+  takes,
+}: {
+  scene?: string;
+  takes?: string;
+}): Promise<JSX.Element> {
   const { user, profile } = await requireUser();
   const snapshot = await getAccountBudgetSnapshot(user.id, profile);
-  return <CreateVideoConsole snapshot={snapshot} initialSceneId={scene} />;
+  return (
+    <CreateVideoConsole
+      snapshot={snapshot}
+      initialSceneId={scene}
+      takesShown={takes ? Number(takes) : undefined}
+    />
+  );
 }
 
 // ONE PLACE TO MAKE THINGS. The Image tab is the personal image generator,
@@ -23,9 +35,9 @@ async function CreateVideoTab({ scene }: { scene?: string }): Promise<JSX.Elemen
 export default async function CreatePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; scene?: string }>;
+  searchParams: Promise<{ tab?: string; scene?: string; takes?: string }>;
 }): Promise<JSX.Element> {
-  const { tab, scene } = await searchParams;
+  const { tab, scene, takes } = await searchParams;
   const video = tab === "video";
   await requireUser();
 
@@ -50,7 +62,7 @@ export default async function CreatePage({
 
       <CreateModeContent video={video}>
         <Suspense key={video ? "video" : "image"} fallback={<CreateModeSkeleton video={video} />}>
-          {video ? <CreateVideoTab scene={scene} /> : <ImageGeneratorConsole />}
+          {video ? <CreateVideoTab scene={scene} takes={takes} /> : <ImageGeneratorConsole />}
         </Suspense>
       </CreateModeContent>
     </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { JSX } from "react";
 import { requireUser } from "@/actions/guard";
 import { ensurePersonalClipProject } from "@/actions/ugc";
@@ -15,10 +16,14 @@ import { extFromFilename, signedUrl } from "@/lib/storage";
 import { createClient } from "@/lib/supabase/server";
 import { ugcOptions } from "@/lib/ugc-options";
 
-/** Scenes read for the wall, newest first. Each can carry several takes. */
-const RECENT_SCENES = 60;
-/** Takes shown. */
+/** Takes shown, and how many more each press of Load more adds. */
 const WALL_TAKES = 30;
+// ponytail: capped so the scene-id .in() reads stay under the ~575-id URL
+// limit (lib/in-chunks.ts); chunk those reads if a wall ever needs more.
+/** The most `?takes=` will show. */
+const MAX_WALL_TAKES = 240;
+/** Scenes read per take shown, newest first: a scene can carry several takes or none. */
+const SCENES_PER_TAKE = 2;
 /** Attempts listed in the Runs pill. */
 const RECENT_RUNS = 30;
 
@@ -61,10 +66,19 @@ function snapshotModel(raw: unknown): { id: string | null; resolution: string | 
 export async function CreateVideoConsole({
   snapshot,
   initialSceneId,
+  takesShown,
 }: {
   snapshot: AccountBudgetSnapshot;
   initialSceneId?: string;
+  /** From `?takes=`: how many takes the wall shows. Load more raises it. */
+  takesShown?: number;
 }): Promise<JSX.Element> {
+  // Clamped: the number is from the URL.
+  const wallTakes = Math.min(
+    MAX_WALL_TAKES,
+    Math.max(WALL_TAKES, Number.isFinite(takesShown) ? Math.floor(takesShown!) : WALL_TAKES),
+  );
+  const sceneLimit = wallTakes * SCENES_PER_TAKE;
   const { user, profile } = await requireUser();
   const supabase = await createClient();
 
@@ -89,7 +103,7 @@ export async function CreateVideoConsole({
             projects.map((p) => p.id),
           )
           .order("created_at", { ascending: false })
-          .limit(RECENT_SCENES)
+          .limit(sceneLimit)
       : Promise.resolve({ data: [] }),
     loadElementTags(supabase, user.id),
   ]);
@@ -212,7 +226,11 @@ export async function CreateVideoConsole({
   }
 
   const sortedTakes = [...versions].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const takes = sortedTakes.slice(0, WALL_TAKES);
+  const takes = sortedTakes.slice(0, wallTakes);
+  // More to show: takes cut off here, or older scenes the read never reached.
+  const hasMore =
+    wallTakes < MAX_WALL_TAKES &&
+    (sortedTakes.length > wallTakes || (sceneResult.data ?? []).length >= sceneLimit);
   const initialVersionId = initialSceneId
     ? (sceneById.get(initialSceneId)?.active_version_id ?? null)
     : null;
@@ -330,6 +348,19 @@ export async function CreateVideoConsole({
         initialVersionId={initialVersionId}
         elements={elements}
       />
+      {hasMore ? (
+        // A link, not client state: the wall is server-rendered, so "more" is
+        // a bigger read. scroll={false} keeps the operator where they were.
+        <div className="flex justify-center p-4 pb-32">
+          <Link
+            href={`/create?tab=video&takes=${wallTakes + WALL_TAKES}`}
+            scroll={false}
+            className="inline-flex h-9 items-center rounded-md border border-border bg-background px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Load more
+          </Link>
+        </div>
+      ) : null}
 
       {/* Same sticky dock as the image bar: <main> is the scroll container. */}
       <div className="pointer-events-none sticky bottom-0 z-30 mt-auto bg-gradient-to-t from-background via-background to-transparent px-3 pb-3 pt-8 has-[[data-moved=true]]:bg-none">
