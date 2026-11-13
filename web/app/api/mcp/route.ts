@@ -244,7 +244,15 @@ export async function POST(request: Request): Promise<Response> {
       new Request(url, { headers: { Authorization: authorization } }),
       "read",
     );
-    if (!auth.ok) return auth.response;
+    if (!auth.ok) {
+      // Which failure Claude's connector hit (invalid_token, token_revoked, ...); never the token.
+      const body = (await auth.response
+        .clone()
+        .json()
+        .catch(() => null)) as { code?: string } | null;
+      console.info(`mcp auth failed method=${String(method)} code=${body?.code ?? "?"}`);
+      return auth.response;
+    }
   }
 
   // Notifications (no id) get no body.
