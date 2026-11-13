@@ -65,6 +65,19 @@ const (
 	audioBitrate      = "128k"
 )
 
+// The video bitrate ceiling Normalize encodes under. ultrafast stays (speed on
+// the one-CPU worker), but at a fixed CRF it inflates the file: a 31.7 MiB,
+// 30s kie clip came out at 117.8 MiB, past Storage's 100 MB limit, with no
+// visible gain (the source is 480p/720p scaled up). Capped at 10 Mbps the same
+// clip is 38 MiB at 42.9 dB PSNR against the source, and encodes faster.
+// Measured locally 2026-11-14 with ffmpeg 9.0.2. 10 Mbps x 30s is ~38 MiB, so
+// ShrinkCRF is now only a backstop. CRF still governs below the cap, so a
+// simple clip stays small.
+const (
+	videoMaxRate = "10M"
+	videoBufSize = "20M"
+)
+
 // FrameSize is the normalized width x height for an aspect ratio.
 func FrameSize(aspectRatio string) (w, h int) {
 	switch aspectRatio {
@@ -197,6 +210,7 @@ func (r *Runner) Normalize(ctx context.Context, inPath, outPath, aspectRatio str
 		// ultrafast, not veryfast: about a quarter of the CPU per clip, for a
 		// much bigger file at the same crf (superfast measured 2.2x on prod).
 		"-c:v", "libx264", "-preset", "ultrafast", "-crf", strconv.Itoa(crf),
+		"-maxrate", videoMaxRate, "-bufsize", videoBufSize,
 		"-c:a", "aac", "-ar", audioSampleRateHz, "-ac", audioChannels, "-b:a", audioBitrate,
 	)
 	if !hasAudio {
