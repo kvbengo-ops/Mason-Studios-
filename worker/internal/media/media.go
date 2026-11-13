@@ -156,7 +156,9 @@ func CRFFor(quality string) int {
 // 30s clip stored on 2026-11-13 was 44-47 MiB, and two that came out larger
 // were refused), so a bigger clip is re-encoded smaller first (ShrinkCRF).
 // ponytail: a constant, not config; raise it with the Supabase limit.
-const MaxClipBytes = 48 << 20
+// Raised 2026-11-14 with the project's upload limit (set to 200 MB in the dashboard): at 48 MiB
+// every 30s clip was being shrunk to CRF 24+ and came out visibly blurred.
+const MaxClipBytes = 190 << 20
 
 // maxShrinkCRF is the lowest quality a shrink will go to. Past it a clip is
 // uploaded as it is and Storage's refusal fails it honestly.
