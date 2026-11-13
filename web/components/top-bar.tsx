@@ -9,6 +9,7 @@ import { AccountMenu } from "@/components/account-menu";
 import { createClient } from "@/lib/supabase/client";
 import type { SidebarBudget } from "@/lib/sidebar-budget";
 import type { Notification } from "@/lib/notifications";
+import { grantMessage } from "@/lib/grant-message";
 import { notificationHref } from "@/lib/notification-href";
 import type { Database } from "@/types/db";
 
@@ -47,7 +48,7 @@ export function TopBar({
   isAdmin: boolean;
   budget: SidebarBudget | null;
 }): JSX.Element {
-  const [filter, setFilter] = useState<"all" | "activity" | "credits">("all");
+  const [filter, setFilter] = useState<"all" | "activity" | "credits" | "messages">("all");
   const [notificationCount, setNotificationCount] = useState(unreadNotificationCount);
   const [notifications, setNotifications] = useState(initialNotifications);
   const [previousNotificationCount, setPreviousNotificationCount] =
@@ -120,6 +121,7 @@ export function TopBar({
     .filter((notification) => {
       if (filter === "credits") return notification.kind.startsWith("credit_");
       if (filter === "activity") return !notification.kind.startsWith("credit_");
+      if (filter === "messages") return grantMessage(notification) !== null;
       return true;
     })
     .slice(0, 5);
@@ -176,6 +178,7 @@ export function TopBar({
                       ["all", "All"],
                       ["activity", "Activity"],
                       ["credits", "Allowance"],
+                      ["messages", "Messages"],
                     ] as const
                   ).map(([value, label]) => (
                     <button
@@ -214,9 +217,15 @@ export function TopBar({
                             {notification.kind.startsWith("credit_") ? "Allowance" : "Activity"}
                           </span>
                         </span>
-                        <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">
-                          {notification.body}
-                        </span>
+                        {filter === "messages" ? (
+                          <span className="mt-1 block whitespace-pre-wrap break-words rounded-md bg-muted/60 px-2 py-1.5 text-xs text-foreground">
+                            {grantMessage(notification)}
+                          </span>
+                        ) : (
+                          <span className="mt-0.5 line-clamp-2 block text-xs text-muted-foreground">
+                            {notification.body}
+                          </span>
+                        )}
                       </span>
                     </Link>
                   ))}
@@ -227,7 +236,9 @@ export function TopBar({
                     ? "No allowance notifications yet."
                     : filter === "activity"
                       ? "No activity notifications yet."
-                      : "No notifications yet."}
+                      : filter === "messages"
+                        ? "No messages from grants yet."
+                        : "No notifications yet."}
                 </p>
               )}
               <Link

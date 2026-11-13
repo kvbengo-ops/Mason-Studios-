@@ -118,4 +118,48 @@ describe("TopBar", () => {
     await user.click(link);
     expect(markNotificationRead).toHaveBeenCalledWith("renewal-notification");
   });
+
+  it("shows the full text of an allowance message on the Messages tab", async () => {
+    const note =
+      "Approved for the launch week. Please keep renders under $5 each and tell me if anything fails.";
+    const notifications: Notification[] = [
+      {
+        id: "n-1",
+        kind: "credit_approved",
+        title: "Allowance approved",
+        body: `$10.00 added to your weekly allowance. Note: ${note}`,
+        metadata: { amount_usd: 10, note },
+        created_at: new Date(2026, 10, 13, 12).toISOString(),
+        read_at: null,
+        scene_id: null,
+        allowance_request_id: "r-1",
+      },
+      {
+        id: "n-2",
+        kind: "credit_approved",
+        title: "Allowance approved",
+        body: "$1.00 added to your weekly allowance.",
+        metadata: { amount_usd: 1, note: null },
+        created_at: new Date(2026, 10, 13, 11).toISOString(),
+        read_at: null,
+        scene_id: null,
+        allowance_request_id: "r-2",
+      },
+    ];
+    render(
+      <TopBar
+        unreadNotificationCount={2}
+        initialNotifications={notifications}
+        currentUserId="user-1"
+        email="a@b.com"
+        roleLabel="Editor"
+        avatarUrl={null}
+        isAdmin={false}
+        budget={null}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Messages" }));
+    expect(screen.getByText(note)).toBeTruthy();
+    expect(screen.queryByText("$1.00 added to your weekly allowance.")).toBeNull();
+  });
 });
