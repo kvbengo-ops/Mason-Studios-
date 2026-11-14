@@ -210,6 +210,8 @@ describe("the rate table itself", () => {
       "seedance-2.5-byteplus 480p",
       "seedance-2.5-byteplus 720p",
       "seedance-2.5-byteplus 1080p",
+      "seedance-2.5-flash-byteplus 480p",
+      "seedance-2.5-flash-byteplus 720p",
       "kling-4.0 720p",
       "kling-4.0 1080p",
       "kling-4.0-reference 720p",

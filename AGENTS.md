@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0142`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0143`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;
@@ -91,7 +91,10 @@ Captions are gone. Subtitles are added in CapCut after export.
   its own spend tier (`HYBRID_EDITOR_*` / `AI_ANIMATOR_*` caps, default = the global cap's
   default) and model access via `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor
   cannot use `wan-3.0`; an AI Animator can use every model. **Seedance 2.5 BytePlus
-  is trusted editors and admins only** (owner, 2026-11-10); Seedance 2.5 · Kie stays open. **No allowance approval and no
+  is trusted editors and admins only** (owner, 2026-11-10); Seedance 2.5 · Kie stays open.
+  **Seedance 2.5 Flash is BytePlus only** (`seedance-2.5-flash-byteplus` →
+  `dreamina-seedance-2-5-flash-261115`, owner 2026-11-15): same role gate, 480p only,
+  `isBytePlusSeedance`/`kie.IsBytePlusModel` cover both BytePlus picks. **No allowance approval and no
   API tokens/MCP** — those stay with `trusted_editor` and `admin`. Set by an admin in
   Accounts Control (`setAccountRole`); no client can write `role`. SQL functions that list
   the editor tiers (`pass_allowance`, `transfer_recipients`, the weekly-reset and

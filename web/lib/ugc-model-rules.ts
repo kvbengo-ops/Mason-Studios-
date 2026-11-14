@@ -3,12 +3,24 @@
 // fallback for BytePlus, and never rewritten to it.
 
 export const BYTEPLUS_SEEDANCE_ID = "seedance-2.5-byteplus";
+/** Seedance 2.5 Flash, BytePlus ModelArk only (2026-11-15). */
+export const BYTEPLUS_SEEDANCE_FLASH_ID = "seedance-2.5-flash-byteplus";
+/** Every model that renders on BytePlus ModelArk. */
+export const BYTEPLUS_SEEDANCE_IDS: ReadonlySet<string> = new Set([
+  BYTEPLUS_SEEDANCE_ID,
+  BYTEPLUS_SEEDANCE_FLASH_ID,
+]);
 /** The only tier /ugc sells on BytePlus Seedance. */
 export const BYTEPLUS_SEEDANCE_RESOLUTION = "480p";
+
+export function isBytePlusSeedance(modelId: string): boolean {
+  return BYTEPLUS_SEEDANCE_IDS.has(modelId);
+}
 
 const PICKER_RESOLUTIONS: Readonly<Record<string, readonly string[]>> = {
   "seedance-2.5": ["480p"],
   "seedance-2.5-byteplus": ["480p"],
+  "seedance-2.5-flash-byteplus": ["480p"],
   "kling-4.0": ["720p"],
   "kling-4.0-reference": ["720p"],
   "wan-3.0": ["480P", "720P"],
@@ -26,7 +38,7 @@ export function ugcPickerResolutions(modelId: string, resolutions: readonly stri
 
 /** A refusal message when BytePlus Seedance is asked for anything but 480p, else null. */
 export function byteplusResolutionRefusal(modelId: string, resolution: string): string | null {
-  return modelId === BYTEPLUS_SEEDANCE_ID && resolution !== BYTEPLUS_SEEDANCE_RESOLUTION
-    ? `Seedance 2.5 renders at ${BYTEPLUS_SEEDANCE_RESOLUTION} only.`
-    : null;
+  if (!isBytePlusSeedance(modelId) || resolution === BYTEPLUS_SEEDANCE_RESOLUTION) return null;
+  const name = modelId === BYTEPLUS_SEEDANCE_FLASH_ID ? "Seedance 2.5 Flash" : "Seedance 2.5";
+  return `${name} renders at ${BYTEPLUS_SEEDANCE_RESOLUTION} only.`;
 }

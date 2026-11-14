@@ -17,6 +17,7 @@ import { mergeRenderSettings } from "@/lib/models";
 import { queueScenesIfWithinCaps } from "@/lib/spend";
 import { removeStorageObjects } from "@/lib/storage";
 import { createAdminClient } from "@/lib/supabase/server";
+import { isBytePlusSeedance } from "@/lib/ugc-model-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +156,7 @@ export async function POST(request: Request): Promise<Response> {
           model: prepared.input.modelId,
           resolution: prepared.input.resolution,
           aspect_ratio: prepared.input.aspectRatio,
-          ...(prepared.input.modelId === "seedance-2.5-byteplus" ? { quality: "high" } : {}),
+          ...(isBytePlusSeedance(prepared.input.modelId) ? { quality: "high" } : {}),
         },
         p_dev: isDev(),
         p_api_token_id: auth.tokenId,

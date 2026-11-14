@@ -25,9 +25,9 @@ import {
   isResolutionAllowedForDuration,
   maxDurationForResolution,
   pickModel,
-  SEEDANCE_2_5_BYTEPLUS,
   type RenderSettings,
 } from "@/lib/models";
+import { isBytePlusSeedance } from "@/lib/ugc-model-rules";
 import { effectiveRender } from "@/lib/effective-render";
 import { updateSceneRenderOverride, clearSceneRenderOverride } from "@/actions/render-settings";
 import { toggleTalkingHead, updateSceneDuration } from "@/actions/brief";
@@ -212,7 +212,7 @@ export function SceneSettingsPanel({
     isTalkingHead,
     audioEnabled,
   });
-  const rateSource = model.id === SEEDANCE_2_5_BYTEPLUS.id ? "BytePlus ModelArk" : "kie";
+  const rateSource = isBytePlusSeedance(model.id) ? "BytePlus ModelArk" : "kie";
 
   // sceneBusy is the WORKBENCH's work, not this panel's — a frame
   // regeneration, a rewrite, a retry, running in the column to the left.

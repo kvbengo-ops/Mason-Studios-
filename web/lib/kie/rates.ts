@@ -344,6 +344,53 @@ export const KIE_RATES: Readonly<Record<string, KieRates>> = {
       },
     },
   },
+  // Same token estimate as seedance-2.5-byteplus above, at Flash's published
+  // prices (model-pricing page, read 2026-11-15): $7.0/M without video input,
+  // $4.3/M with. 480p and 720p only.
+  "seedance-2.5-flash-byteplus": {
+    silent: {
+      "480p": {
+        creditsPerSecond: 13.4505,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 30.24,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+    },
+    sound: {
+      "480p": {
+        creditsPerSecond: 13.4505,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 30.24,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimated from output pixels × 24 fps. Actual billing uses completion_tokens.",
+      },
+    },
+    video: {
+      "480p": {
+        creditsPerSecond: 8.26245,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $4.3/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+      "720p": {
+        creditsPerSecond: 18.576,
+        provenance: "published",
+        pricedAt: "2026-11-15",
+        note: "BytePlus ModelArk Seedance 2.5 Flash: $4.3/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+    },
+  },
   "gemini-omni-video": {
     // Presence/provenance gate only. Gemini's actual quote comes from
     // geminiOmniCredits above: its published schedule has a fixed

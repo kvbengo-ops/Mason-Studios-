@@ -38,8 +38,8 @@ import { canUseVideoModel } from "@/lib/model-access";
 import type { ProfileRole } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import {
-  BYTEPLUS_SEEDANCE_ID,
   BYTEPLUS_SEEDANCE_RESOLUTION,
+  isBytePlusSeedance,
   ugcPickerResolutionAllowed,
 } from "@/lib/ugc-model-rules";
 import type { UgcOption } from "@/components/ugc-column";
@@ -52,6 +52,7 @@ import type { UgcOption } from "@/components/ugc-column";
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "seedance-2.5",
   "seedance-2.5-byteplus",
+  "seedance-2.5-flash-byteplus",
   "kling-4.0",
   "kling-4.0-reference",
   "wan-3.0",
@@ -65,8 +66,7 @@ export function ugcOptions(withSound: boolean, role: ProfileRole | null = null):
       SHOWN_MODEL_IDS.has(offer.model.id) &&
       ugcPickerResolutionAllowed(offer.model.id, offer.resolution) &&
       canUseVideoModel(role, offer.model.id) &&
-      (offer.model.id !== BYTEPLUS_SEEDANCE_ID ||
-        offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
+      (!isBytePlusSeedance(offer.model.id) || offer.resolution === BYTEPLUS_SEEDANCE_RESOLUTION),
   );
   return shown.map((offer) => {
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;

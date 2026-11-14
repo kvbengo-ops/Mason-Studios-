@@ -17,6 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/db";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
 import { canUseVideoModel } from "@/lib/model-access";
+import { isBytePlusSeedance } from "@/lib/ugc-model-rules";
 import type { ProfileRole } from "@/types/db";
 
 /**
@@ -181,12 +182,12 @@ export function parseApiClipInput(body: Record<string, unknown>): ApiClipInput |
       error: `${model.label} does not support resolution "${resolution}". Accepted: ${model.resolutions.join(", ")}.`,
     };
   }
-  if (modelId === "seedance-2.5-byteplus" && canonicalResolution !== "480p") {
+  if (isBytePlusSeedance(modelId) && canonicalResolution !== "480p") {
     return {
       ok: false,
       status: 422,
       code: "unsupported_resolution",
-      error: "seedance-2.5-byteplus accepts only 480p.",
+      error: `${modelId} accepts only 480p.`,
     };
   }
   const refs: Record<"image_refs" | "video_refs" | "audio_refs", string[]> = {

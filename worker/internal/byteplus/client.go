@@ -43,6 +43,10 @@ const (
 	// through an endpoint id instead (error
 	// InvalidEndpointOrModel.ModelIDAccessDisabled).
 	ModelSeedance25 = "dreamina-seedance-2-5-260628"
+	// ModelSeedance25Flash is BytePlus's id for Seedance 2.5 Flash
+	// (kie.BytePlusSeedance25FlashID; model-pricing page, read 2026-11-15).
+	// BYTEPLUS_MODEL does not override it.
+	ModelSeedance25Flash = "dreamina-seedance-2-5-flash-261115"
 	// KieSeedance25 is the kie model id dispatch hands Submit for Seedance
 	// 2.5 (kie/models.go's seedance25 descriptor). It stays the id on every
 	// run row even when BytePlus renders it, so spend_category_totals and
@@ -79,6 +83,14 @@ func NewClient(apiKey, model string, httpClient *http.Client) *Client {
 		httpClient = &http.Client{Timeout: requestTimeout}
 	}
 	return &Client{apiKey: apiKey, model: model, baseURL: defaultBaseURL, httpClient: httpClient}
+}
+
+// modelFor is the BytePlus model id for a selected-model id.
+func (c *Client) modelFor(selectedModelID string) string {
+	if selectedModelID == kie.BytePlusSeedance25FlashID {
+		return ModelSeedance25Flash
+	}
+	return c.model
 }
 
 type urlRef struct {
@@ -193,6 +205,8 @@ type task struct {
 	} `json:"usage"`
 	Duration   float64 `json:"duration"`
 	Resolution string  `json:"resolution"`
+	// Model is the BytePlus model id the task ran on; it picks the price.
+	Model string `json:"model"`
 }
 
 // APIError is a clear HTTP refusal from BytePlus (4xx), with its error code.
@@ -355,9 +369,15 @@ func stripQuery(u string) string {
 }
 
 // pricePerMillionUSD is BytePlus's published Seedance 2.5 token price
-// (model-pricing page, read 2026-11-06): USD per million completion tokens,
-// lower when a reference video is attached.
-func pricePerMillionUSD(resolution string, withVideo bool) float64 {
+// (model-pricing page, read 2026-11-06; Flash read 2026-11-15): USD per
+// million completion tokens, lower when a reference video is attached.
+func pricePerMillionUSD(model, resolution string, withVideo bool) float64 {
+	if strings.Contains(model, "seedance-2-5-flash") {
+		if withVideo {
+			return 4.3
+		}
+		return 7.0
+	}
 	hd := strings.EqualFold(resolution, "1080p")
 	switch {
 	case hd && withVideo:
@@ -383,6 +403,6 @@ func costUSD(t task, withVideo bool) *float64 {
 	if t.Usage == nil || t.Usage.CompletionTokens == nil {
 		return nil
 	}
-	usd := *t.Usage.CompletionTokens / 1e6 * pricePerMillionUSD(t.Resolution, withVideo)
+	usd := *t.Usage.CompletionTokens / 1e6 * pricePerMillionUSD(t.Model, t.Resolution, withVideo)
 	return &usd
 }

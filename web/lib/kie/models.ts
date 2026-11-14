@@ -181,6 +181,21 @@ export const SEEDANCE_2_5_BYTEPLUS: KieModel = {
 };
 
 /**
+ * Seedance 2.5 Flash, BytePlus ModelArk only (dreamina-seedance-2-5-flash-261115,
+ * live 2026-11-15). kie does not sell it: kieModelName is only the id written to
+ * runs.model, never sent to kie. BytePlus serves 480p and 720p; /ugc offers 480p.
+ */
+export const SEEDANCE_2_5_FLASH_BYTEPLUS: KieModel = {
+  ...SEEDANCE_2_5,
+  id: "seedance-2.5-flash-byteplus",
+  kieModelName: "bytedance/seedance-2-5-flash",
+  label: "Seedance 2.5 Flash · BytePlus ModelArk",
+  resolutions: ["480p", "720p"],
+  longestRenderedS: 0,
+  note: "Direct BytePlus ModelArk pricing estimate.",
+};
+
+/**
  * The cheap tier of ByteDance's 2.0 line, and the answer to "same clip, less
  * money": 11.7 cr/s at 480p against 2.5's measured 28, for the same 4s 9:16
  * clip the editors already make -- $0.234 against $0.56.
@@ -295,6 +310,7 @@ const WAN_3: KieModel = {
 export const KIE_MODELS: readonly KieModel[] = [
   SEEDANCE_2_5,
   SEEDANCE_2_5_BYTEPLUS,
+  SEEDANCE_2_5_FLASH_BYTEPLUS,
   SEEDANCE_2,
   SEEDANCE_2_FAST,
   SEEDANCE_2_MINI,

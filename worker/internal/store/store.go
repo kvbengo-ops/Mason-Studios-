@@ -329,7 +329,7 @@ WITH queued AS (
            -- coalesce: a NULL render_settings makes the merge NULL, and NULL
            -- here would drop the scene from eligible below instead of
            -- reading it as "not BytePlus".
-           coalesce((p.render_settings || coalesce(s.render_settings_override, '{}'::jsonb)) ->> 'model' = $2, false)
+           coalesce((p.render_settings || coalesce(s.render_settings_override, '{}'::jsonb)) ->> 'model' = ANY($2::text[]), false)
                AS byteplus
     FROM scenes s
     JOIN projects p ON p.id = s.project_id
@@ -466,7 +466,7 @@ RETURNING scenes.id, scenes.project_id, scenes.idx, scenes.script_line,
 		return nil, fmt.Errorf("store: claim queued scenes: lock: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix, ceiling, byteplusCap, perTick)
+	rows, err := tx.Query(ctx, q, s.dev, kie.BytePlusModelIDs, kie.BytePlusTaskPrefix, ceiling, byteplusCap, perTick)
 	if err != nil {
 		return nil, fmt.Errorf("store: claim queued scenes: %w", err)
 	}
@@ -797,7 +797,7 @@ WHERE s.status = 'rendering'
 }
 
 // bytePlusRenderingCount is the BytePlus in-flight count, as a scalar
-// subquery over $1 (dev), $2 (kie.BytePlusSeedance25ID) and $3
+// subquery over $1 (dev), $2 (kie.BytePlusModelIDs) and $3
 // (kie.BytePlusTaskPrefix): this mode's 'rendering' scenes that are on
 // BytePlus (a byteplus: task id) or bound for it (claimed, no task id yet,
 // BytePlus model). The second half is what a task-prefix count alone
@@ -815,7 +815,7 @@ const bytePlusRenderingCount = `(
       AND rs.dev = $1
       AND (rs.kie_task_id LIKE $3 || '%'
            OR (coalesce(rs.kie_task_id, '') = ''
-               AND (rp.render_settings || coalesce(rs.render_settings_override, '{}'::jsonb)) ->> 'model' = $2))
+               AND (rp.render_settings || coalesce(rs.render_settings_override, '{}'::jsonb)) ->> 'model' = ANY($2::text[])))
 )`
 
 // BytePlusInflight is byteplus.Router's in-flight count: every BytePlus
@@ -825,7 +825,7 @@ func (s *Store) BytePlusInflight(ctx context.Context) (int, error) {
 	const q = `SELECT ` + bytePlusRenderingCount
 
 	var n int64
-	if err := s.pool.QueryRow(ctx, q, s.dev, kie.BytePlusSeedance25ID, kie.BytePlusTaskPrefix).Scan(&n); err != nil {
+	if err := s.pool.QueryRow(ctx, q, s.dev, kie.BytePlusModelIDs, kie.BytePlusTaskPrefix).Scan(&n); err != nil {
 		return 0, fmt.Errorf("store: byteplus inflight: %w", err)
 	}
 	return int(n), nil

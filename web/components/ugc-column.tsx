@@ -54,7 +54,7 @@ import { buildUgcPromptPreview } from "@/lib/ugc-prompt-preview";
 import { IMAGE_ASSET_KINDS } from "@/lib/asset-kinds";
 import { isAcceptedReferenceAudio, isAcceptedReferenceVideo } from "@/lib/file-type";
 import { maxReferencesFor } from "@/lib/ugc-references";
-import { ugcPickerResolutions } from "@/lib/ugc-model-rules";
+import { isBytePlusSeedance, ugcPickerResolutions } from "@/lib/ugc-model-rules";
 
 // How many reference chips show before the rest fold behind "+N more": about
 // two rows at the column's width, so a full box of ten never pushes the prompt
@@ -68,7 +68,7 @@ function modelMenuId(modelId: string): string {
 import type { RenderBudgetFigures } from "@/lib/render-budget";
 import type { ActionNotice, ActionResult } from "@/lib/action-result";
 import { ugcTierLabel } from "@/lib/ugc-tier-label";
-import { kieModel, SEEDANCE_2_5_BYTEPLUS } from "@/lib/kie/models";
+import { kieModel } from "@/lib/kie/models";
 import { cn } from "@/lib/utils";
 import {
   beginGeneratePending,
@@ -817,7 +817,7 @@ export function UgcColumn({
     kieModel(option.modelId)?.resolutions ?? tierOptions.map((o) => o.resolution),
   );
   // Whose published price the confirm dialog's "not a receipt" note names.
-  const rateSource = option.modelId === SEEDANCE_2_5_BYTEPLUS.id ? "BytePlus" : "kie";
+  const rateSource = isBytePlusSeedance(option.modelId) ? "BytePlus" : "kie";
 
   // THE TRIGGER FOR EVERYTHING BELOW THAT DIFFERS FOR KLING. option.nativeAudio,
   // not a string compare against "kling-3.0-pro" — see that field's own

@@ -19,11 +19,18 @@ const SEEDANCE_25_LIMITS = {
   audioSeconds: 30,
 };
 
+// ponytail: Flash assumed to share 2.5's reference limits (same create-task API page).
+const SEEDANCE_25_IDS: ReadonlySet<string> = new Set([
+  "seedance-2.5",
+  "seedance-2.5-byteplus",
+  "seedance-2.5-flash-byteplus",
+]);
+
 export function referenceLimitsFor(modelId: string) {
   if (modelId === "gemini-omni-1.2") {
     return { image: 6, video: 0, audio: 0, total: 6, videoSeconds: 0, audioSeconds: 0 };
   }
-  if (modelId === "seedance-2.5-byteplus" || modelId === "seedance-2.5") {
+  if (SEEDANCE_25_IDS.has(modelId)) {
     return SEEDANCE_25_LIMITS;
   }
   if (modelId.startsWith("kling-")) {
@@ -69,7 +76,7 @@ export function referenceDurationRefusal(
   kind: "video" | "audio",
   durationsS: readonly (number | null)[],
 ): string | null {
-  if (modelId !== "seedance-2.5" && modelId !== "seedance-2.5-byteplus") return null;
+  if (!SEEDANCE_25_IDS.has(modelId)) return null;
   const max = kind === "video" ? SEEDANCE_25_LIMITS.videoSeconds : SEEDANCE_25_LIMITS.audioSeconds;
   const measured = durationsS.filter((s): s is number => typeof s === "number");
   const bad = measured.find((s) => s < SEEDANCE_25_MIN_CLIP_S || s > max);

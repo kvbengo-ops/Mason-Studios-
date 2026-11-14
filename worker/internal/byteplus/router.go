@@ -100,7 +100,7 @@ func (r *Router) logger() *slog.Logger {
 
 // Submit sends a render to its vendor and returns the id to persist.
 func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, error) {
-	if req.SelectedModelID != kie.BytePlusSeedance25ID || r.Mock {
+	if !kie.IsBytePlusModel(req.SelectedModelID) || r.Mock {
 		return r.Kie.Submit(ctx, req)
 	}
 	var id string
@@ -167,7 +167,7 @@ func (r *Router) submitBytePlus(ctx context.Context, req kie.SubmitRequest) (str
 	}
 	r.lastCreate = time.Now()
 
-	return r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.model))
+	return r.BytePlus.create(ctx, buildCreateRequest(req, r.BytePlus.modelFor(req.SelectedModelID)))
 }
 
 // parseID splits a persisted id. ok is false for a kie id.

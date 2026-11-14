@@ -118,6 +118,8 @@ const (
 	measuredDate = "2026-08-31"
 	// BytePlus ModelArk published token prices, read 2026-11-06.
 	bytePlusPublished = "2026-11-06"
+	// bytePlusFlashPublished is when Seedance 2.5 Flash's price was read.
+	bytePlusFlashPublished = "2026-11-15"
 	// The first /ugc clip that actually rendered and billed.
 	firstClipDate = "2026-09-02"
 	// Read off kie.ai's own model page, not billed. See the note on
@@ -197,6 +199,21 @@ var Rates = map[string]ModelRates{
 			"480p":  {CreditsPerSecond: 12.2976, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
 			"720p":  {CreditsPerSecond: 27.648, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
 			"1080p": {CreditsPerSecond: 68.04, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $7.00/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
+		},
+	},
+	// Flash's published prices (read 2026-11-15): $7.0/M without video, $4.3/M with.
+	"seedance-2.5-flash-byteplus": {
+		Sound: map[string]RatePoint{
+			"480p": {CreditsPerSecond: 13.4505, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"720p": {CreditsPerSecond: 30.24, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+		},
+		Silent: map[string]RatePoint{
+			"480p": {CreditsPerSecond: 13.4505, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+			"720p": {CreditsPerSecond: 30.24, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $7.0/M tokens without video input; estimate uses output pixels at 24 fps. Actual billing uses completion_tokens."},
+		},
+		Video: map[string]RatePoint{
+			"480p": {CreditsPerSecond: 8.26245, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $4.3/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
+			"720p": {CreditsPerSecond: 18.576, Provenance: ProvenancePublished, PricedAt: bytePlusFlashPublished, Note: "BytePlus ModelArk Seedance 2.5 Flash: $4.3/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
 		},
 	},
 	"gemini-omni-video": {
@@ -787,6 +804,28 @@ var seedance25BytePlus = func() Descriptor {
 	return d
 }()
 
+// BytePlusSeedance25FlashID is Seedance 2.5 Flash, BytePlus ModelArk only
+// (live 2026-11-15). kie does not sell it: KieModelID is only the id written
+// to runs.model (spend_category_totals lists it), never sent to kie.
+const BytePlusSeedance25FlashID = "seedance-2.5-flash-byteplus"
+
+var seedance25FlashBytePlus = func() Descriptor {
+	d := seedance25
+	d.ID = BytePlusSeedance25FlashID
+	d.Label = "Seedance 2.5 Flash (BytePlus ModelArk)"
+	d.KieModelID = "bytedance/seedance-2-5-flash"
+	d.AllowedResolutions = []string{"480p", "720p"}
+	return d
+}()
+
+// BytePlusModelIDs are the selected-model ids that render on BytePlus only.
+var BytePlusModelIDs = []string{BytePlusSeedance25ID, BytePlusSeedance25FlashID}
+
+// IsBytePlusModel reports whether a selected-model id renders on BytePlus.
+func IsBytePlusModel(id string) bool {
+	return id == BytePlusSeedance25ID || id == BytePlusSeedance25FlashID
+}
+
 // seedance2Fast is the cheap tier of ByteDance's 2.0 line, added because the
 // editors asked for the same clip for less money rather than for anything new.
 //
@@ -969,7 +1008,7 @@ var wan3 = Descriptor{
 // (docs read 2026-10-27); media.Normalize crops to the matching frame.
 var VideoAspectRatios = []string{"9:16", "16:9", "1:1"}
 
-var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo, geminiOmni12}
+var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance25FlashBytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo, geminiOmni12}
 
 // DefaultModelID is the model a project gets when render_settings says
 // nothing: the general-purpose, non-native-audio default, same role

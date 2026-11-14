@@ -111,6 +111,11 @@ describe("published prices are sold on /ugc", () => {
         "seedance-2.5-byteplus 480p (sound=true)",
         "seedance-2.5-byteplus 720p (sound=false)",
         "seedance-2.5-byteplus 720p (sound=true)",
+        // BytePlus ModelArk's published per-token price for Flash, 2026-11-15.
+        "seedance-2.5-flash-byteplus 480p (sound=false)",
+        "seedance-2.5-flash-byteplus 480p (sound=true)",
+        "seedance-2.5-flash-byteplus 720p (sound=false)",
+        "seedance-2.5-flash-byteplus 720p (sound=true)",
         "wan-3.0 1080P (sound=true)",
         "wan-3.0 720P (sound=true)",
       ],
@@ -205,6 +210,11 @@ describe("published prices are sold on /ugc", () => {
         "seedance-2.5-byteplus 720p sound=true",
         "seedance-2.5-byteplus 1080p sound=false",
         "seedance-2.5-byteplus 1080p sound=true",
+        // BytePlus ModelArk's published per-token price for Flash, 2026-11-15.
+        "seedance-2.5-flash-byteplus 480p sound=false",
+        "seedance-2.5-flash-byteplus 480p sound=true",
+        "seedance-2.5-flash-byteplus 720p sound=false",
+        "seedance-2.5-flash-byteplus 720p sound=true",
       ].sort(),
     );
   });

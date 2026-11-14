@@ -513,6 +513,13 @@ export const SEEDANCE_2_5_BYTEPLUS: VideoModelDescriptor = {
   label: "Seedance 2.5 · BytePlus ModelArk",
 };
 
+export const SEEDANCE_2_5_FLASH_BYTEPLUS: VideoModelDescriptor = {
+  ...SEEDANCE_2_5,
+  id: "seedance-2.5-flash-byteplus",
+  label: "Seedance 2.5 Flash · BytePlus ModelArk",
+  allowedResolutions: ["480p", "720p"],
+};
+
 /**
  * Kling 3.0 — the only model that can produce sound, and the only
  * route to a lip-synced talking-head clip.
@@ -735,6 +742,7 @@ export const WAN_3: VideoModelDescriptor = {
 export const VIDEO_MODELS: readonly VideoModelDescriptor[] = [
   SEEDANCE_2_5,
   SEEDANCE_2_5_BYTEPLUS,
+  SEEDANCE_2_5_FLASH_BYTEPLUS,
   SEEDANCE_2,
   SEEDANCE_2_FAST,
   SEEDANCE_2_MINI,
