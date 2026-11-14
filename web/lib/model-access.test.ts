@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canUseVideoModel, isAssignableRole } from "@/lib/model-access";
+import { FLASH_LIVE_AT, canUseVideoModel, isAssignableRole } from "@/lib/model-access";
 
 describe("canUseVideoModel (owner's role table, 2026-11-09)", () => {
   it("lets a Hybrid Editor use every model except Wan 3.0", () => {
@@ -22,6 +22,14 @@ describe("canUseVideoModel (owner's role table, 2026-11-09)", () => {
       expect(canUseVideoModel(role, "seedance-2.5-byteplus"), String(role)).toBe(false);
     }
     expect(canUseVideoModel("editor", "seedance-2.5"), "Seedance 2.5 · Kie stays open").toBe(true);
+  });
+
+  it("hides Seedance 2.5 Flash until BytePlus opens it, then trusted editors and admins only", () => {
+    const flash = "seedance-2.5-flash-byteplus";
+    expect(canUseVideoModel("admin", flash, FLASH_LIVE_AT - 1)).toBe(false);
+    expect(canUseVideoModel("admin", flash, FLASH_LIVE_AT)).toBe(true);
+    expect(canUseVideoModel("trusted_editor", flash, FLASH_LIVE_AT)).toBe(true);
+    expect(canUseVideoModel("editor", flash, FLASH_LIVE_AT)).toBe(false);
   });
 
   it("does not restrict models for the other roles", () => {

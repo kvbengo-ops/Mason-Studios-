@@ -8,8 +8,17 @@
 // own implementation, and a mutation reverting the rule to defaultResolution
 // must fail against it.
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+import { FLASH_LIVE_AT } from "./model-access";
 import { ugcOptions } from "./ugc-options";
+
+// Past Seedance 2.5 Flash's launch, so the picker lists are the steady state.
+// Module level, not beforeAll: the describe bodies below call ugcOptions while
+// they are collected, before any hook runs.
+vi.useFakeTimers({ toFake: ["Date"], now: FLASH_LIVE_AT });
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 describe("ugcOptions(true) — the sound picker", () => {
   const options = ugcOptions(true, "trusted_editor");
