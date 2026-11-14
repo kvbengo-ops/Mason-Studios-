@@ -462,11 +462,13 @@ describe("RenderProgress — RetryAllFailedDialog model button pricing (Finding 
     // Opens the batch retry dialog to reach the model row.
     await user.click(screen.getByRole("button", { name: /Retry 2 failed/ }));
     // Quoted at the only resolution it has, never at the project's.
-    // `(?! · BytePlus)` keeps this on kie's Seedance 2.5, not the BytePlus variant.
+    // `(?! · BytePlus| Flash)` keeps this on kie's Seedance 2.5, not the BytePlus variants.
     expect(
-      screen.queryByRole("button", { name: /Seedance 2\.5(?! · BytePlus).*\$1\.15\/s/ }),
+      screen.queryByRole("button", { name: /Seedance 2\.5(?! · BytePlus| Flash).*\$1\.15\/s/ }),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: /Seedance 2\.5(?! · BytePlus)/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Seedance 2\.5(?! · BytePlus| Flash)/ }),
+    ).toBeTruthy();
   });
 });
 
