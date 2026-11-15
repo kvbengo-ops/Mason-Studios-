@@ -588,6 +588,8 @@ function firstLine(text: string | null | undefined): string {
 export interface AccountsRunLogRow {
   id: string;
   userId: string | null;
+  /** runs.created_at: when the attempt was made. */
+  createdAt: string;
   model: string;
   /** runs.vendor as a person reads it: "kie", "BytePlus". */
   provider: string;
@@ -759,6 +761,7 @@ export async function loadAccountsRunLog(
     rows: rows.map((run, i) => ({
       id: run.id,
       userId: run.user_id ?? run.projects?.user_id ?? null,
+      createdAt: run.created_at,
       model: run.model,
       provider: providerLabel(run.vendor),
       costUsd: run.cost_usd,

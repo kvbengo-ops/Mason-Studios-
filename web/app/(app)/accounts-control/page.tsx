@@ -1623,10 +1623,11 @@ export default async function AccountsControlPage({
                       CSV preview links expire after one hour.
                     </p>
                     <div className="overflow-hidden rounded-xl border border-border">
-                      <Table className="min-w-[840px]">
+                      <Table className="min-w-[960px]">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
                             <TableHead>Preview</TableHead>
+                            <TableHead>Date</TableHead>
                             <TableHead>User email</TableHead>
                             <TableHead>Provider</TableHead>
                             <TableHead className="whitespace-nowrap">Model</TableHead>
@@ -1645,6 +1646,11 @@ export default async function AccountsControlPage({
                                     badge="—"
                                   />
                                 </div>
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-4 text-xs tabular-nums text-muted-foreground">
+                                <time dateTime={run.createdAt}>
+                                  {dateTimeFormatter.format(new Date(run.createdAt))}
+                                </time>
                               </TableCell>
                               <TableCell className="min-w-36 break-words py-4 font-medium">
                                 {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
