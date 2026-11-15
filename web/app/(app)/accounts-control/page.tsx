@@ -1601,8 +1601,12 @@ export default async function AccountsControlPage({
                   </nav>
                 </div>
                 <a
-                  href={`/api/accounts-control/runs-csv?days=${windowDays}`}
-                  download={`runs-last-${windowDays}-days.csv`}
+                  href={`/api/accounts-control/runs-csv?${new URLSearchParams({
+                    days: String(windowDays),
+                    ...(runUser ? { runUser } : {}),
+                    ...(failedOnly ? { failed: "1" } : {}),
+                  })}`}
+                  download={`runs-last-${windowDays}-days${failedOnly ? "-failed" : ""}.csv`}
                   className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <DownloadIcon aria-hidden="true" className="size-3.5" />
