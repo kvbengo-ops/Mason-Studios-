@@ -29,10 +29,13 @@ export function BinThumbnail({
   thumbnail,
   itemLabel,
   badge,
+  controls = true,
 }: {
   thumbnail: BinThumbnail;
   itemLabel: string;
   badge: string;
+  /** False for a thumbnail too small for player controls (Accounts Control's run log). */
+  controls?: boolean;
 }): JSX.Element {
   const [failed, setFailed] = useState(false);
 
@@ -44,7 +47,9 @@ export function BinThumbnail({
         className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-muted-foreground"
       >
         <ImageOffIcon className="size-6" aria-hidden="true" />
-        <span className="font-mono text-base font-medium tabular-nums">{badge}</span>
+        {badge ? (
+          <span className="font-mono text-base font-medium tabular-nums">{badge}</span>
+        ) : null}
       </div>
     );
   }
@@ -70,7 +75,8 @@ export function BinThumbnail({
     <video
       src={thumbnail.url}
       poster={thumbnail.posterUrl ?? undefined}
-      controls
+      controls={controls}
+      muted={!controls}
       preload={thumbnail.posterUrl ? "none" : "metadata"}
       playsInline
       aria-label={itemLabel}
