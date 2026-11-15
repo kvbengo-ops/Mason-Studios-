@@ -78,7 +78,7 @@ import { dateTimeFormatter } from "@/lib/datetime";
 import { asAttachment } from "@/lib/download-url";
 import { formatUsd } from "@/lib/format-usd";
 import { pageRange, parsePage, totalPageCount } from "@/lib/pagination";
-import { formatRunwayDays, isRunwayShort } from "@/lib/runway";
+import { formatRunwayDays, isBelowBannerThreshold, isRunwayShort } from "@/lib/runway";
 import { extFromFilename, getImageUrl } from "@/lib/storage";
 
 import { periodChange } from "@/lib/period-change";
@@ -87,6 +87,13 @@ import { createClient } from "@/lib/supabase/server";
 import { loadFailedRunErrors, loadTeamSnapshot } from "@/lib/team-snapshot";
 import { cn } from "@/lib/utils";
 import { AccountsControlLiveRefresh } from "@/components/accounts-control-live-refresh";
+import {
+  PendingLink,
+  PendingNavProvider,
+  PendingRegion,
+  RunsUserFilter,
+} from "@/components/accounts-control-pending";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export type AccountsControlView = "spending" | "accounts" | "runs";
 export type AccountsControlTab = "videos" | "images" | "deleted";
@@ -143,6 +150,9 @@ function buildAccountsControlHref(params: {
   tab?: AccountsControlTab;
   page?: number;
   chart?: SpendGranularity;
+  /** Runs view filters. */
+  runUser?: string | null;
+  failed?: boolean;
 }): string {
   const query = new URLSearchParams();
   if (params.chart && params.chart !== "daily") {
@@ -162,6 +172,12 @@ function buildAccountsControlHref(params: {
   }
   if (params.page && params.page > 1) {
     query.set("page", String(params.page));
+  }
+  if (params.runUser) {
+    query.set("runUser", params.runUser);
+  }
+  if (params.failed) {
+    query.set("failed", "1");
   }
   const qs = query.toString();
   return qs ? `/accounts-control?${qs}` : "/accounts-control";
@@ -229,6 +245,55 @@ function EmptyState({ children }: { children: ReactNode }): JSX.Element {
     <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center text-sm leading-relaxed text-muted-foreground">
       {children}
     </p>
+  );
+}
+
+/** Stands in for a view while a tab switch loads (components/accounts-control-pending.tsx). */
+function ViewSkeleton(): JSX.Element {
+  return (
+    <section role="status" aria-label="Loading" className={PANEL}>
+      <div className="flex items-center justify-between gap-4 px-5 py-5 sm:px-6">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+      <div className="flex flex-col gap-4 border-t border-border/60 px-5 py-5 sm:px-6 sm:py-6">
+        <Skeleton className="h-48 w-full rounded-lg" />
+        <RowsSkeleton rows={4} />
+      </div>
+    </section>
+  );
+}
+
+function RowsSkeleton({ rows }: { rows: number }): JSX.Element {
+  return (
+    <div className="flex flex-col gap-3" aria-hidden="true">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center gap-4">
+          <Skeleton className="size-12 shrink-0 rounded-md" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The account inspector's shape while another account loads. */
+function InspectorSkeleton(): JSX.Element {
+  return (
+    <div role="status" aria-label="Loading account" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-3 w-64 max-w-full" />
+        <Skeleton className="h-8 w-40" />
+      </div>
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }, (_, index) => (
+          <Skeleton key={index} className="aspect-[9/16] w-full rounded-xl" />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -522,6 +587,8 @@ export default async function AccountsControlPage({
     tab?: string | string[];
     page?: string | string[];
     chart?: string | string[];
+    runUser?: string | string[];
+    failed?: string | string[];
   }>;
 }): Promise<JSX.Element> {
   const { user: viewer, profile: viewerProfile } = await requireAdmin();
@@ -533,6 +600,8 @@ export default async function AccountsControlPage({
   const requestedUserId = parseUserParam(resolvedParams.user);
   const requestedPage = parsePage(resolvedParams.page);
   const chart = parseSpendGranularity(resolvedParams.chart);
+  const runUser = parseUserParam(resolvedParams.runUser);
+  const failedOnly = parseUserParam(resolvedParams.failed) === "1";
 
   // Only what the open view shows is loaded. The Needs attention reads are
   // fail-soft (null), and a null line is skipped rather than shown as zero.
@@ -552,7 +621,10 @@ export default async function AccountsControlPage({
     loadAccountsControlOverview(windowDays, now),
     spending ? getAnthropicMonthlySpend() : null,
     view === "runs"
-      ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now)
+      ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now, {
+          userId: runUser,
+          failedOnly,
+        })
       : null,
     spending
       ? loadTeamSnapshot(supabase, now).catch((error: unknown) => {
@@ -629,8 +701,35 @@ export default async function AccountsControlPage({
   const chartCopy = CHART_COPY[chartKind];
   const maxDailyUsd = Math.max(...series.map((point) => point.totalUsd), 0);
   const maxAccountRangeUsd = Math.max(...rankedAccounts.map((account) => account.rangeTotalUsd), 0);
-  const runwayShort = isRunwayShort(overview.runwayEstimate);
+  // Manual banner thresholds (Balance alerts, 0145) replace the runway rule when set.
+  const kieLow = isBelowBannerThreshold(
+    overview.kieBalanceUsd,
+    balanceAlerts?.kieBannerThresholdUsd ?? null,
+    isRunwayShort(overview.runwayEstimate),
+  );
   const kieEmpty = overview.kieBalanceUsd !== null && overview.kieBalanceUsd <= 0;
+  const bytePlusLow = isBelowBannerThreshold(
+    overview.bytePlusBalanceUsd,
+    balanceAlerts?.bytePlusBannerThresholdUsd ?? null,
+    false,
+  );
+  const bytePlusEmpty = overview.bytePlusBalanceUsd !== null && overview.bytePlusBalanceUsd <= 0;
+  const fundsAlerts = [
+    kieEmpty || kieLow
+      ? {
+          vendor: "Kie",
+          headline: kieEmpty ? "Kie account is out of funds." : "Kie funds are running low.",
+        }
+      : null,
+    bytePlusLow
+      ? {
+          vendor: "BytePlus",
+          headline: bytePlusEmpty
+            ? "BytePlus account is out of funds."
+            : "BytePlus funds are running low.",
+        }
+      : null,
+  ].filter((alert) => alert !== null);
   // Top accounts: share of the team's window total, which keeps archived
   // accounts' past spend even though they leave the ranking.
   const teamWindowUsd = overview.rangeCategoryTotals.totalUsd;
@@ -662,13 +761,14 @@ export default async function AccountsControlPage({
   const modelRunCount = overview.modelUsage.reduce((sum, m) => sum + m.runs, 0);
   const user = selectedAccount?.id ?? null;
   const hrefFor = (page: number): string =>
-    buildAccountsControlHref({ view, days: windowDays, user, tab, page });
+    buildAccountsControlHref({ view, days: windowDays, user, tab, page, runUser, failed: failedOnly });
 
   // A stale bookmark lands on the real last page, not an empty table.
   if (runLog && requestedPage > totalPages && runLog.total > 0) redirect(hrefFor(totalPages));
 
   return (
     <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:gap-8 md:px-8 md:py-10">
+      <PendingNavProvider>
       <AccountsControlLiveRefresh />
       <header className="flex flex-wrap items-end justify-between gap-5">
         <div className="flex max-w-2xl flex-col gap-2">
@@ -701,20 +801,19 @@ export default async function AccountsControlPage({
         </div>
       </header>
 
-      {kieEmpty || runwayShort ? (
+      {fundsAlerts.map((alert) => (
         <div
+          key={alert.vendor}
           role="alert"
           className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
         >
           <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <p>
-            <span className="font-medium">
-              {kieEmpty ? "Kie account is out of funds." : "Kie funds are running low."}
-            </span>{" "}
-            Fund the Kie account before starting more paid renders.
+            <span className="font-medium">{alert.headline}</span> Fund the {alert.vendor} account
+            before starting more paid renders.
           </p>
         </div>
-      ) : null}
+      ))}
 
       <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <KpiTile
@@ -750,7 +849,7 @@ export default async function AccountsControlPage({
             overview.kieBalanceUsd !== null ? formatUsd(overview.kieBalanceUsd) : "Unavailable"
           }
           sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
-          alert={kieEmpty || runwayShort}
+          alert={kieEmpty || kieLow}
         />
         <KpiTile
           icon={Wallet}
@@ -761,7 +860,7 @@ export default async function AccountsControlPage({
               : "Unavailable"
           }
           sub={`${formatUsd(overview.bytePlusRangeUsd)} spent last ${overview.windowDays} days`}
-          alert={overview.bytePlusBalanceUsd !== null && overview.bytePlusBalanceUsd <= 0}
+          alert={bytePlusEmpty || bytePlusLow}
         />
         <GlobalSpendCapControl
           settings={overview.globalSpendCap}
@@ -776,8 +875,9 @@ export default async function AccountsControlPage({
             const active = view === entry.id;
             const Icon = entry.icon;
             return (
-              <Link
+              <PendingLink
                 key={entry.id}
+                region="view"
                 href={buildAccountsControlHref({ view: entry.id, days: windowDays, user, tab })}
                 aria-current={active ? "page" : undefined}
                 scroll={false}
@@ -785,7 +885,7 @@ export default async function AccountsControlPage({
               >
                 <Icon aria-hidden="true" className="hidden size-4 sm:block" />
                 {entry.label}
-              </Link>
+              </PendingLink>
             );
           })}
         </nav>
@@ -795,7 +895,15 @@ export default async function AccountsControlPage({
             {WINDOW_OPTIONS.map((days) => (
               <Link
                 key={days}
-                href={buildAccountsControlHref({ view, days, user, tab, chart })}
+                href={buildAccountsControlHref({
+                  view,
+                  days,
+                  user,
+                  tab,
+                  chart,
+                  runUser,
+                  failed: failedOnly,
+                })}
                 aria-current={windowDays === days ? "page" : undefined}
                 scroll={false}
                 className={cn(SEGMENT, windowDays === days ? SEGMENT_ON : SEGMENT_OFF)}
@@ -807,6 +915,7 @@ export default async function AccountsControlPage({
         </div>
       </div>
 
+      <PendingRegion region="view" fallback={<ViewSkeleton />}>
       {view === "spending" ? (
         // Wide column, narrow side column: activity stats across both, then
         // Daily spend | Needs attention, then Top accounts | Models used.
@@ -1241,8 +1350,9 @@ export default async function AccountsControlPage({
                         ? (account.rangeRenderUsd / account.rangeTotalUsd) * 100
                         : 0;
                     return (
-                      <Link
+                      <PendingLink
                         key={account.id}
+                        region="account"
                         href={buildAccountsControlHref({
                           view,
                           days: windowDays,
@@ -1298,7 +1408,7 @@ export default async function AccountsControlPage({
                             </span>
                           ) : null}
                         </span>
-                      </Link>
+                      </PendingLink>
                     );
                   })}
                 </nav>
@@ -1315,6 +1425,7 @@ export default async function AccountsControlPage({
               aria-labelledby="accounts-control-inspector-heading"
               className="flex min-w-0 flex-col gap-6"
             >
+              <PendingRegion region="account" fallback={<InspectorSkeleton />}>
               {selectedAccount ? (
                 <>
                   <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1392,6 +1503,7 @@ export default async function AccountsControlPage({
                   <EmptyState>No accounts available to inspect.</EmptyState>
                 </>
               )}
+              </PendingRegion>
             </section>
           </div>
         </ViewPanel>
@@ -1404,7 +1516,63 @@ export default async function AccountsControlPage({
           title="All runs"
           meta={`${runLog.total} in the last ${windowDays} days`}
         >
-          <div className="flex justify-end">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <RunsUserFilter
+                value={runUser ?? "all"}
+                options={[
+                  {
+                    value: "all",
+                    label: "All accounts",
+                    href: buildAccountsControlHref({
+                      view,
+                      days: windowDays,
+                      user,
+                      tab,
+                      failed: failedOnly,
+                    }),
+                  },
+                  ...[...overview.accounts]
+                    .sort((a, b) => a.email.localeCompare(b.email))
+                    .map((account) => ({
+                      value: account.id,
+                      label: account.email,
+                      href: buildAccountsControlHref({
+                        view,
+                        days: windowDays,
+                        user,
+                        tab,
+                        runUser: account.id,
+                        failed: failedOnly,
+                      }),
+                    })),
+                ]}
+              />
+              <nav aria-label="Run outcome" className={SEGMENTED}>
+                {[
+                  { failed: false, label: "All runs" },
+                  { failed: true, label: "Failed" },
+                ].map((entry) => (
+                  <PendingLink
+                    key={entry.label}
+                    region="runs"
+                    href={buildAccountsControlHref({
+                      view,
+                      days: windowDays,
+                      user,
+                      tab,
+                      runUser,
+                      failed: entry.failed,
+                    })}
+                    aria-current={failedOnly === entry.failed ? "page" : undefined}
+                    scroll={false}
+                    className={cn(SEGMENT, failedOnly === entry.failed ? SEGMENT_ON : SEGMENT_OFF)}
+                  >
+                    {entry.label}
+                  </PendingLink>
+                ))}
+              </nav>
+            </div>
             <a
               href={`/api/accounts-control/runs-csv?days=${windowDays}`}
               download={`runs-last-${windowDays}-days.csv`}
@@ -1414,8 +1582,13 @@ export default async function AccountsControlPage({
               Export {windowDays}-day runs CSV
             </a>
           </div>
+          <PendingRegion region="runs" fallback={<RowsSkeleton rows={8} />}>
           {runLog.rows.length === 0 ? (
-            <EmptyState>No runs in this window.</EmptyState>
+            <EmptyState>
+              {runUser || failedOnly
+                ? "No runs match these filters in this window."
+                : "No runs in this window."}
+            </EmptyState>
           ) : (
             <div className="flex flex-col gap-5">
               <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1480,8 +1653,11 @@ export default async function AccountsControlPage({
               />
             </div>
           )}
+          </PendingRegion>
         </ViewPanel>
       ) : null}
+      </PendingRegion>
+      </PendingNavProvider>
     </main>
   );
 }

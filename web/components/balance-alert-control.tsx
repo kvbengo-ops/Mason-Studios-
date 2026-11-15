@@ -30,7 +30,65 @@ function parseThreshold(raw: string): number | null | "invalid" {
 
 const thresholdText = (value: number | null): string => value?.toString() ?? "";
 
-/** One vendor's row: its live balance, the threshold field, and what the alert will do. */
+/** A "$" threshold input with a Clear button; blank shows `placeholder`. */
+function ThresholdField({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+  disabled,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}): JSX.Element {
+  const threshold = parseThreshold(value);
+  return (
+    <div className="flex items-center gap-2">
+      <label htmlFor={id} className="w-32 shrink-0 text-xs text-muted-foreground">
+        {label}
+      </label>
+      <div className="relative flex-1">
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
+          $
+        </span>
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step="0.01"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          aria-invalid={threshold === "invalid"}
+          className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-3 text-sm tabular-nums shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:opacity-50"
+        />
+      </div>
+      {typeof threshold === "number" ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => onChange("")}
+        >
+          Clear
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One vendor's row: its live balance, the email threshold and what that alert
+ * will do, and the threshold for Accounts Control's low-funds banner.
+ */
 function VendorThreshold({
   id,
   label,
@@ -38,6 +96,10 @@ function VendorThreshold({
   value,
   onChange,
   alertedAt,
+  bannerValue,
+  onBannerChange,
+  bannerPlaceholder,
+  bannerHint,
   disabled,
 }: {
   id: string;
@@ -46,6 +108,10 @@ function VendorThreshold({
   value: string;
   onChange: (value: string) => void;
   alertedAt: string | null;
+  bannerValue: string;
+  onBannerChange: (value: string) => void;
+  bannerPlaceholder: string;
+  bannerHint: string;
   disabled: boolean;
 }): JSX.Element {
   const threshold = parseThreshold(value);
@@ -71,9 +137,7 @@ function VendorThreshold({
             <Wallet aria-hidden="true" className="size-4 text-muted-foreground" />
           </span>
           <div className="flex flex-col">
-            <label htmlFor={id} className="text-sm font-medium">
-              {label}
-            </label>
+            <span className="text-sm font-medium">{label}</span>
             <span className="text-xs tabular-nums text-muted-foreground">
               Balance {balanceUsd === null ? "unavailable" : formatUsd(balanceUsd)}
             </span>
@@ -89,44 +153,30 @@ function VendorThreshold({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Alert when below</span>
-        <div className="relative flex-1">
-          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
-            $
-          </span>
-          <input
-            id={id}
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.01"
-            placeholder="Off"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            disabled={disabled}
-            aria-invalid={threshold === "invalid"}
-            className="h-9 w-full rounded-md border border-input bg-background pl-7 pr-3 text-sm tabular-nums shadow-xs outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 aria-invalid:border-destructive disabled:opacity-50"
-          />
-        </div>
-        {on ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            disabled={disabled}
-            onClick={() => onChange("")}
-          >
-            Turn off
-          </Button>
-        ) : null}
-      </div>
+      <ThresholdField
+        id={id}
+        label="Email when below"
+        placeholder="Off"
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+      />
 
       {below && !alertedAt ? (
         <p className="text-xs text-amber-700 dark:text-amber-400">
           Already below this. Saving sends an email on the next balance check, within a minute.
         </p>
       ) : null}
+
+      <ThresholdField
+        id={`${id}-banner`}
+        label="Show banner below"
+        placeholder={bannerPlaceholder}
+        value={bannerValue}
+        onChange={onBannerChange}
+        disabled={disabled}
+      />
+      <p className="-mt-1 text-xs text-muted-foreground">{bannerHint}</p>
     </div>
   );
 }
@@ -148,6 +198,10 @@ export function BalanceAlertControl({
   const [open, setOpen] = useState(false);
   const [kie, setKie] = useState(thresholdText(settings.kieThresholdUsd));
   const [bytePlus, setBytePlus] = useState(thresholdText(settings.bytePlusThresholdUsd));
+  const [kieBanner, setKieBanner] = useState(thresholdText(settings.kieBannerThresholdUsd));
+  const [bytePlusBanner, setBytePlusBanner] = useState(
+    thresholdText(settings.bytePlusBannerThresholdUsd),
+  );
   const [recipients, setRecipients] = useState<ReadonlySet<string>>(
     new Set(settings.recipientIds),
   );
@@ -163,6 +217,8 @@ export function BalanceAlertControl({
       // Every open starts from what is saved, not from an abandoned edit.
       setKie(thresholdText(settings.kieThresholdUsd));
       setBytePlus(thresholdText(settings.bytePlusThresholdUsd));
+      setKieBanner(thresholdText(settings.kieBannerThresholdUsd));
+      setBytePlusBanner(thresholdText(settings.bytePlusBannerThresholdUsd));
       setRecipients(new Set(settings.recipientIds));
     }
     setOpen(next);
@@ -179,7 +235,14 @@ export function BalanceAlertControl({
   function save(): void {
     const kieThresholdUsd = parseThreshold(kie);
     const bytePlusThresholdUsd = parseThreshold(bytePlus);
-    if (kieThresholdUsd === "invalid" || bytePlusThresholdUsd === "invalid") {
+    const kieBannerThresholdUsd = parseThreshold(kieBanner);
+    const bytePlusBannerThresholdUsd = parseThreshold(bytePlusBanner);
+    if (
+      kieThresholdUsd === "invalid" ||
+      bytePlusThresholdUsd === "invalid" ||
+      kieBannerThresholdUsd === "invalid" ||
+      bytePlusBannerThresholdUsd === "invalid"
+    ) {
       toast.error("A threshold must be blank or zero or more.");
       return;
     }
@@ -192,6 +255,8 @@ export function BalanceAlertControl({
         const result = await setBalanceAlerts({
           kieThresholdUsd,
           bytePlusThresholdUsd,
+          kieBannerThresholdUsd,
+          bytePlusBannerThresholdUsd,
           recipientIds: [...recipients],
         });
         if (result?.error) {
@@ -247,7 +312,8 @@ export function BalanceAlertControl({
               <DialogTitle>Low balance alerts</DialogTitle>
               <DialogDescription>
                 Email the admins you pick when a vendor balance drops below its threshold. One
-                email per drop; it re-arms once the balance is topped up.
+                email per drop; it re-arms once the balance is topped up. The banner threshold
+                sets when this page warns that funds are low.
               </DialogDescription>
             </div>
           </DialogHeader>
@@ -278,6 +344,10 @@ export function BalanceAlertControl({
                 value={kie}
                 onChange={setKie}
                 alertedAt={settings.kieAlertedAt}
+                bannerValue={kieBanner}
+                onBannerChange={setKieBanner}
+                bannerPlaceholder="Auto"
+                bannerHint="Blank: the banner shows when runway drops under 3 days."
                 disabled={pending}
               />
               <VendorThreshold
@@ -287,6 +357,10 @@ export function BalanceAlertControl({
                 value={bytePlus}
                 onChange={setBytePlus}
                 alertedAt={settings.bytePlusAlertedAt}
+                bannerValue={bytePlusBanner}
+                onBannerChange={setBytePlusBanner}
+                bannerPlaceholder="Off"
+                bannerHint="Blank: no low-funds banner for BytePlus."
                 disabled={pending}
               />
             </section>

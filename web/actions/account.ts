@@ -841,10 +841,17 @@ export async function setGlobalSpendCap(
 export async function setBalanceAlerts(input: {
   kieThresholdUsd: number | null;
   bytePlusThresholdUsd: number | null;
+  kieBannerThresholdUsd: number | null;
+  bytePlusBannerThresholdUsd: number | null;
   recipientIds: string[];
 }): Promise<ActionResult> {
   const { user } = await requireAdmin();
-  for (const value of [input.kieThresholdUsd, input.bytePlusThresholdUsd]) {
+  for (const value of [
+    input.kieThresholdUsd,
+    input.bytePlusThresholdUsd,
+    input.kieBannerThresholdUsd,
+    input.bytePlusBannerThresholdUsd,
+  ]) {
     if (value !== null && (!Number.isFinite(value) || value < 0)) {
       return { error: "A threshold must be blank or zero or more." };
     }
@@ -864,6 +871,8 @@ export async function setBalanceAlerts(input: {
     .update({
       kie_threshold_usd: input.kieThresholdUsd,
       byteplus_threshold_usd: input.bytePlusThresholdUsd,
+      kie_banner_threshold_usd: input.kieBannerThresholdUsd,
+      byteplus_banner_threshold_usd: input.bytePlusBannerThresholdUsd,
       recipient_ids: (admins ?? []).map((row) => row.id),
       kie_alerted_at: null,
       byteplus_alerted_at: null,
