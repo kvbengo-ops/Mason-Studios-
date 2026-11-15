@@ -3,6 +3,7 @@ import { AuthorizationError, requireAdmin } from "@/actions/guard";
 import {
   parseWindowDays,
   providerLabel,
+  runOwnerFilter,
   runPreviewSource,
   sceneTimeKey,
 } from "@/lib/accounts-control";
@@ -48,7 +49,11 @@ export async function GET(request: Request): Promise<Response> {
   // run ever and sign each preview one call at a time, before sending a byte;
   // past ~100 s Cloudflare dropped the connection and Chrome showed "Site
   // wasn't available" (2026-11-11). Same Manila window as the All runs table.
-  const windowDays = parseWindowDays(new URL(request.url).searchParams.get("days") ?? undefined);
+  const params = new URL(request.url).searchParams;
+  const windowDays = parseWindowDays(params.get("days") ?? undefined);
+  // The All runs table's filters, so the file matches what is on screen.
+  const owner = runOwnerFilter(params.get("runUser"));
+  const failedOnly = params.get("failed") === "1";
   const now = new Date();
   const windowStartIso = new Date(manilaWindowStartIso(now, windowDays)).toISOString();
   const windowEndIso = new Date(manilaWindowEndIso(now)).toISOString();
@@ -56,13 +61,16 @@ export async function GET(request: Request): Promise<Response> {
   const supabase = await createClient();
   const runs: RunRow[] = [];
   for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await supabase
+    let query = supabase
       .from("runs")
       .select(
         "asset_id, scene_id, created_at, error, model, vendor, cost_usd, user_id, projects ( user_id )",
       )
       .gte("created_at", windowStartIso)
-      .lt("created_at", windowEndIso)
+      .lt("created_at", windowEndIso);
+    if (owner) query = query.eq("projects.user_id", owner.userId).or(owner.or);
+    if (failedOnly) query = query.not("error", "is", null);
+    const { data, error } = await query
       .order("created_at", { ascending: true })
       .order("id", { ascending: true })
       .range(from, from + PAGE_SIZE - 1);
@@ -176,7 +184,9 @@ export async function GET(request: Request): Promise<Response> {
   return new Response(UTF8_BOM + csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": contentDispositionHeader(`runs-last-${windowDays}-days.csv`),
+      "Content-Disposition": contentDispositionHeader(
+        `runs-last-${windowDays}-days${failedOnly ? "-failed" : ""}.csv`,
+      ),
       "Cache-Control": "no-store",
     },
   });

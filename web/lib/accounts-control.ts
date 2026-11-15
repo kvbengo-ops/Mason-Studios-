@@ -652,6 +652,21 @@ export async function loadAccountAllTimeSpendUsd(
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * The Runs view's account filter, for the table and the CSV export alike: apply
+ * as `.eq("projects.user_id", userId).or(or)` on a select embedding
+ * `projects ( user_id )`. The embed filter nulls `projects` unless this account
+ * owns the project, so a run is theirs if it is billed to them or that embed
+ * survived. The id is interpolated into a PostgREST filter string, so anything
+ * but a bare uuid (a hand-edited ?runUser=) gives null: no filter, not trusted.
+ */
+export function runOwnerFilter(
+  userId: string | null | undefined,
+): { userId: string; or: string } | null {
+  if (!userId || !UUID_PATTERN.test(userId)) return null;
+  return { userId, or: `user_id.eq.${userId},projects.not.is.null` };
+}
+
+/**
  * One page of every run in the same `windowDays` window as the overview — the
  * log that used to live on /spend behind its own date picker. `projects` is
  * embedded off runs.project_id (not through scenes) so a scene-less run still
@@ -680,15 +695,8 @@ export async function loadAccountsRunLog(
     )
     .gte("created_at", windowStart.toISOString())
     .lt("created_at", tomorrowStart.toISOString());
-  // Interpolated into a PostgREST filter string, so only ever a bare uuid; a
-  // hand-edited ?runUser= that is not one is ignored rather than trusted.
-  if (filters.userId && UUID_PATTERN.test(filters.userId)) {
-    // The embed filter nulls `projects` unless this account owns the project;
-    // the run is theirs if it is billed to them or that embed survived.
-    query = query
-      .eq("projects.user_id", filters.userId)
-      .or(`user_id.eq.${filters.userId},projects.not.is.null`);
-  }
+  const owner = runOwnerFilter(filters.userId);
+  if (owner) query = query.eq("projects.user_id", owner.userId).or(owner.or);
   if (filters.failedOnly) query = query.not("error", "is", null);
   const { data, error, count } = await query
     .order("created_at", { ascending: false })

@@ -164,4 +164,33 @@ describe("GET /api/accounts-control/runs-csv", () => {
     );
     expect(response.headers.get("Content-Disposition")).toContain("runs-last-14-days.csv");
   });
+
+  it("applies the All runs table's account and Failed filters", async () => {
+    mockedRequireAdmin.mockResolvedValue({ user: {} as never, profile: {} as never });
+    mockBulkSigning();
+    const userId = "11111111-2222-4333-8444-555555555555";
+    const calls: string[] = [];
+    const filtered = {
+      eq: (column: string, value: string) => (calls.push(`eq ${column} ${value}`), filtered),
+      or: (filter: string) => (calls.push(`or ${filter}`), filtered),
+      not: (column: string, op: string) => (calls.push(`not ${column} ${op}`), filtered),
+      order: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }),
+    };
+    mockedCreateClient.mockResolvedValue({
+      from: () => ({ select: () => ({ gte: () => ({ lt: () => filtered }) }) }),
+    } as unknown as Awaited<ReturnType<typeof createClient>>);
+
+    const response = await GET(makeRequest(`?days=7&runUser=${userId}&failed=1`));
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([
+      `eq projects.user_id ${userId}`,
+      `or user_id.eq.${userId},projects.not.is.null`,
+      "not error is",
+    ]);
+    expect(response.headers.get("Content-Disposition")).toContain("runs-last-7-days-failed.csv");
+
+    calls.length = 0;
+    await GET(makeRequest("?runUser=not-a-uuid)"));
+    expect(calls).toEqual([]);
+  });
 });
