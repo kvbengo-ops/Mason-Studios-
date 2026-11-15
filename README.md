@@ -4,10 +4,12 @@ Turns an ad script into a set of generated video clips, with human review gates
 before any money is spent.
 
 ```
-scene prompt → reference frames → kie renders clips → deliver
+scene prompt → reference frames → kie or BytePlus renders clips → deliver
 ```
 
-kie is the only vendor on the render path. Claude (Anthropic) is an optional helper, not a
+kie renders every model except the two BytePlus picks (Seedance 2.5 and Seedance 2.5
+Flash on BytePlus ModelArk), which render on BytePlus only; neither vendor is ever a
+fallback for the other. Claude (Anthropic) is an optional helper, not a
 step: it compiles a script into prompts on the project Script page and describes
 reference images. Leave `ANTHROPIC_API_KEY` unset and nothing else changes.
 
@@ -34,6 +36,7 @@ flowchart TB
     end
 
     KIE["🎬 kie.ai<br/>$11–137/video, by model"]
+    BP["🎬 BytePlus ModelArk<br/>Seedance 2.5 · 2.5 Flash<br/><i>trusted editors · admins</i>"]
 
     UI <--> CF
     CF <--> WEB
@@ -43,6 +46,7 @@ flowchart TB
     GO -- "poll · write<br/><i>queued → done</i>" --> PG
     GO -- "submit render" --> KIE
     KIE -. "webhook" .-> CF
+    GO -- "submit · poll<br/><i>no webhook</i>" --> BP
     CF -.-> GO
     GO --> STORE
 
@@ -56,7 +60,7 @@ flowchart TB
     classDef cdn fill:#5c3a12,stroke:#c77f2a,color:#fff
     class WEB,GO ours
     class PG,AUTH,STORE,RT data
-    class KIE ext
+    class KIE,BP ext
     class CF cdn
 ```
 
@@ -73,7 +77,8 @@ render; it writes `status='queued'` and stops. The worker picks it up from there
 
 ### The async part
 
-Nothing waits on a render. kie returns a task id, then calls back minutes later.
+Nothing waits on a render. kie returns a task id, then calls back minutes later. A
+BytePlus render has no callback: the reconcile loop polls it.
 
 ```mermaid
 sequenceDiagram
@@ -87,7 +92,7 @@ sequenceDiagram
     W->>D: scenes.status = 'queued'
     W-->>U: done — request is over
 
-    loop every 30s
+    loop every 10s
         G->>D: any queued? under concurrency cap?
     end
     G->>K: createTask × N

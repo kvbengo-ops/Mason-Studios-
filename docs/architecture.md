@@ -7,7 +7,9 @@ Browser ──► web (Next.js, SSR)  ──── read/write ────┐
                                                      ▼
                                               ┌────────────┐
 kie webhook ──► worker (Go)     ──── jobs ───►│  Postgres  │
-                                              └────────────┘
+                   │                          └────────────┘
+                   ├── submit ──► kie.ai              every model but the two below
+                   └── submit · poll ──► BytePlus     Seedance 2.5 and 2.5 Flash picks
 ```
 
 The two services **never call each other**. There is no REST API between them, no
