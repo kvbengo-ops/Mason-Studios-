@@ -1623,57 +1623,83 @@ export default async function AccountsControlPage({
                       CSV preview links expire after one hour.
                     </p>
                     <div className="overflow-hidden rounded-xl border border-border">
-                      <Table className="min-w-[960px]">
+                      <Table className="min-w-[760px]">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead>Preview</TableHead>
+                            <TableHead className="w-14">Preview</TableHead>
                             <TableHead>Date</TableHead>
-                            <TableHead>User email</TableHead>
-                            <TableHead>Provider</TableHead>
-                            <TableHead className="whitespace-nowrap">Model</TableHead>
+                            <TableHead>Account</TableHead>
+                            <TableHead>Model</TableHead>
                             <TableHead numeric>Cost</TableHead>
-                            <TableHead>Details</TableHead>
+                            <TableHead>Error</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {runLog.rows.map((run) => (
-                            <TableRow key={run.id} className="align-top">
-                              <TableCell className="py-4">
-                                <div className="h-24 w-14 overflow-hidden rounded-md bg-muted">
-                                  <BinThumbnail
-                                    thumbnail={run.thumbnail}
-                                    itemLabel={`Output of ${run.model}`}
-                                    badge="—"
-                                  />
-                                </div>
+                            <TableRow key={run.id}>
+                              <TableCell className="py-2">
+                                {/* Small and silent; a click opens the full output. */}
+                                {run.thumbnail.kind === "placeholder" ? (
+                                  <div className="size-10 overflow-hidden rounded-md bg-muted">
+                                    <BinThumbnail
+                                      thumbnail={run.thumbnail}
+                                      itemLabel={`Output of ${run.model}`}
+                                      badge=""
+                                      controls={false}
+                                    />
+                                  </div>
+                                ) : (
+                                  <a
+                                    href={run.thumbnail.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block size-10 overflow-hidden rounded-md bg-muted ring-offset-background transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  >
+                                    <BinThumbnail
+                                      thumbnail={run.thumbnail}
+                                      itemLabel={`Output of ${run.model}`}
+                                      badge=""
+                                      controls={false}
+                                    />
+                                  </a>
+                                )}
                               </TableCell>
-                              <TableCell className="whitespace-nowrap py-4 text-xs tabular-nums text-muted-foreground">
+                              <TableCell className="whitespace-nowrap py-2 text-xs tabular-nums text-muted-foreground">
                                 <time dateTime={run.createdAt}>
                                   {dateTimeFormatter.format(new Date(run.createdAt))}
                                 </time>
                               </TableCell>
-                              <TableCell className="min-w-36 break-words py-4 font-medium">
-                                {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
-                              </TableCell>
-                              <TableCell className="whitespace-nowrap py-4 text-xs">
-                                {run.provider}
-                              </TableCell>
-                              <TableCell className="max-w-64 break-words py-4 text-xs">
-                                <span className="inline-block rounded-md bg-muted px-2 py-1">
-                                  {run.model}
+                              <TableCell className="py-2">
+                                <span className="block max-w-56 truncate text-sm font-medium">
+                                  {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
                                 </span>
                               </TableCell>
-                              <TableCell numeric className="py-4">
+                              <TableCell className="py-2">
+                                <span className="block max-w-56 truncate text-xs font-medium">
+                                  {run.model}
+                                </span>
+                                <span className="block text-[11px] text-muted-foreground">
+                                  {run.provider}
+                                </span>
+                              </TableCell>
+                              <TableCell numeric className="whitespace-nowrap py-2">
                                 {run.costUsd !== null ? (
-                                  <span className="block font-medium">
-                                    {formatUsd(run.costUsd)}
-                                  </span>
+                                  <span className="font-medium">{formatUsd(run.costUsd)}</span>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">Not billed</span>
                                 )}
                               </TableCell>
-                              <TableCell className="max-w-sm break-words py-4 text-xs leading-relaxed text-destructive">
-                                {run.error ?? "—"}
+                              <TableCell className="py-2 text-xs">
+                                {run.error ? (
+                                  <span
+                                    title={run.error}
+                                    className="line-clamp-2 max-w-xs whitespace-normal break-words text-destructive"
+                                  >
+                                    {run.error}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
