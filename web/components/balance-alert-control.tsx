@@ -202,9 +202,7 @@ export function BalanceAlertControl({
   const [bytePlusBanner, setBytePlusBanner] = useState(
     thresholdText(settings.bytePlusBannerThresholdUsd),
   );
-  const [recipients, setRecipients] = useState<ReadonlySet<string>>(
-    new Set(settings.recipientIds),
-  );
+  const [recipients, setRecipients] = useState<ReadonlySet<string>>(new Set(settings.recipientIds));
   const { pending, run } = useAsyncAction();
 
   const activeCount =
@@ -311,9 +309,9 @@ export function BalanceAlertControl({
             <div className="flex flex-col gap-1">
               <DialogTitle>Low balance alerts</DialogTitle>
               <DialogDescription>
-                Email the admins you pick when a vendor balance drops below its threshold. One
-                email per drop; it re-arms once the balance is topped up. The banner threshold
-                sets when this page warns that funds are low.
+                Email the admins you pick when a vendor balance drops below its threshold. One email
+                per drop; it re-arms once the balance is topped up. The banner threshold sets when
+                this page warns that funds are low.
               </DialogDescription>
             </div>
           </DialogHeader>

@@ -761,7 +761,15 @@ export default async function AccountsControlPage({
   const modelRunCount = overview.modelUsage.reduce((sum, m) => sum + m.runs, 0);
   const user = selectedAccount?.id ?? null;
   const hrefFor = (page: number): string =>
-    buildAccountsControlHref({ view, days: windowDays, user, tab, page, runUser, failed: failedOnly });
+    buildAccountsControlHref({
+      view,
+      days: windowDays,
+      user,
+      tab,
+      page,
+      runUser,
+      failed: failedOnly,
+    });
 
   // A stale bookmark lands on the real last page, not an empty table.
   if (runLog && requestedPage > totalPages && runLog.total > 0) redirect(hrefFor(totalPages));
@@ -769,894 +777,915 @@ export default async function AccountsControlPage({
   return (
     <main className="mx-auto flex w-full max-w-[1440px] flex-col gap-6 px-4 py-6 sm:gap-8 md:px-8 md:py-10">
       <PendingNavProvider>
-      <AccountsControlLiveRefresh />
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="flex max-w-2xl flex-col gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-            Administration
-          </span>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            Accounts and Spending Control
-          </h1>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            Understand your team’s spending. Set limits. Review what gets made.
-          </p>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:items-end">
-          <Link
-            href="/users"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <AccountsControlLiveRefresh />
+        <header className="flex flex-wrap items-end justify-between gap-5">
+          <div className="flex max-w-2xl flex-col gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Administration
+            </span>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+              Accounts and Spending Control
+            </h1>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Understand your team’s spending. Set limits. Review what gets made.
+            </p>
+          </div>
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <Link
+              href="/users"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <SlidersHorizontal aria-hidden="true" className="size-4" />
+              Manage accounts
+              <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground" />
+            </Link>
+            {balanceAlerts ? (
+              <BalanceAlertControl
+                settings={balanceAlerts}
+                kieBalanceUsd={overview.kieBalanceUsd}
+                bytePlusBalanceUsd={overview.bytePlusBalanceUsd}
+              />
+            ) : null}
+          </div>
+        </header>
+
+        {fundsAlerts.map((alert) => (
+          <div
+            key={alert.vendor}
+            role="alert"
+            className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           >
-            <SlidersHorizontal aria-hidden="true" className="size-4" />
-            Manage accounts
-            <ArrowUpRight aria-hidden="true" className="size-4 text-muted-foreground" />
-          </Link>
-          {balanceAlerts ? (
-            <BalanceAlertControl
-              settings={balanceAlerts}
-              kieBalanceUsd={overview.kieBalanceUsd}
-              bytePlusBalanceUsd={overview.bytePlusBalanceUsd}
-            />
-          ) : null}
-        </div>
-      </header>
+            <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <p>
+              <span className="font-medium">{alert.headline}</span> Fund the {alert.vendor} account
+              before starting more paid renders.
+            </p>
+          </div>
+        ))}
 
-      {fundsAlerts.map((alert) => (
-        <div
-          key={alert.vendor}
-          role="alert"
-          className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
-          <TriangleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <p>
-            <span className="font-medium">{alert.headline}</span> Fund the {alert.vendor} account
-            before starting more paid renders.
-          </p>
-        </div>
-      ))}
-
-      <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <KpiTile
-          icon={BarChart3}
-          label="Today · since 5 AM"
-          value={formatUsd(overview.todaySpendUsd)}
-          sub={
-            <ChangeLine
-              change={periodChange(overview.todaySpendUsd, overview.yesterdaySameTimeUsd)}
-              vs="this time yesterday"
-            />
-          }
-        />
-        <KpiTile
-          icon={History}
-          label="This month"
-          value={formatUsd(overview.monthSpendUsd)}
-          sub={
-            <ChangeLine
-              change={periodChange(overview.monthSpendUsd, overview.lastMonthSameSpanUsd)}
-              vs="same days last month"
-            />
-          }
-        >
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {formatUsd(overview.weekSpendUsd)} last 7 days
-          </span>
-        </KpiTile>
-        <KpiTile
-          icon={Wallet}
-          label="Kie balance"
-          value={
-            overview.kieBalanceUsd !== null ? formatUsd(overview.kieBalanceUsd) : "Unavailable"
-          }
-          sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
-          alert={kieEmpty || kieLow}
-        />
-        <KpiTile
-          icon={Wallet}
-          label="BytePlus balance"
-          value={
-            overview.bytePlusBalanceUsd !== null
-              ? formatUsd(overview.bytePlusBalanceUsd)
-              : "Unavailable"
-          }
-          sub={`${formatUsd(overview.bytePlusRangeUsd)} spent last ${overview.windowDays} days`}
-          alert={bytePlusEmpty || bytePlusLow}
-        />
-        <GlobalSpendCapControl
-          settings={overview.globalSpendCap}
-          spentUsd={overview.teamGlobalSpendUsd}
-        />
-      </section>
-
-
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
-        <nav aria-label="Sections" className={SEGMENTED}>
-          {VIEWS.map((entry) => {
-            const active = view === entry.id;
-            const Icon = entry.icon;
-            return (
-              <PendingLink
-                key={entry.id}
-                region="view"
-                href={buildAccountsControlHref({ view: entry.id, days: windowDays, user, tab })}
-                aria-current={active ? "page" : undefined}
-                scroll={false}
-                className={cn(SEGMENT, "sm:px-5", active ? SEGMENT_ON : SEGMENT_OFF)}
-              >
-                <Icon aria-hidden="true" className="hidden size-4 sm:block" />
-                {entry.label}
-              </PendingLink>
-            );
-          })}
-        </nav>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-muted-foreground">Reporting window · Manila time</span>
-          <nav aria-label="Spending window" className={SEGMENTED}>
-            {WINDOW_OPTIONS.map((days) => (
-              <Link
-                key={days}
-                href={buildAccountsControlHref({
-                  view,
-                  days,
-                  user,
-                  tab,
-                  chart,
-                  runUser,
-                  failed: failedOnly,
-                })}
-                aria-current={windowDays === days ? "page" : undefined}
-                scroll={false}
-                className={cn(SEGMENT, windowDays === days ? SEGMENT_ON : SEGMENT_OFF)}
-              >
-                {days} days
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      <PendingRegion region="view" fallback={<ViewSkeleton />}>
-      {view === "spending" ? (
-        // Wide column, narrow side column: activity stats across both, then
-        // Daily spend | Needs attention, then Top accounts | Models used.
-        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <section
-            aria-label="Activity"
-            className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:col-span-2"
-          >
-            <KpiTile
-              compact
-              icon={Activity}
-              label="Renders today"
-              value={overview.rendersToday !== null ? String(overview.rendersToday) : "Unavailable"}
-              sub="Video and image runs since 5:00 AM Manila time"
-            />
-            <KpiTile
-              compact
-              icon={CircleX}
-              label="Failed today"
-              value={failedRunErrors ? String(failedRunErrors.length) : "Unavailable"}
-              sub={
-                failedRunErrors && failedRunErrors.length > 0 && overview.rendersToday
-                  ? `${Math.round((failedRunErrors.length / overview.rendersToday) * 100)}% of today's renders`
-                  : "None so far"
-              }
-              alert={Boolean(failedRunErrors?.length)}
-              href={buildAccountsControlHref({ view: "runs", days: windowDays, user, tab })}
-            />
-            <KpiTile
-              compact
-              icon={Receipt}
-              label="Avg cost per render"
-              value={
-                overview.avgCostPerRenderUsd !== null
-                  ? formatUsd(overview.avgCostPerRenderUsd)
-                  : "—"
-              }
-              sub={`Billed runs, last ${windowDays} days`}
-            />
-            <KpiTile
-              compact
-              icon={UserRound}
-              label="Active accounts"
-              value={String(activeAccountCount)}
-              sub={`Spent in the last ${windowDays} days`}
-            />
-          </section>
-
-          <ViewPanel
-            id="accounts-control-spending-heading"
-            title={chartCopy.title}
-            meta={
-              chartKind === "daily" ? (
-                <span className="inline-flex flex-wrap items-center gap-x-2">
-                  {formatUsd(teamWindowUsd)} in {windowDays} days
-                  <ChangeLine
-                    change={periodChange(teamWindowUsd, overview.previousWindowUsd)}
-                    vs={`previous ${windowDays} days`}
-                  />
-                </span>
-              ) : (
-                <span>
-                  {formatUsd(seriesTotals.totalUsd)} in {chartCopy.span}
-                </span>
-              )
+        <section aria-label="Spend summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <KpiTile
+            icon={BarChart3}
+            label="Today · since 5 AM"
+            value={formatUsd(overview.todaySpendUsd)}
+            sub={
+              <ChangeLine
+                change={periodChange(overview.todaySpendUsd, overview.yesterdaySameTimeUsd)}
+                vs="this time yesterday"
+              />
+            }
+          />
+          <KpiTile
+            icon={History}
+            label="This month"
+            value={formatUsd(overview.monthSpendUsd)}
+            sub={
+              <ChangeLine
+                change={periodChange(overview.monthSpendUsd, overview.lastMonthSameSpanUsd)}
+                vs="same days last month"
+              />
             }
           >
-            <Tabs defaultValue="area" className="gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatUsd(overview.weekSpendUsd)} last 7 days
+            </span>
+          </KpiTile>
+          <KpiTile
+            icon={Wallet}
+            label="Kie balance"
+            value={
+              overview.kieBalanceUsd !== null ? formatUsd(overview.kieBalanceUsd) : "Unavailable"
+            }
+            sub={`Runway ${formatRunwayDays(overview.runwayEstimate)}`}
+            alert={kieEmpty || kieLow}
+          />
+          <KpiTile
+            icon={Wallet}
+            label="BytePlus balance"
+            value={
+              overview.bytePlusBalanceUsd !== null
+                ? formatUsd(overview.bytePlusBalanceUsd)
+                : "Unavailable"
+            }
+            sub={`${formatUsd(overview.bytePlusRangeUsd)} spent last ${overview.windowDays} days`}
+            alert={bytePlusEmpty || bytePlusLow}
+          />
+          <GlobalSpendCapControl
+            settings={overview.globalSpendCap}
+            spentUsd={overview.teamGlobalSpendUsd}
+          />
+        </section>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
+          <nav aria-label="Sections" className={SEGMENTED}>
+            {VIEWS.map((entry) => {
+              const active = view === entry.id;
+              const Icon = entry.icon;
+              return (
+                <PendingLink
+                  key={entry.id}
+                  region="view"
+                  href={buildAccountsControlHref({ view: entry.id, days: windowDays, user, tab })}
+                  aria-current={active ? "page" : undefined}
+                  scroll={false}
+                  className={cn(SEGMENT, "sm:px-5", active ? SEGMENT_ON : SEGMENT_OFF)}
+                >
+                  <Icon aria-hidden="true" className="hidden size-4 sm:block" />
+                  {entry.label}
+                </PendingLink>
+              );
+            })}
+          </nav>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-muted-foreground">Reporting window · Manila time</span>
+            <nav aria-label="Spending window" className={SEGMENTED}>
+              {WINDOW_OPTIONS.map((days) => (
+                <Link
+                  key={days}
+                  href={buildAccountsControlHref({
+                    view,
+                    days,
+                    user,
+                    tab,
+                    chart,
+                    runUser,
+                    failed: failedOnly,
+                  })}
+                  aria-current={windowDays === days ? "page" : undefined}
+                  scroll={false}
+                  className={cn(SEGMENT, windowDays === days ? SEGMENT_ON : SEGMENT_OFF)}
+                >
+                  {days} days
+                </Link>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        <PendingRegion region="view" fallback={<ViewSkeleton />}>
+          {view === "spending" ? (
+            // Wide column, narrow side column: activity stats across both, then
+            // Daily spend | Needs attention, then Top accounts | Models used.
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+              <section
+                aria-label="Activity"
+                className="grid grid-cols-2 gap-4 lg:grid-cols-4 xl:col-span-2"
+              >
+                <KpiTile
+                  compact
+                  icon={Activity}
+                  label="Renders today"
+                  value={
+                    overview.rendersToday !== null ? String(overview.rendersToday) : "Unavailable"
+                  }
+                  sub="Video and image runs since 5:00 AM Manila time"
+                />
+                <KpiTile
+                  compact
+                  icon={CircleX}
+                  label="Failed today"
+                  value={failedRunErrors ? String(failedRunErrors.length) : "Unavailable"}
+                  sub={
+                    failedRunErrors && failedRunErrors.length > 0 && overview.rendersToday
+                      ? `${Math.round((failedRunErrors.length / overview.rendersToday) * 100)}% of today's renders`
+                      : "None so far"
+                  }
+                  alert={Boolean(failedRunErrors?.length)}
+                  href={buildAccountsControlHref({ view: "runs", days: windowDays, user, tab })}
+                />
+                <KpiTile
+                  compact
+                  icon={Receipt}
+                  label="Avg cost per render"
+                  value={
+                    overview.avgCostPerRenderUsd !== null
+                      ? formatUsd(overview.avgCostPerRenderUsd)
+                      : "—"
+                  }
+                  sub={`Billed runs, last ${windowDays} days`}
+                />
+                <KpiTile
+                  compact
+                  icon={UserRound}
+                  label="Active accounts"
+                  value={String(activeAccountCount)}
+                  sub={`Spent in the last ${windowDays} days`}
+                />
+              </section>
+
+              <ViewPanel
+                id="accounts-control-spending-heading"
+                title={chartCopy.title}
+                meta={
+                  chartKind === "daily" ? (
+                    <span className="inline-flex flex-wrap items-center gap-x-2">
+                      {formatUsd(teamWindowUsd)} in {windowDays} days
+                      <ChangeLine
+                        change={periodChange(teamWindowUsd, overview.previousWindowUsd)}
+                        vs={`previous ${windowDays} days`}
+                      />
+                    </span>
+                  ) : (
+                    <span>
+                      {formatUsd(seriesTotals.totalUsd)} in {chartCopy.span}
+                    </span>
+                  )
+                }
+              >
+                <Tabs defaultValue="area" className="gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <nav aria-label="Chart period" className={SEGMENTED}>
+                        {(["hourly", "daily", "monthly"] as const).map((option) => (
+                          <Link
+                            key={option}
+                            href={buildAccountsControlHref({
+                              view,
+                              days: windowDays,
+                              user,
+                              tab,
+                              chart: option,
+                            })}
+                            aria-current={chartKind === option ? "page" : undefined}
+                            scroll={false}
+                            className={cn(
+                              SEGMENT,
+                              "text-xs",
+                              chartKind === option ? SEGMENT_ON : SEGMENT_OFF,
+                            )}
+                          >
+                            {option === "hourly"
+                              ? "Hourly"
+                              : option === "daily"
+                                ? "Daily"
+                                : "Monthly"}
+                          </Link>
+                        ))}
+                      </nav>
+                      <p className="text-xs tabular-nums text-muted-foreground">
+                        Video{" "}
+                        {formatUsd(
+                          chartKind === "daily"
+                            ? overview.rangeCategoryTotals.renderUsd
+                            : seriesTotals.renderUsd,
+                        )}{" "}
+                        · Images{" "}
+                        {formatUsd(
+                          chartKind === "daily"
+                            ? overview.rangeCategoryTotals.iterateUsd
+                            : seriesTotals.iterateUsd,
+                        )}
+                      </p>
+                      {monthlyFailed ? (
+                        <p role="status" className="text-xs text-destructive">
+                          Monthly totals could not be loaded; showing daily.
+                        </p>
+                      ) : null}
+                    </div>
+                    <TabsList aria-label="Chart type">
+                      <TabsTrigger value="area" className="px-3 text-xs">
+                        Area
+                      </TabsTrigger>
+                      <TabsTrigger value="bars" className="px-3 text-xs">
+                        Bars
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  <TabsContent value="area">
+                    <AreaChart
+                      heightClass="h-64 sm:h-72"
+                      ariaLabel={`${chartCopy.title} over ${chartCopy.span}`}
+                      points={series.map((point) => ({
+                        date: point.date,
+                        label: chartKind === "daily" ? undefined : point.label,
+                        valueUsd: point.totalUsd,
+                        details: [
+                          { label: "Video", valueUsd: point.renderUsd },
+                          { label: "Images", valueUsd: point.iterateUsd },
+                        ],
+                      }))}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="bars">
+                    <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
+                        Video
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
+                        Images
+                      </span>
+                    </div>
+                    <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
+                      <span>Spent</span>
+                      <span>
+                        Peak {chartCopy.unit.toLowerCase()} · {formatUsd(maxDailyUsd)}
+                      </span>
+                    </div>
+                    <div
+                      role="img"
+                      aria-label={`${chartCopy.title} over ${chartCopy.span}`}
+                      className="flex h-64 items-end gap-1 rounded-t-lg border-b border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] pt-4 sm:h-72 sm:gap-2"
+                    >
+                      {series.map((point) => {
+                        const totalPct = maxDailyUsd > 0 ? (point.totalUsd / maxDailyUsd) * 100 : 0;
+                        const renderPct =
+                          point.totalUsd > 0 ? (point.renderUsd / point.totalUsd) * 100 : 0;
+                        const iteratePct =
+                          point.totalUsd > 0 ? (point.iterateUsd / point.totalUsd) * 100 : 0;
+                        return (
+                          <div
+                            key={point.date}
+                            title={`${point.label} (${point.date}): ${formatUsd(point.totalUsd)} — Video: ${formatUsd(point.renderUsd)}, Images: ${formatUsd(point.iterateUsd)}`}
+                            className="group flex h-full flex-1 items-end justify-center"
+                          >
+                            {point.totalUsd > 0 ? (
+                              <div
+                                className="flex w-full max-w-8 flex-col overflow-hidden rounded-t-md transition-opacity group-hover:opacity-80"
+                                style={{ height: `${totalPct}%`, minHeight: 2 }}
+                              >
+                                {iteratePct > 0 ? (
+                                  <div
+                                    className="w-full bg-chart-4"
+                                    style={{ height: `${iteratePct}%` }}
+                                  />
+                                ) : null}
+                                {renderPct > 0 ? (
+                                  <div
+                                    className="w-full bg-chart-1"
+                                    style={{ height: `${renderPct}%` }}
+                                  />
+                                ) : null}
+                              </div>
+                            ) : (
+                              <div className="h-0.5 w-full max-w-6 rounded-full bg-muted" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
+                      <span>{series[0]?.label ?? ""}</span>
+                      {series.length > 2 ? (
+                        <span>{series[Math.floor(series.length / 2)]?.label ?? ""}</span>
+                      ) : null}
+                      <span>{series[series.length - 1]?.label ?? ""}</span>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+                <details className="mt-5 border-t border-border/60 pt-4">
+                  <summary className="cursor-pointer rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    View{" "}
+                    {chartKind === "hourly"
+                      ? "hourly"
+                      : chartKind === "monthly"
+                        ? "monthly"
+                        : "daily"}{" "}
+                    totals
+                  </summary>
+                  <div className="mt-4">
+                    <Table>
+                      <caption className="sr-only">{chartCopy.title}</caption>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead scope="col">{chartCopy.unit}</TableHead>
+                          <TableHead scope="col" numeric>
+                            Video
+                          </TableHead>
+                          <TableHead scope="col" numeric>
+                            Images
+                          </TableHead>
+                          <TableHead scope="col" numeric>
+                            Total
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {series.map((point) => (
+                          <TableRow key={point.date}>
+                            <TableHead scope="row">{point.label}</TableHead>
+                            <TableCell numeric>{formatUsd(point.renderUsd)}</TableCell>
+                            <TableCell numeric>{formatUsd(point.iterateUsd)}</TableCell>
+                            <TableCell numeric>{formatUsd(point.totalUsd)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </details>
+              </ViewPanel>
+
+              <NeedsAttention
+                input={{
+                  pendingAccounts: team
+                    ? team.activeAccounts.filter((account) => account.status === "pending").length
+                    : null,
+                  pendingAllowanceRequests,
+                  nearCapAccounts: team?.nearCapIds ? team.nearCapIds.size : null,
+                  failedRunErrors,
+                  kieBalanceUsd: overview.kieBalanceUsd,
+                  bytePlusBalanceUsd: overview.bytePlusBalanceUsd,
+                }}
+              />
+
+              <ViewPanel
+                id="accounts-control-top-accounts-heading"
+                title="Top accounts"
+                meta={`Share of ${formatUsd(teamWindowUsd)} · ${windowDays} days`}
+              >
+                {topAccounts.length === 0 ? (
+                  <EmptyState>No accounts found.</EmptyState>
+                ) : (
+                  <div className="-mx-5 sm:-mx-6">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="pl-5 sm:pl-6">Account</TableHead>
+                          <TableHead className="hidden sm:table-cell">Role</TableHead>
+                          <TableHead numeric className="hidden sm:table-cell">
+                            Runs
+                          </TableHead>
+                          <TableHead numeric>Spend</TableHead>
+                          <TableHead numeric className="pr-5 sm:pr-6">
+                            Share
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {/* ponytail: top 8 here, the full list lives on the Accounts view. */}
+                        {topAccounts.map((account) => {
+                          const sharePct =
+                            teamWindowUsd > 0 ? (account.rangeTotalUsd / teamWindowUsd) * 100 : 0;
+                          return (
+                            <TableRow key={account.id}>
+                              <TableCell className="py-3 pl-5 sm:pl-6">
+                                <Link
+                                  href={buildAccountsControlHref({
+                                    view: "accounts",
+                                    days: windowDays,
+                                    user: account.id,
+                                    tab,
+                                  })}
+                                  className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <AvatarThumb
+                                    username={account.username}
+                                    email={account.email}
+                                    avatarUrl={topAvatarUrls.get(account.id)}
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block truncate text-sm font-medium">
+                                      {account.username}
+                                    </span>
+                                    <span className="block truncate text-[11px] text-muted-foreground">
+                                      {account.email}
+                                    </span>
+                                  </span>
+                                </Link>
+                              </TableCell>
+                              <TableCell className="hidden py-3 sm:table-cell">
+                                <RoleBadge role={account.role} />
+                              </TableCell>
+                              <TableCell numeric className="hidden py-3 sm:table-cell">
+                                {account.rangeRunCount ?? 0}
+                              </TableCell>
+                              <TableCell numeric className="py-3 font-medium">
+                                {formatUsd(account.rangeTotalUsd)}
+                              </TableCell>
+                              <TableCell numeric className="py-3 pr-5 sm:pr-6">
+                                <span className="inline-flex items-center justify-end gap-2">
+                                  <span
+                                    aria-hidden="true"
+                                    className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted md:block"
+                                  >
+                                    <span
+                                      className="block h-full rounded-full bg-primary"
+                                      style={{ width: `${Math.min(100, sharePct)}%` }}
+                                    />
+                                  </span>
+                                  {sharePct.toFixed(sharePct < 10 ? 1 : 0)}%
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </ViewPanel>
+
+              <ViewPanel
+                id="accounts-control-models-heading"
+                title="Models used"
+                meta={`${overview.modelUsage.reduce((sum, m) => sum + m.runs, 0)} billed runs in ${windowDays} days`}
+              >
+                {overview.modelUsage.length === 0 ? (
+                  <EmptyState>No billed runs in this window.</EmptyState>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    {/* The 4 most-used models against the whole window's total; the
+                    ring's unfilled part is every other model. All of them are
+                    one click away in the dialog. */}
+                    <DonutChart
+                      ariaLabel={
+                        modelSlices.length > MODELS_SHOWN
+                          ? `Models used, top ${MODELS_SHOWN} of ${modelSlices.length}`
+                          : "Models used"
+                      }
+                      slices={modelSlices.slice(0, MODELS_SHOWN)}
+                      totalUsd={modelTotalUsd}
+                      centreSub={`${modelRunCount} runs`}
+                    />
+                    {modelSlices.length > MODELS_SHOWN ? (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="self-start">
+                            <Maximize2 aria-hidden="true" className="size-4" />
+                            View all {modelSlices.length} models
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Models used</DialogTitle>
+                            <DialogDescription>
+                              {modelRunCount} billed runs in the last {windowDays} days, by spend
+                              share.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DonutChart
+                            ariaLabel="Models used, all models"
+                            slices={modelSlices}
+                            centreSub={`${modelRunCount} runs`}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    ) : null}
+                  </div>
+                )}
+              </ViewPanel>
+
+              {claudeSpend?.status === "ok" ? (
+                <p className="text-xs tabular-nums text-muted-foreground xl:col-span-2">
+                  Claude API this month: {formatUsd(claudeSpend.usd)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {view === "accounts" ? (
+            <ViewPanel
+              id="accounts-control-accounts-heading"
+              title="Accounts"
+              meta={`${rankedAccounts.length} account${rankedAccounts.length === 1 ? "" : "s"}`}
+            >
+              <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
+                {/* ONE account picker: the per-account ranking is also the selector,
+                so there is no second strip of the same names to keep in sync. */}
+                <aside className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 lg:sticky lg:top-6">
+                  <div className="flex items-center justify-between px-1 py-1 text-xs text-muted-foreground">
+                    <span className="font-medium">Team directory</span>
+                    <span>Spend · {windowDays} days</span>
+                  </div>
+                  {rankedAccounts.length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-muted-foreground">No accounts found.</p>
+                  ) : (
+                    <nav
+                      aria-label="Select account"
+                      className="flex max-h-[22rem] flex-col gap-2 overflow-y-auto lg:max-h-[36rem]"
+                    >
+                      {rankedAccounts.map((account) => {
+                        const active = selectedAccount?.id === account.id;
+                        const barPct =
+                          maxAccountRangeUsd > 0
+                            ? (account.rangeTotalUsd / maxAccountRangeUsd) * 100
+                            : 0;
+                        const renderSharePct =
+                          account.rangeTotalUsd > 0
+                            ? (account.rangeRenderUsd / account.rangeTotalUsd) * 100
+                            : 0;
+                        return (
+                          <PendingLink
+                            key={account.id}
+                            region="account"
+                            href={buildAccountsControlHref({
+                              view,
+                              days: windowDays,
+                              user: account.id,
+                              tab,
+                            })}
+                            aria-current={active ? "true" : undefined}
+                            scroll={false}
+                            className={cn(
+                              "flex flex-col gap-3 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              active
+                                ? "border-primary/40 bg-card shadow-sm"
+                                : "border-transparent hover:border-border hover:bg-card/60",
+                            )}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="flex min-w-0 items-center gap-2.5">
+                                <span
+                                  aria-hidden="true"
+                                  className={cn(
+                                    "grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold uppercase",
+                                    active
+                                      ? "bg-primary/10 text-primary"
+                                      : "bg-muted text-muted-foreground",
+                                  )}
+                                >
+                                  {account.username.slice(0, 2)}
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                                    <PresenceDot lastSeenAt={account.lastSeenAt} />
+                                    <span className="truncate">{account.username}</span>
+                                  </span>
+                                  <span className="block truncate text-[11px] text-muted-foreground">
+                                    {account.email}
+                                  </span>
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                                {formatUsd(account.rangeTotalUsd)}
+                              </span>
+                            </span>
+                            <span className="h-1 w-full overflow-hidden rounded-full bg-border/60">
+                              {account.rangeTotalUsd > 0 ? (
+                                <span
+                                  className="flex h-full overflow-hidden rounded-full bg-primary/35"
+                                  style={{ width: `${Math.max(barPct, 4)}%` }}
+                                >
+                                  <span
+                                    className="h-full bg-primary"
+                                    style={{ width: `${renderSharePct}%` }}
+                                  />
+                                </span>
+                              ) : null}
+                            </span>
+                          </PendingLink>
+                        );
+                      })}
+                    </nav>
+                  )}
+                  <Link
+                    href="/users"
+                    className="rounded-lg border-t border-border/60 px-3 py-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Approvals &amp; allowances →
+                  </Link>
+                </aside>
+
+                <section
+                  aria-labelledby="accounts-control-inspector-heading"
+                  className="flex min-w-0 flex-col gap-6"
+                >
+                  <PendingRegion region="account" fallback={<InspectorSkeleton />}>
+                    {selectedAccount ? (
+                      <>
+                        <div className="flex flex-wrap items-end justify-between gap-4">
+                          <div className="flex min-w-0 flex-col gap-1.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3
+                                id="accounts-control-inspector-heading"
+                                className="truncate text-2xl font-medium"
+                              >
+                                {selectedAccount.username}
+                              </h3>
+                              <RoleBadge role={selectedAccount.role} />
+                              <AccountStatusBadge
+                                role={selectedAccount.role}
+                                status={selectedAccount.status}
+                              />
+                              <PresenceDot
+                                lastSeenAt={selectedAccount.lastSeenAt}
+                                className="size-2.5"
+                              />
+                            </div>
+                            <p className="break-all text-xs text-muted-foreground">
+                              {selectedAccount.email}
+                            </p>
+                            <RoleSelect
+                              key={selectedAccount.id}
+                              userId={selectedAccount.id}
+                              role={selectedAccount.role}
+                            />
+                          </div>
+
+                          <nav aria-label="Creation categories" className={SEGMENTED}>
+                            {TABS.map((entry) => {
+                              const active = tab === entry.id;
+                              return (
+                                <Link
+                                  key={entry.id}
+                                  href={buildAccountsControlHref({
+                                    view,
+                                    days: windowDays,
+                                    user: selectedAccount.id,
+                                    tab: entry.id,
+                                  })}
+                                  aria-current={active ? "page" : undefined}
+                                  // Same page, new query: keep the reader where they are.
+                                  scroll={false}
+                                  className={cn(SEGMENT, "px-4", active ? SEGMENT_ON : SEGMENT_OFF)}
+                                >
+                                  {entry.label}
+                                </Link>
+                              );
+                            })}
+                          </nav>
+                        </div>
+
+                        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 xl:grid-cols-4">
+                          {[
+                            {
+                              label: `${windowDays}-day spend`,
+                              usd: selectedAccount.rangeTotalUsd,
+                            },
+                            { label: "Video", usd: selectedAccount.rangeRenderUsd },
+                            { label: "Images", usd: selectedAccount.rangeIterateUsd },
+                            { label: "All-time spend", usd: allTimeSpendUsd },
+                          ].map((stat) => (
+                            <div key={stat.label} className="min-w-0 bg-card p-4">
+                              <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
+                              <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
+                                {stat.usd === null ? "—" : formatUsd(stat.usd)}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                        {inspectorContent}
+                      </>
+                    ) : (
+                      <>
+                        <h3 id="accounts-control-inspector-heading" className="sr-only">
+                          Account creations
+                        </h3>
+                        <EmptyState>No accounts available to inspect.</EmptyState>
+                      </>
+                    )}
+                  </PendingRegion>
+                </section>
+              </div>
+            </ViewPanel>
+          ) : null}
+
+          {/* Every vendor call in the window, every account. */}
+          {runLog ? (
+            <ViewPanel
+              id="accounts-control-runs-heading"
+              title="All runs"
+              meta={`${runLog.total} in the last ${windowDays} days`}
+            >
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <nav aria-label="Chart period" className={SEGMENTED}>
-                    {(["hourly", "daily", "monthly"] as const).map((option) => (
-                      <Link
-                        key={option}
+                  <RunsUserFilter
+                    value={runUser ?? "all"}
+                    options={[
+                      {
+                        value: "all",
+                        label: "All accounts",
+                        href: buildAccountsControlHref({
+                          view,
+                          days: windowDays,
+                          user,
+                          tab,
+                          failed: failedOnly,
+                        }),
+                      },
+                      ...[...overview.accounts]
+                        .sort((a, b) => a.email.localeCompare(b.email))
+                        .map((account) => ({
+                          value: account.id,
+                          label: account.email,
+                          href: buildAccountsControlHref({
+                            view,
+                            days: windowDays,
+                            user,
+                            tab,
+                            runUser: account.id,
+                            failed: failedOnly,
+                          }),
+                        })),
+                    ]}
+                  />
+                  <nav aria-label="Run outcome" className={SEGMENTED}>
+                    {[
+                      { failed: false, label: "All runs" },
+                      { failed: true, label: "Failed" },
+                    ].map((entry) => (
+                      <PendingLink
+                        key={entry.label}
+                        region="runs"
                         href={buildAccountsControlHref({
                           view,
                           days: windowDays,
                           user,
                           tab,
-                          chart: option,
+                          runUser,
+                          failed: entry.failed,
                         })}
-                        aria-current={chartKind === option ? "page" : undefined}
+                        aria-current={failedOnly === entry.failed ? "page" : undefined}
                         scroll={false}
                         className={cn(
                           SEGMENT,
-                          "text-xs",
-                          chartKind === option ? SEGMENT_ON : SEGMENT_OFF,
+                          failedOnly === entry.failed ? SEGMENT_ON : SEGMENT_OFF,
                         )}
                       >
-                        {option === "hourly" ? "Hourly" : option === "daily" ? "Daily" : "Monthly"}
-                      </Link>
+                        {entry.label}
+                      </PendingLink>
                     ))}
                   </nav>
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    Video{" "}
-                    {formatUsd(
-                      chartKind === "daily"
-                        ? overview.rangeCategoryTotals.renderUsd
-                        : seriesTotals.renderUsd,
-                    )}{" "}
-                    · Images{" "}
-                    {formatUsd(
-                      chartKind === "daily"
-                        ? overview.rangeCategoryTotals.iterateUsd
-                        : seriesTotals.iterateUsd,
-                    )}
-                  </p>
-                  {monthlyFailed ? (
-                    <p role="status" className="text-xs text-destructive">
-                      Monthly totals could not be loaded; showing daily.
+                </div>
+                <a
+                  href={`/api/accounts-control/runs-csv?days=${windowDays}`}
+                  download={`runs-last-${windowDays}-days.csv`}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <DownloadIcon aria-hidden="true" className="size-3.5" />
+                  Export {windowDays}-day runs CSV
+                </a>
+              </div>
+              <PendingRegion region="runs" fallback={<RowsSkeleton rows={8} />}>
+                {runLog.rows.length === 0 ? (
+                  <EmptyState>
+                    {runUser || failedOnly
+                      ? "No runs match these filters in this window."
+                      : "No runs in this window."}
+                  </EmptyState>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Every recorded attempt across the team, including failures. Costs are in USD.
+                      CSV preview links expire after one hour.
                     </p>
-                  ) : null}
-                </div>
-                <TabsList aria-label="Chart type">
-                  <TabsTrigger value="area" className="px-3 text-xs">
-                    Area
-                  </TabsTrigger>
-                  <TabsTrigger value="bars" className="px-3 text-xs">
-                    Bars
-                  </TabsTrigger>
-                </TabsList>
-              </div>
-
-              <TabsContent value="area">
-                <AreaChart
-                  heightClass="h-64 sm:h-72"
-                  ariaLabel={`${chartCopy.title} over ${chartCopy.span}`}
-                  points={series.map((point) => ({
-                    date: point.date,
-                    label: chartKind === "daily" ? undefined : point.label,
-                    valueUsd: point.totalUsd,
-                    details: [
-                      { label: "Video", valueUsd: point.renderUsd },
-                      { label: "Images", valueUsd: point.iterateUsd },
-                    ],
-                  }))}
-                />
-              </TabsContent>
-
-              <TabsContent value="bars">
-                <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-1" />
-                    Video
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-chart-4" />
-                    Images
-                  </span>
-                </div>
-                <div className="mb-3 flex items-center justify-between gap-3 text-[11px] tabular-nums text-muted-foreground">
-                  <span>Spent</span>
-                  <span>
-                    Peak {chartCopy.unit.toLowerCase()} · {formatUsd(maxDailyUsd)}
-                  </span>
-                </div>
-                <div
-                  role="img"
-                  aria-label={`${chartCopy.title} over ${chartCopy.span}`}
-                  className="flex h-64 items-end gap-1 rounded-t-lg border-b border-border bg-[linear-gradient(to_top,var(--border)_1px,transparent_1px)] bg-[size:100%_25%] pt-4 sm:h-72 sm:gap-2"
-                >
-                  {series.map((point) => {
-                    const totalPct = maxDailyUsd > 0 ? (point.totalUsd / maxDailyUsd) * 100 : 0;
-                    const renderPct =
-                      point.totalUsd > 0 ? (point.renderUsd / point.totalUsd) * 100 : 0;
-                    const iteratePct =
-                      point.totalUsd > 0 ? (point.iterateUsd / point.totalUsd) * 100 : 0;
-                    return (
-                      <div
-                        key={point.date}
-                        title={`${point.label} (${point.date}): ${formatUsd(point.totalUsd)} — Video: ${formatUsd(point.renderUsd)}, Images: ${formatUsd(point.iterateUsd)}`}
-                        className="group flex h-full flex-1 items-end justify-center"
-                      >
-                        {point.totalUsd > 0 ? (
-                          <div
-                            className="flex w-full max-w-8 flex-col overflow-hidden rounded-t-md transition-opacity group-hover:opacity-80"
-                            style={{ height: `${totalPct}%`, minHeight: 2 }}
-                          >
-                            {iteratePct > 0 ? (
-                              <div
-                                className="w-full bg-chart-4"
-                                style={{ height: `${iteratePct}%` }}
-                              />
-                            ) : null}
-                            {renderPct > 0 ? (
-                              <div
-                                className="w-full bg-chart-1"
-                                style={{ height: `${renderPct}%` }}
-                              />
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div className="h-0.5 w-full max-w-6 rounded-full bg-muted" />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[11px] tabular-nums text-muted-foreground">
-                  <span>{series[0]?.label ?? ""}</span>
-                  {series.length > 2 ? (
-                    <span>{series[Math.floor(series.length / 2)]?.label ?? ""}</span>
-                  ) : null}
-                  <span>{series[series.length - 1]?.label ?? ""}</span>
-                </div>
-              </TabsContent>
-            </Tabs>
-            <details className="mt-5 border-t border-border/60 pt-4">
-              <summary className="cursor-pointer rounded-md text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                View{" "}
-                {chartKind === "hourly" ? "hourly" : chartKind === "monthly" ? "monthly" : "daily"}{" "}
-                totals
-              </summary>
-              <div className="mt-4">
-                <Table>
-                  <caption className="sr-only">{chartCopy.title}</caption>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead scope="col">{chartCopy.unit}</TableHead>
-                      <TableHead scope="col" numeric>
-                        Video
-                      </TableHead>
-                      <TableHead scope="col" numeric>
-                        Images
-                      </TableHead>
-                      <TableHead scope="col" numeric>
-                        Total
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {series.map((point) => (
-                      <TableRow key={point.date}>
-                        <TableHead scope="row">{point.label}</TableHead>
-                        <TableCell numeric>{formatUsd(point.renderUsd)}</TableCell>
-                        <TableCell numeric>{formatUsd(point.iterateUsd)}</TableCell>
-                        <TableCell numeric>{formatUsd(point.totalUsd)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </details>
-          </ViewPanel>
-
-          <NeedsAttention
-            input={{
-              pendingAccounts: team
-                ? team.activeAccounts.filter((account) => account.status === "pending").length
-                : null,
-              pendingAllowanceRequests,
-              nearCapAccounts: team?.nearCapIds ? team.nearCapIds.size : null,
-              failedRunErrors,
-              kieBalanceUsd: overview.kieBalanceUsd,
-              bytePlusBalanceUsd: overview.bytePlusBalanceUsd,
-            }}
-          />
-
-          <ViewPanel
-            id="accounts-control-top-accounts-heading"
-            title="Top accounts"
-            meta={`Share of ${formatUsd(teamWindowUsd)} · ${windowDays} days`}
-          >
-            {topAccounts.length === 0 ? (
-              <EmptyState>No accounts found.</EmptyState>
-            ) : (
-              <div className="-mx-5 sm:-mx-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="pl-5 sm:pl-6">Account</TableHead>
-                      <TableHead className="hidden sm:table-cell">Role</TableHead>
-                      <TableHead numeric className="hidden sm:table-cell">
-                        Runs
-                      </TableHead>
-                      <TableHead numeric>Spend</TableHead>
-                      <TableHead numeric className="pr-5 sm:pr-6">
-                        Share
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {/* ponytail: top 8 here, the full list lives on the Accounts view. */}
-                    {topAccounts.map((account) => {
-                      const sharePct =
-                        teamWindowUsd > 0 ? (account.rangeTotalUsd / teamWindowUsd) * 100 : 0;
-                      return (
-                        <TableRow key={account.id}>
-                          <TableCell className="py-3 pl-5 sm:pl-6">
-                            <Link
-                              href={buildAccountsControlHref({
-                                view: "accounts",
-                                days: windowDays,
-                                user: account.id,
-                                tab,
-                              })}
-                              className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              <AvatarThumb
-                                username={account.username}
-                                email={account.email}
-                                avatarUrl={topAvatarUrls.get(account.id)}
-                              />
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-medium">
-                                  {account.username}
+                    <div className="overflow-hidden rounded-xl border border-border">
+                      <Table className="min-w-[840px]">
+                        <TableHeader className="bg-muted/50">
+                          <TableRow>
+                            <TableHead>Preview</TableHead>
+                            <TableHead>User email</TableHead>
+                            <TableHead>Provider</TableHead>
+                            <TableHead className="whitespace-nowrap">Model</TableHead>
+                            <TableHead numeric>Cost</TableHead>
+                            <TableHead>Details</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {runLog.rows.map((run) => (
+                            <TableRow key={run.id} className="align-top">
+                              <TableCell className="py-4">
+                                <div className="h-24 w-14 overflow-hidden rounded-md bg-muted">
+                                  <BinThumbnail
+                                    thumbnail={run.thumbnail}
+                                    itemLabel={`Output of ${run.model}`}
+                                    badge="—"
+                                  />
+                                </div>
+                              </TableCell>
+                              <TableCell className="min-w-36 break-words py-4 font-medium">
+                                {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-4 text-xs">
+                                {run.provider}
+                              </TableCell>
+                              <TableCell className="max-w-64 break-words py-4 text-xs">
+                                <span className="inline-block rounded-md bg-muted px-2 py-1">
+                                  {run.model}
                                 </span>
-                                <span className="block truncate text-[11px] text-muted-foreground">
-                                  {account.email}
-                                </span>
-                              </span>
-                            </Link>
-                          </TableCell>
-                          <TableCell className="hidden py-3 sm:table-cell">
-                            <RoleBadge role={account.role} />
-                          </TableCell>
-                          <TableCell numeric className="hidden py-3 sm:table-cell">
-                            {account.rangeRunCount ?? 0}
-                          </TableCell>
-                          <TableCell numeric className="py-3 font-medium">
-                            {formatUsd(account.rangeTotalUsd)}
-                          </TableCell>
-                          <TableCell numeric className="py-3 pr-5 sm:pr-6">
-                            <span className="inline-flex items-center justify-end gap-2">
-                              <span
-                                aria-hidden="true"
-                                className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-muted md:block"
-                              >
-                                <span
-                                  className="block h-full rounded-full bg-primary"
-                                  style={{ width: `${Math.min(100, sharePct)}%` }}
-                                />
-                              </span>
-                              {sharePct.toFixed(sharePct < 10 ? 1 : 0)}%
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </ViewPanel>
-
-          <ViewPanel
-            id="accounts-control-models-heading"
-            title="Models used"
-            meta={`${overview.modelUsage.reduce((sum, m) => sum + m.runs, 0)} billed runs in ${windowDays} days`}
-          >
-            {overview.modelUsage.length === 0 ? (
-              <EmptyState>No billed runs in this window.</EmptyState>
-            ) : (
-              <div className="flex flex-col gap-5">
-                {/* The 4 most-used models against the whole window's total; the
-                    ring's unfilled part is every other model. All of them are
-                    one click away in the dialog. */}
-                <DonutChart
-                  ariaLabel={
-                    modelSlices.length > MODELS_SHOWN
-                      ? `Models used, top ${MODELS_SHOWN} of ${modelSlices.length}`
-                      : "Models used"
-                  }
-                  slices={modelSlices.slice(0, MODELS_SHOWN)}
-                  totalUsd={modelTotalUsd}
-                  centreSub={`${modelRunCount} runs`}
-                />
-                {modelSlices.length > MODELS_SHOWN ? (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="self-start">
-                        <Maximize2 aria-hidden="true" className="size-4" />
-                        View all {modelSlices.length} models
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
-                      <DialogHeader>
-                        <DialogTitle>Models used</DialogTitle>
-                        <DialogDescription>
-                          {modelRunCount} billed runs in the last {windowDays} days, by spend share.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DonutChart
-                        ariaLabel="Models used, all models"
-                        slices={modelSlices}
-                        centreSub={`${modelRunCount} runs`}
-                      />
-                    </DialogContent>
-                  </Dialog>
-                ) : null}
-              </div>
-            )}
-          </ViewPanel>
-
-          {claudeSpend?.status === "ok" ? (
-            <p className="text-xs tabular-nums text-muted-foreground xl:col-span-2">
-              Claude API this month: {formatUsd(claudeSpend.usd)}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {view === "accounts" ? (
-        <ViewPanel
-          id="accounts-control-accounts-heading"
-          title="Accounts"
-          meta={`${rankedAccounts.length} account${rankedAccounts.length === 1 ? "" : "s"}`}
-        >
-          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
-            {/* ONE account picker: the per-account ranking is also the selector,
-                so there is no second strip of the same names to keep in sync. */}
-            <aside className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-3 lg:sticky lg:top-6">
-              <div className="flex items-center justify-between px-1 py-1 text-xs text-muted-foreground">
-                <span className="font-medium">Team directory</span>
-                <span>Spend · {windowDays} days</span>
-              </div>
-              {rankedAccounts.length === 0 ? (
-                <p className="px-3 py-6 text-sm text-muted-foreground">No accounts found.</p>
-              ) : (
-                <nav
-                  aria-label="Select account"
-                  className="flex max-h-[22rem] flex-col gap-2 overflow-y-auto lg:max-h-[36rem]"
-                >
-                  {rankedAccounts.map((account) => {
-                    const active = selectedAccount?.id === account.id;
-                    const barPct =
-                      maxAccountRangeUsd > 0
-                        ? (account.rangeTotalUsd / maxAccountRangeUsd) * 100
-                        : 0;
-                    const renderSharePct =
-                      account.rangeTotalUsd > 0
-                        ? (account.rangeRenderUsd / account.rangeTotalUsd) * 100
-                        : 0;
-                    return (
-                      <PendingLink
-                        key={account.id}
-                        region="account"
-                        href={buildAccountsControlHref({
-                          view,
-                          days: windowDays,
-                          user: account.id,
-                          tab,
-                        })}
-                        aria-current={active ? "true" : undefined}
-                        scroll={false}
-                        className={cn(
-                          "flex flex-col gap-3 rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                          active
-                            ? "border-primary/40 bg-card shadow-sm"
-                            : "border-transparent hover:border-border hover:bg-card/60",
-                        )}
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-2.5">
-                            <span
-                              aria-hidden="true"
-                              className={cn(
-                                "grid size-8 shrink-0 place-items-center rounded-lg text-xs font-semibold uppercase",
-                                active
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {account.username.slice(0, 2)}
-                            </span>
-                            <span className="min-w-0">
-                              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                                <PresenceDot lastSeenAt={account.lastSeenAt} />
-                                <span className="truncate">{account.username}</span>
-                              </span>
-                              <span className="block truncate text-[11px] text-muted-foreground">
-                                {account.email}
-                              </span>
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                            {formatUsd(account.rangeTotalUsd)}
-                          </span>
-                        </span>
-                        <span className="h-1 w-full overflow-hidden rounded-full bg-border/60">
-                          {account.rangeTotalUsd > 0 ? (
-                            <span
-                              className="flex h-full overflow-hidden rounded-full bg-primary/35"
-                              style={{ width: `${Math.max(barPct, 4)}%` }}
-                            >
-                              <span
-                                className="h-full bg-primary"
-                                style={{ width: `${renderSharePct}%` }}
-                              />
-                            </span>
-                          ) : null}
-                        </span>
-                      </PendingLink>
-                    );
-                  })}
-                </nav>
-              )}
-              <Link
-                href="/users"
-                className="rounded-lg border-t border-border/60 px-3 py-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Approvals &amp; allowances →
-              </Link>
-            </aside>
-
-            <section
-              aria-labelledby="accounts-control-inspector-heading"
-              className="flex min-w-0 flex-col gap-6"
-            >
-              <PendingRegion region="account" fallback={<InspectorSkeleton />}>
-              {selectedAccount ? (
-                <>
-                  <div className="flex flex-wrap items-end justify-between gap-4">
-                    <div className="flex min-w-0 flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3
-                          id="accounts-control-inspector-heading"
-                          className="truncate text-2xl font-medium"
-                        >
-                          {selectedAccount.username}
-                        </h3>
-                        <RoleBadge role={selectedAccount.role} />
-                        <AccountStatusBadge
-                          role={selectedAccount.role}
-                          status={selectedAccount.status}
-                        />
-                        <PresenceDot lastSeenAt={selectedAccount.lastSeenAt} className="size-2.5" />
-                      </div>
-                      <p className="break-all text-xs text-muted-foreground">
-                        {selectedAccount.email}
-                      </p>
-                      <RoleSelect
-                        key={selectedAccount.id}
-                        userId={selectedAccount.id}
-                        role={selectedAccount.role}
-                      />
+                              </TableCell>
+                              <TableCell numeric className="py-4">
+                                {run.costUsd !== null ? (
+                                  <span className="block font-medium">
+                                    {formatUsd(run.costUsd)}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Not billed</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="max-w-sm break-words py-4 text-xs leading-relaxed text-destructive">
+                                {run.error ?? "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
-
-                    <nav aria-label="Creation categories" className={SEGMENTED}>
-                      {TABS.map((entry) => {
-                        const active = tab === entry.id;
-                        return (
-                          <Link
-                            key={entry.id}
-                            href={buildAccountsControlHref({
-                              view,
-                              days: windowDays,
-                              user: selectedAccount.id,
-                              tab: entry.id,
-                            })}
-                            aria-current={active ? "page" : undefined}
-                            // Same page, new query: keep the reader where they are.
-                            scroll={false}
-                            className={cn(SEGMENT, "px-4", active ? SEGMENT_ON : SEGMENT_OFF)}
-                          >
-                            {entry.label}
-                          </Link>
-                        );
-                      })}
-                    </nav>
+                    <PaginationControls
+                      page={requestedPage}
+                      totalPages={totalPages}
+                      previousHref={requestedPage > 1 ? hrefFor(requestedPage - 1) : null}
+                      nextHref={requestedPage < totalPages ? hrefFor(requestedPage + 1) : null}
+                    />
                   </div>
-
-                  <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border/70 bg-border/70 xl:grid-cols-4">
-                    {[
-                      { label: `${windowDays}-day spend`, usd: selectedAccount.rangeTotalUsd },
-                      { label: "Video", usd: selectedAccount.rangeRenderUsd },
-                      { label: "Images", usd: selectedAccount.rangeIterateUsd },
-                      { label: "All-time spend", usd: allTimeSpendUsd },
-                    ].map((stat) => (
-                      <div key={stat.label} className="min-w-0 bg-card p-4">
-                        <dt className="text-[11px] text-muted-foreground">{stat.label}</dt>
-                        <dd className="mt-2 text-lg font-semibold tracking-tight tabular-nums">
-                          {stat.usd === null ? "—" : formatUsd(stat.usd)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {inspectorContent}
-                </>
-              ) : (
-                <>
-                  <h3 id="accounts-control-inspector-heading" className="sr-only">
-                    Account creations
-                  </h3>
-                  <EmptyState>No accounts available to inspect.</EmptyState>
-                </>
-              )}
+                )}
               </PendingRegion>
-            </section>
-          </div>
-        </ViewPanel>
-      ) : null}
-
-      {/* Every vendor call in the window, every account. */}
-      {runLog ? (
-        <ViewPanel
-          id="accounts-control-runs-heading"
-          title="All runs"
-          meta={`${runLog.total} in the last ${windowDays} days`}
-        >
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <RunsUserFilter
-                value={runUser ?? "all"}
-                options={[
-                  {
-                    value: "all",
-                    label: "All accounts",
-                    href: buildAccountsControlHref({
-                      view,
-                      days: windowDays,
-                      user,
-                      tab,
-                      failed: failedOnly,
-                    }),
-                  },
-                  ...[...overview.accounts]
-                    .sort((a, b) => a.email.localeCompare(b.email))
-                    .map((account) => ({
-                      value: account.id,
-                      label: account.email,
-                      href: buildAccountsControlHref({
-                        view,
-                        days: windowDays,
-                        user,
-                        tab,
-                        runUser: account.id,
-                        failed: failedOnly,
-                      }),
-                    })),
-                ]}
-              />
-              <nav aria-label="Run outcome" className={SEGMENTED}>
-                {[
-                  { failed: false, label: "All runs" },
-                  { failed: true, label: "Failed" },
-                ].map((entry) => (
-                  <PendingLink
-                    key={entry.label}
-                    region="runs"
-                    href={buildAccountsControlHref({
-                      view,
-                      days: windowDays,
-                      user,
-                      tab,
-                      runUser,
-                      failed: entry.failed,
-                    })}
-                    aria-current={failedOnly === entry.failed ? "page" : undefined}
-                    scroll={false}
-                    className={cn(SEGMENT, failedOnly === entry.failed ? SEGMENT_ON : SEGMENT_OFF)}
-                  >
-                    {entry.label}
-                  </PendingLink>
-                ))}
-              </nav>
-            </div>
-            <a
-              href={`/api/accounts-control/runs-csv?days=${windowDays}`}
-              download={`runs-last-${windowDays}-days.csv`}
-              className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <DownloadIcon aria-hidden="true" className="size-3.5" />
-              Export {windowDays}-day runs CSV
-            </a>
-          </div>
-          <PendingRegion region="runs" fallback={<RowsSkeleton rows={8} />}>
-          {runLog.rows.length === 0 ? (
-            <EmptyState>
-              {runUser || failedOnly
-                ? "No runs match these filters in this window."
-                : "No runs in this window."}
-            </EmptyState>
-          ) : (
-            <div className="flex flex-col gap-5">
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Every recorded attempt across the team, including failures. Costs are in USD. CSV
-                preview links expire after one hour.
-              </p>
-              <div className="overflow-hidden rounded-xl border border-border">
-                <Table className="min-w-[840px]">
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead>Preview</TableHead>
-                      <TableHead>User email</TableHead>
-                      <TableHead>Provider</TableHead>
-                      <TableHead className="whitespace-nowrap">Model</TableHead>
-                      <TableHead numeric>Cost</TableHead>
-                      <TableHead>Details</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {runLog.rows.map((run) => (
-                      <TableRow key={run.id} className="align-top">
-                        <TableCell className="py-4">
-                          <div className="h-24 w-14 overflow-hidden rounded-md bg-muted">
-                            <BinThumbnail
-                              thumbnail={run.thumbnail}
-                              itemLabel={`Output of ${run.model}`}
-                              badge="—"
-                            />
-                          </div>
-                        </TableCell>
-                        <TableCell className="min-w-36 break-words py-4 font-medium">
-                          {run.userId ? (runEmailByUserId.get(run.userId) ?? "—") : "—"}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap py-4 text-xs">
-                          {run.provider}
-                        </TableCell>
-                        <TableCell className="max-w-64 break-words py-4 text-xs">
-                          <span className="inline-block rounded-md bg-muted px-2 py-1">
-                            {run.model}
-                          </span>
-                        </TableCell>
-                        <TableCell numeric className="py-4">
-                          {run.costUsd !== null ? (
-                            <span className="block font-medium">{formatUsd(run.costUsd)}</span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Not billed</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-sm break-words py-4 text-xs leading-relaxed text-destructive">
-                          {run.error ?? "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <PaginationControls
-                page={requestedPage}
-                totalPages={totalPages}
-                previousHref={requestedPage > 1 ? hrefFor(requestedPage - 1) : null}
-                nextHref={requestedPage < totalPages ? hrefFor(requestedPage + 1) : null}
-              />
-            </div>
-          )}
-          </PendingRegion>
-        </ViewPanel>
-      ) : null}
-      </PendingRegion>
+            </ViewPanel>
+          ) : null}
+        </PendingRegion>
       </PendingNavProvider>
     </main>
   );
