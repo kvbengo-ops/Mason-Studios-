@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeRunway,
   formatRunwayDays,
+  isBelowBannerThreshold,
   isRunwayShort,
   RUNWAY_WARNING_THRESHOLD_DAYS,
   RUNWAY_WINDOW_DAYS,
@@ -97,5 +98,21 @@ describe("formatRunwayDays", () => {
       const formatted = formatRunwayDays({ status: "ok", days });
       expect(formatted).not.toMatch(/nan|infinity/i);
     }
+  });
+});
+
+describe("isBelowBannerThreshold", () => {
+  it("falls back to the automatic rule when no threshold is set", () => {
+    expect(isBelowBannerThreshold(5, null, true)).toBe(true);
+    expect(isBelowBannerThreshold(5, null, false)).toBe(false);
+  });
+
+  it("replaces the automatic rule when a threshold is set", () => {
+    expect(isBelowBannerThreshold(499.99, 500, false)).toBe(true);
+    expect(isBelowBannerThreshold(500, 500, true)).toBe(false);
+  });
+
+  it("never warns on an unknown balance once a threshold is set", () => {
+    expect(isBelowBannerThreshold(null, 500, true)).toBe(false);
   });
 });

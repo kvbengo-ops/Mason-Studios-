@@ -588,6 +588,8 @@ function firstLine(text: string | null | undefined): string {
 export interface AccountsRunLogRow {
   id: string;
   userId: string | null;
+  /** runs.created_at: when the attempt was made. */
+  createdAt: string;
   model: string;
   /** runs.vendor as a person reads it: "kie", "BytePlus". */
   provider: string;
@@ -647,6 +649,8 @@ export async function loadAccountAllTimeSpendUsd(
   }
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * One page of every run in the same `windowDays` window as the overview — the
  * log that used to live on /spend behind its own date picker. `projects` is
@@ -654,23 +658,39 @@ export async function loadAccountAllTimeSpendUsd(
  * resolves its owner. Each row carries its provider and a preview of what it
  * made; a preview that cannot be found or signed is a placeholder, never an
  * error, because the run log matters more than its pictures.
+ *
+ * `filters.userId` keeps one account's runs, owned the way the rest of the
+ * schema resolves it: coalesce(runs.user_id, projects.user_id). `failedOnly`
+ * keeps attempts that recorded an error, billed or not.
  */
 export async function loadAccountsRunLog(
   windowDays: AccountsControlWindowDays,
   range: { from: number; to: number },
   now: Date = new Date(),
+  filters: { userId?: string | null; failedOnly?: boolean } = {},
 ): Promise<{ rows: AccountsRunLogRow[]; total: number }> {
   const supabase = await createClient();
   const tomorrowStart = new Date(endOfManilaDayIso(now));
   const windowStart = new Date(manilaWindowStartIso(now, windowDays));
-  const { data, error, count } = await supabase
+  let query = supabase
     .from("runs")
     .select(
       "id, model, vendor, cost_usd, error, created_at, scene_id, asset_id, user_id, projects ( user_id )",
       { count: "exact" },
     )
     .gte("created_at", windowStart.toISOString())
-    .lt("created_at", tomorrowStart.toISOString())
+    .lt("created_at", tomorrowStart.toISOString());
+  // Interpolated into a PostgREST filter string, so only ever a bare uuid; a
+  // hand-edited ?runUser= that is not one is ignored rather than trusted.
+  if (filters.userId && UUID_PATTERN.test(filters.userId)) {
+    // The embed filter nulls `projects` unless this account owns the project;
+    // the run is theirs if it is billed to them or that embed survived.
+    query = query
+      .eq("projects.user_id", filters.userId)
+      .or(`user_id.eq.${filters.userId},projects.not.is.null`);
+  }
+  if (filters.failedOnly) query = query.not("error", "is", null);
+  const { data, error, count } = await query
     .order("created_at", { ascending: false })
     .range(range.from, range.to);
   if (error) throw new Error(`Failed to load runs: ${error.message}`);
@@ -741,6 +761,7 @@ export async function loadAccountsRunLog(
     rows: rows.map((run, i) => ({
       id: run.id,
       userId: run.user_id ?? run.projects?.user_id ?? null,
+      createdAt: run.created_at,
       model: run.model,
       provider: providerLabel(run.vendor),
       costUsd: run.cost_usd,

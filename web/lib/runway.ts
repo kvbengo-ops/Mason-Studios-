@@ -103,6 +103,20 @@ export function isRunwayShort(
 }
 
 /**
+ * Whether Accounts Control's low-funds banner shows for a vendor. A manual
+ * threshold (balance_alert_settings.*_banner_threshold_usd, 0145) replaces the
+ * automatic rule; null falls back to it. An unknown balance is never "below".
+ */
+export function isBelowBannerThreshold(
+  balanceUsd: number | null,
+  thresholdUsd: number | null,
+  automatic: boolean,
+): boolean {
+  if (thresholdUsd === null) return automatic;
+  return balanceUsd !== null && balanceUsd < thresholdUsd;
+}
+
+/**
  * Human-readable runway, for the one place this is displayed (/spend).
  * Rounds to whole days ("6 days left") — sub-day precision would imply an
  * accuracy this estimate does not have (a 7-day trailing average is

@@ -212,6 +212,9 @@ export type Database = {
           recipient_ids: string[];
           kie_alerted_at: string | null;
           byteplus_alerted_at: string | null;
+          // 0145 — manual low-funds banner thresholds; null = automatic.
+          kie_banner_threshold_usd: number | null;
+          byteplus_banner_threshold_usd: number | null;
           updated_at: string;
           updated_by: string | null;
         };
@@ -222,6 +225,8 @@ export type Database = {
           recipient_ids?: string[];
           kie_alerted_at?: string | null;
           byteplus_alerted_at?: string | null;
+          kie_banner_threshold_usd?: number | null;
+          byteplus_banner_threshold_usd?: number | null;
           updated_at?: string;
           updated_by?: string | null;
         };
@@ -232,6 +237,8 @@ export type Database = {
           recipient_ids?: string[];
           kie_alerted_at?: string | null;
           byteplus_alerted_at?: string | null;
+          kie_banner_threshold_usd?: number | null;
+          byteplus_banner_threshold_usd?: number | null;
           updated_at?: string;
           updated_by?: string | null;
         };
