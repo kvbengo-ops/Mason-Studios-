@@ -66,8 +66,20 @@ import { dateTimeFormatter } from "@/lib/datetime";
 // filename ("scene 1" downloading as scene-02.mp4), so this subtracts the 1
 // back out first — one place, so nobody has to remember it at each call site
 // below.
-function ugcClipFilename(idx: number, storageKey: string): string {
-  return filenameForClip(idx - 1, storageKey);
+function ugcClipFilename(idx: number, storageKey: string, title?: string | null): string {
+  const generic = filenameForClip(idx - 1, storageKey);
+  const name = downloadBaseName(title);
+  return name ? `${name}${generic.slice(generic.lastIndexOf("."))}` : generic;
+}
+
+/**
+ * A renamed scene's title as a filename stem (issue #58), or null to keep the
+ * generic `scene-NN`. Drops what Windows refuses in a filename.
+ */
+function downloadBaseName(title: string | null | undefined): string | null {
+  // eslint-disable-next-line no-control-regex
+  const name = (title ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim();
+  return name.replace(/\.+$/, "") || null;
 }
 
 /**
@@ -77,10 +89,16 @@ function ugcClipFilename(idx: number, storageKey: string): string {
  * filenameForClip: that function's own output has already lost the
  * extension by the time you'd want to splice a suffix in front of it.
  */
-function ugcVersionFilename(idx: number, n: number, storageKey: string): string {
+function ugcVersionFilename(
+  idx: number,
+  n: number,
+  storageKey: string,
+  title?: string | null,
+): string {
   const match = /\.([a-zA-Z0-9]+)$/.exec(storageKey);
   const ext = match?.[1] ?? "mp4";
-  return `scene-${String(idx).padStart(2, "0")}-v${n}.${ext}`;
+  const stem = downloadBaseName(title) ?? `scene-${String(idx).padStart(2, "0")}`;
+  return `${stem}-v${n}.${ext}`;
 }
 
 /**
@@ -431,7 +449,7 @@ export default async function UgcPage({
           status: row.status,
           versionCount: counts.get(row.id) ?? 1,
           downloadUrl,
-          filename: clipAsset ? ugcClipFilename(row.idx, clipAsset.storage_key) : null,
+          filename: clipAsset ? ugcClipFilename(row.idx, clipAsset.storage_key, row.title) : null,
           posterUrl: await (async () => {
             const key = posterByScene.get(row.id);
             return key ? await signedUrl(key, RESULT_SIGNED_URL_TTL_SECONDS) : null;
@@ -473,7 +491,9 @@ export default async function UgcPage({
           downloadUrl: asset
             ? await signedUrl(asset.storage_key, RESULT_SIGNED_URL_TTL_SECONDS)
             : null,
-          filename: asset ? ugcVersionFilename(scene.idx, v.n, asset.storage_key) : null,
+          filename: asset
+            ? ugcVersionFilename(scene.idx, v.n, asset.storage_key, scene.title)
+            : null,
           // The poster is the scene's newest, so only its current take shows it.
           posterUrl: v.id === activeId ? scene.posterUrl : null,
         });
@@ -623,7 +643,7 @@ export default async function UgcPage({
           downloadUrl,
           posterUrl: posterKey ? await signedUrl(posterKey, RESULT_SIGNED_URL_TTL_SECONDS) : null,
           filename: storageKey
-            ? ugcVersionFilename(selectedScene.idx, version.n, storageKey)
+            ? ugcVersionFilename(selectedScene.idx, version.n, storageKey, selectedScene.title)
             : null,
         };
       }),
