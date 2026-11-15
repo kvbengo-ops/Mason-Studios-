@@ -6,6 +6,7 @@ import { deleteClipScene, deleteClipVersion } from "@/actions/ugc";
 import { CreateClipWall, type WallItem } from "./create-clip-wall";
 
 vi.mock("@/actions/clip-actions", () => ({ shareClipLink: vi.fn() }));
+vi.mock("@/actions/scene-organize", () => ({ setSceneKeep: vi.fn() }));
 vi.mock("@/actions/ugc", () => ({
   deleteClipScene: vi.fn(),
   deleteClipVersion: vi.fn(),
@@ -45,6 +46,7 @@ const clip: WallItem = {
   resolution: "480p",
   durationS: 5,
   createdAt: "2026-11-01T00:00:00.000Z",
+  keep: false,
   url: "https://example.test/clip.mp4",
   filename: "clip-1.mp4",
   referenceTags: [],

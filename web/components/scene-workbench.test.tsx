@@ -54,6 +54,7 @@ function createMockScene(overrides?: Partial<SceneRow>): SceneRow {
     // 0142 — studio name and drag position; irrelevant here.
     title: null,
     position: null,
+    keep: false,
     id: "scene-1",
     project_id: "project-1",
     // 0127 — API-token columns; irrelevant to the workbench.

@@ -210,6 +210,11 @@ func run() error {
 		go loop.Every(ctx, loop.BinPurgeInterval, "bin-purge", func(ctx context.Context) error {
 			return loop.PurgeBin(ctx, st, cfg, logger)
 		})
+		// Production only, like the purge it feeds: expired scenes land in the
+		// bin, and only a production worker empties the bin.
+		go loop.Every(ctx, loop.BinPurgeInterval, "clip-expiry", func(ctx context.Context) error {
+			return loop.ExpireClips(ctx, st, logger)
+		})
 	}
 
 	srv := whttp.New(fmt.Sprintf(":%d", cfg.Port), st, cfg, kieClient, mediaRunner, logger)

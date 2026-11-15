@@ -132,3 +132,19 @@ export async function deleteSceneComment(formData: FormData): Promise<ActionResu
   revalidatePath(`/ugc/${project.id}`);
   return undefined;
 }
+
+/** Marks a scene Keep (exempt from the 14-day clip expiry, 0144), or clears it. */
+export async function setSceneKeep(formData: FormData): Promise<ActionResult> {
+  const sceneId = String(formData.get("sceneId") ?? "");
+  if (!sceneId) return { error: "Missing scene." };
+  const keep = formData.get("keep") === "true";
+
+  const { scene } = await requireScene(sceneId);
+
+  const { error } = await createAdminClient().from("scenes").update({ keep }).eq("id", scene.id);
+  if (error) throw new Error(`Failed to update the scene: ${error.message}`);
+
+  revalidatePath(`/ugc/${scene.project_id}`);
+  revalidatePath("/create");
+  return undefined;
+}

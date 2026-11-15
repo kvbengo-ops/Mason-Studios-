@@ -42,3 +42,30 @@ func PurgeBin(ctx context.Context, p binPurger, cfg *config.Config, logger *slog
 	logger.Info("bin purge: removed expired bin objects", slog.Int("keys", len(keys)))
 	return nil
 }
+
+// ClipRetention is how long a finished scene lives before ExpireClips moves it
+// to the bin (owner, 2026-11-15). Keep equal to CLIP_RETENTION_DAYS in
+// web/lib/clip-retention.ts: the web warns from it, this loop acts on it.
+const ClipRetention = 14 * 24 * time.Hour
+
+// clipExpiryBatch bounds one pass, so a backlog drains over a few hours
+// instead of one long transaction.
+const clipExpiryBatch = 500
+
+type clipExpirer interface {
+	ExpireClips(ctx context.Context, cutoff time.Time, limit int) (int, error)
+}
+
+// ExpireClips moves finished, unkept scenes past ClipRetention to the bin.
+// They stay restorable there for BinRetention, then PurgeBin deletes them.
+// It deletes rows and never writes scenes.status.
+func ExpireClips(ctx context.Context, e clipExpirer, logger *slog.Logger) error {
+	n, err := e.ExpireClips(ctx, time.Now().Add(-ClipRetention), clipExpiryBatch)
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		logger.Info("clip expiry: moved expired scenes to the bin", slog.Int("scenes", n))
+	}
+	return nil
+}

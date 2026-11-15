@@ -2930,6 +2930,9 @@ export async function restoreScene(formData: FormData): Promise<ActionResult> {
     // set on this first insert.
     ref_frame_asset_id: null,
     active_version_id: null,
+    // Restored on purpose: exempt it from the 14-day clip expiry (0144), or
+    // an expired scene would go straight back to the bin within the hour.
+    keep: true,
   };
 
   // WRAPPED, because a failure partway through — scene inserted, then

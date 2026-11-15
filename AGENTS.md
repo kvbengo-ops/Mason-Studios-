@@ -44,7 +44,7 @@ make db-push      # migrate LOCAL db      make tunnel  # kie cannot reach localh
 `make db-push` only touches local Postgres. `db-push-remote` (`--linked`) is not the
 working path for prod: apply with `supabase db query --linked -f <file>`, then insert
 the row into `supabase_migrations.schema_migrations` yourself, before the deploy —
-`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0143`).
+`/api/health`'s `schemaDrift` checks against `EXPECTED_DB_VERSION` (currently `0144`).
 
 **Bun, not pnpm or npm**, pinned to 1.4.2 in four places that move together: `ci.yml`,
 both `web/Dockerfile` stages, and `package.json`'s `packageManager`. Go is 1.25;
@@ -129,6 +129,12 @@ refuses any model missing from `spend_category_totals`'s render list.
   A drag writes `scenes.position` only; **`idx` is never renumbered** (owner, 2026-11-13),
   so order by `compareSceneOrder` (`lib/scene-position.ts`), not `idx`. `scene_comments`
   is the one write a non-owning admin makes on a project (`requireProjectReadable`).
+- **Finished clips expire after 14 days** (owner, 2026-11-15; reverses 2026-11-11's "live
+  work is never auto-deleted"). The worker's hourly `ExpireClips` deletes `done` scenes
+  whose newest take is older than `ClipRetention`, which bins them (0088's trigger); the
+  3-day bin purge then removes them. `scenes.keep` (0144, `setSceneKeep`) exempts a scene,
+  and a restore sets it. `CLIP_RETENTION_DAYS` (`web/lib/clip-retention.ts`) must equal
+  the worker's `ClipRetention`.
 - **Retry is gone** — `regenerateClip` refuses queued/rendering, calls `rerenderScene`
   for `done`, `retryScene(…, versionMode)` for `failed`.
 - **Generate is optimistic** — an external store (not `useTransition`, which can starve

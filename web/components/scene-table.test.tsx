@@ -73,6 +73,7 @@ function scene(overrides: Partial<SceneRow> = {}): SceneRow {
     // 0142 — studio name and drag position; irrelevant here.
     title: null,
     position: null,
+    keep: false,
     active_version_id: null,
     // 0127 — API-token columns; irrelevant to SceneTable.
     api_token_id: null,

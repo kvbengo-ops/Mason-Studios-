@@ -28,6 +28,7 @@ import { StatusIcon, STATUS_LABEL } from "@/components/status-icon";
 import { UgcTileMenu } from "@/components/ugc-tile-menu";
 import { UgcPendingSceneTile } from "@/components/ugc-pending-scene-tile";
 import { UgcNewSceneTile } from "@/components/ugc-new-scene-tile";
+import { setSceneKeep } from "@/actions/scene-organize";
 import { deleteClipScene, deleteClipVersion } from "@/actions/ugc";
 import type { SceneStatus } from "@/types/db";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,8 @@ export interface UgcScene {
   position?: number | null;
   /** Comments on the scene (0142). */
   commentCount?: number;
+  /** Exempt from the 14-day clip expiry (0144). */
+  keep?: boolean;
   /**
    * Set on a TAKE tile: one rendered version of a scene that has several.
    * Takes replace the versions rail — every old version is a tile of its own.
@@ -78,10 +81,7 @@ export interface UgcScene {
 }
 
 /** One sortable group per scene, so every take of a scene moves with it. */
-function groupTiles(
-  sorted: readonly UgcScene[],
-  tiles: readonly JSX.Element[],
-): SceneSortGroup[] {
+function groupTiles(sorted: readonly UgcScene[], tiles: readonly JSX.Element[]): SceneSortGroup[] {
   const groups = new Map<string, { label: string; nodes: JSX.Element[] }>();
   sorted.forEach((scene, i) => {
     const group = groups.get(scene.id) ?? { label: `scene ${scene.idx}`, nodes: [] };
@@ -190,56 +190,58 @@ export function UgcSceneStrip({
               groups={groupTiles(
                 sorted,
                 sorted.map((scene) => {
-                // A take is selected by scene AND version; a scene's single
-                // tile (no versionId) by scene alone.
-                const selected =
-                  scene.id === selectedSceneId &&
-                  (!scene.versionId || !selectedVersionId || scene.versionId === selectedVersionId);
-                return (
-                  // A `div`, not the `Link` itself, now that a tile carries TWO
-                  // separate targets: the whole card still selects the scene, but
-                  // the download control (bottom right) is its own `<a>` — an
-                  // anchor nested inside another anchor is invalid HTML and would
-                  // make one of the two clicks unreliable, so the selecting link
-                  // wraps only the content and the download link sits beside it
-                  // as a sibling, not a descendant.
-                  <div
-                    key={scene.versionId ?? scene.id}
-                    className={cn(
-                      "relative flex shrink-0 flex-col gap-1 rounded-md border p-1.5",
-                      // The sortable group is the strip's direct child now, so
-                      // the tile sizes itself instead of inheriting it.
-                      vertical ? "min-h-24 w-full" : "w-[176px]",
-                      "hover:border-foreground/40",
-                      // Selected is a ring around the whole tile — "what you are
-                      // looking at". Deliberately a different signal from the
-                      // version rail's "current", which is what a scene IS.
-                      selected && "ring-2 ring-primary",
-                      scene.status === "failed" && "border-destructive/60",
-                    )}
-                  >
-                    <Link
-                      href={`/ugc/${projectId}?scene=${scene.id}${scene.versionId ? `&v=${scene.versionId}` : ""}`}
-                      scroll={false}
-                      // PREFETCH, because this page is expensive to build and the
-                      // operator's next click is nearly always another tile in
-                      // this same strip. Next fetches the RSC payload on hover or
-                      // viewport entry, so by the time the press lands the work is
-                      // usually already done.
-                      //
-                      // The scenes are already listed here, so this prefetches a
-                      // bounded, known set — not an open-ended crawl.
-                      prefetch
-                      aria-current={selected ? "true" : undefined}
-                      className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-ring"
+                  // A take is selected by scene AND version; a scene's single
+                  // tile (no versionId) by scene alone.
+                  const selected =
+                    scene.id === selectedSceneId &&
+                    (!scene.versionId ||
+                      !selectedVersionId ||
+                      scene.versionId === selectedVersionId);
+                  return (
+                    // A `div`, not the `Link` itself, now that a tile carries TWO
+                    // separate targets: the whole card still selects the scene, but
+                    // the download control (bottom right) is its own `<a>` — an
+                    // anchor nested inside another anchor is invalid HTML and would
+                    // make one of the two clicks unreliable, so the selecting link
+                    // wraps only the content and the download link sits beside it
+                    // as a sibling, not a descendant.
+                    <div
+                      key={scene.versionId ?? scene.id}
+                      className={cn(
+                        "relative flex shrink-0 flex-col gap-1 rounded-md border p-1.5",
+                        // The sortable group is the strip's direct child now, so
+                        // the tile sizes itself instead of inheriting it.
+                        vertical ? "min-h-24 w-full" : "w-[176px]",
+                        "hover:border-foreground/40",
+                        // Selected is a ring around the whole tile — "what you are
+                        // looking at". Deliberately a different signal from the
+                        // version rail's "current", which is what a scene IS.
+                        selected && "ring-2 ring-primary",
+                        scene.status === "failed" && "border-destructive/60",
+                      )}
                     >
-                      {/* Says the press landed, on the tile that was pressed.
+                      <Link
+                        href={`/ugc/${projectId}?scene=${scene.id}${scene.versionId ? `&v=${scene.versionId}` : ""}`}
+                        scroll={false}
+                        // PREFETCH, because this page is expensive to build and the
+                        // operator's next click is nearly always another tile in
+                        // this same strip. Next fetches the RSC payload on hover or
+                        // viewport entry, so by the time the press lands the work is
+                        // usually already done.
+                        //
+                        // The scenes are already listed here, so this prefetches a
+                        // bounded, known set — not an open-ended crawl.
+                        prefetch
+                        aria-current={selected ? "true" : undefined}
+                        className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-ring"
+                      >
+                        {/* Says the press landed, on the tile that was pressed.
                     Without it the screen showed the previous scene, unchanged,
                     for the whole round-trip — and an operator who gets no
                     answer presses again. See LinkPendingOverlay for why this
                     is per-link rather than a page-wide loading state. */}
-                      <LinkPendingOverlay />
-                      {/* The clip itself, at a FIXED height rather than the 9:16
+                        <LinkPendingOverlay />
+                        {/* The clip itself, at a FIXED height rather than the 9:16
                     aspect this product delivers. A 9:16 box at this tile width
                     is 313px tall, which pushed the strip and the page past the
                     viewport; 96px is enough to recognise a take by.
@@ -249,26 +251,26 @@ export function UgcSceneStrip({
                     rectangles makes that a matter of clicking each one to find
                     out — on the screen whose whole job is to save exactly that
                     trip. */}
-                      {scene.posterUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={scene.posterUrl}
-                          alt=""
-                          className="h-24 w-full rounded-sm border object-cover"
-                        />
-                      ) : scene.downloadUrl ? (
-                        // An older take has no poster of its own: its first frame.
-                        <video
-                          src={`${scene.downloadUrl}#t=0.1`}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="h-24 w-full rounded-sm border object-cover"
-                        />
-                      ) : (
-                        <div className="h-24 w-full rounded-sm bg-muted" />
-                      )}
-                      {/* Two lines, not five.
+                        {scene.posterUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={scene.posterUrl}
+                            alt=""
+                            className="h-24 w-full rounded-sm border object-cover"
+                          />
+                        ) : scene.downloadUrl ? (
+                          // An older take has no poster of its own: its first frame.
+                          <video
+                            src={`${scene.downloadUrl}#t=0.1`}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="h-24 w-full rounded-sm border object-cover"
+                          />
+                        ) : (
+                          <div className="h-24 w-full rounded-sm bg-muted" />
+                        )}
+                        {/* Two lines, not five.
 
                     The tile used to stack index, status, duration, version
                     count and credits one under the other, which made a strip
@@ -281,33 +283,37 @@ export function UgcSceneStrip({
                     Shape first, colour second on the status glyph — the rule
                     status-icon.tsx states, and the one that keeps this legible
                     under reduced motion. */}
-                      <span className="flex items-center gap-1.5 text-[11px]">
-                        <span className="font-mono tabular-nums">{scene.idx}</span>
-                        {scene.take ? (
-                          <span className="font-mono tabular-nums text-muted-foreground">
-                            v{scene.take}
+                        <span className="flex items-center gap-1.5 text-[11px]">
+                          <span className="font-mono tabular-nums">{scene.idx}</span>
+                          {scene.take ? (
+                            <span className="font-mono tabular-nums text-muted-foreground">
+                              v{scene.take}
+                            </span>
+                          ) : null}
+                          <StatusIcon status={scene.status} showLabel={false} />
+                          <span className="truncate text-muted-foreground">
+                            {STATUS_LABEL[scene.status]}
                           </span>
-                        ) : null}
-                        <StatusIcon status={scene.status} showLabel={false} />
-                        <span className="truncate text-muted-foreground">
-                          {STATUS_LABEL[scene.status]}
+                          {scene.commentCount ? (
+                            <span
+                              className="ml-auto flex shrink-0 items-center gap-0.5 font-mono tabular-nums text-muted-foreground"
+                              aria-label={`${scene.commentCount} comment${scene.commentCount === 1 ? "" : "s"}`}
+                            >
+                              <MessageSquare aria-hidden="true" className="size-3" />
+                              {scene.commentCount}
+                            </span>
+                          ) : null}
                         </span>
-                        {scene.commentCount ? (
-                          <span
-                            className="ml-auto flex shrink-0 items-center gap-0.5 font-mono tabular-nums text-muted-foreground"
-                            aria-label={`${scene.commentCount} comment${scene.commentCount === 1 ? "" : "s"}`}
-                          >
-                            <MessageSquare aria-hidden="true" className="size-3" />
-                            {scene.commentCount}
-                          </span>
-                        ) : null}
-                      </span>
-                    </Link>
-                    {/* Beside the link, not inside it: a name field in an anchor
+                      </Link>
+                      {/* Beside the link, not inside it: a name field in an anchor
                         would select the scene on every click into it. */}
-                    <SceneTitle sceneId={scene.id} title={scene.title ?? null} readOnly={readOnly} />
+                      <SceneTitle
+                        sceneId={scene.id}
+                        title={scene.title ?? null}
+                        readOnly={readOnly}
+                      />
 
-                    {/* Same menu as the version rail, for the same reason: the
+                      {/* Same menu as the version rail, for the same reason: the
                   tile itself selects the scene, so everything else has to sit
                   beside that control rather than inside it.
 
@@ -315,58 +321,65 @@ export function UgcSceneStrip({
                   scene once it has rendered — "delete is only available before
                   a clip exists" — so a Delete on a clip tile would be an item
                   that always refuses. Better absent than always failing. */}
-                    <UgcTileMenu
-                      label={`scene ${scene.idx}`}
-                      downloadUrl={scene.downloadUrl}
-                      filename={scene.filename}
-                      // Omitted entirely rather than disabled for a read-only
-                      // viewer: UgcTileMenu renders nothing at all when it has
-                      // neither a download nor a delete, and a disabled Delete on
-                      // every tile would be a row of controls explaining a rule
-                      // the banner above already states once.
-                      // A take deletes as a version (deleteClipVersion), not as the
-                      // whole scene, so its siblings stay.
-                      onDelete={
-                        readOnly ? undefined : scene.versionId ? deleteClipVersion : deleteClipScene
-                      }
-                      deleteFields={
-                        readOnly
-                          ? undefined
-                          : scene.versionId
-                            ? { sceneId: scene.id, versionId: scene.versionId }
-                            : { sceneId: scene.id }
-                      }
-                      deleteUnavailableReason={
-                        scene.status === "queued" || scene.status === "rendering"
-                          ? "Still rendering"
-                          : scene.versionId && scene.isCurrentTake
-                            ? "This is the scene's current take"
-                            : null
-                      }
-                      // Stronger than scene-workbench.tsx's own confirm: that one
-                      // only takes an un-rendered scene's typing with it.
-                      // deleteClipScene refuses just a queued or rendering scene,
-                      // so this is deleting a FINISHED clip, and
-                      // scene_versions.scene_id cascades — every attempt at it
-                      // goes too, not only the one showing. NOT "cannot be
-                      // undone", though — 0088_deleted_scenes.sql's BEFORE
-                      // DELETE trigger archives the scene and every one of those
-                      // rows one step ahead of the cascade, and this same page
-                      // renders a "Recently deleted" section (ugc-deleted-scenes.tsx)
-                      // with a Restore button for exactly this trash entry, so
-                      // claiming otherwise would be false the instant this
-                      // confirm is read.
-                      confirmMessage={
-                        readOnly
-                          ? undefined
-                          : scene.versionId
-                            ? `Delete take v${scene.take} of scene ${scene.idx}?`
-                            : `Delete scene ${scene.idx}? Every version of this clip goes with it. You can restore it from Recently deleted.`
-                      }
-                    />
-                  </div>
-                );
-              }),
+                      <UgcTileMenu
+                        label={`scene ${scene.idx}`}
+                        downloadUrl={scene.downloadUrl}
+                        filename={scene.filename}
+                        onKeep={readOnly || scene.status !== "done" ? undefined : setSceneKeep}
+                        keepSceneId={scene.id}
+                        kept={Boolean(scene.keep)}
+                        // Omitted entirely rather than disabled for a read-only
+                        // viewer: UgcTileMenu renders nothing at all when it has
+                        // neither a download nor a delete, and a disabled Delete on
+                        // every tile would be a row of controls explaining a rule
+                        // the banner above already states once.
+                        // A take deletes as a version (deleteClipVersion), not as the
+                        // whole scene, so its siblings stay.
+                        onDelete={
+                          readOnly
+                            ? undefined
+                            : scene.versionId
+                              ? deleteClipVersion
+                              : deleteClipScene
+                        }
+                        deleteFields={
+                          readOnly
+                            ? undefined
+                            : scene.versionId
+                              ? { sceneId: scene.id, versionId: scene.versionId }
+                              : { sceneId: scene.id }
+                        }
+                        deleteUnavailableReason={
+                          scene.status === "queued" || scene.status === "rendering"
+                            ? "Still rendering"
+                            : scene.versionId && scene.isCurrentTake
+                              ? "This is the scene's current take"
+                              : null
+                        }
+                        // Stronger than scene-workbench.tsx's own confirm: that one
+                        // only takes an un-rendered scene's typing with it.
+                        // deleteClipScene refuses just a queued or rendering scene,
+                        // so this is deleting a FINISHED clip, and
+                        // scene_versions.scene_id cascades — every attempt at it
+                        // goes too, not only the one showing. NOT "cannot be
+                        // undone", though — 0088_deleted_scenes.sql's BEFORE
+                        // DELETE trigger archives the scene and every one of those
+                        // rows one step ahead of the cascade, and this same page
+                        // renders a "Recently deleted" section (ugc-deleted-scenes.tsx)
+                        // with a Restore button for exactly this trash entry, so
+                        // claiming otherwise would be false the instant this
+                        // confirm is read.
+                        confirmMessage={
+                          readOnly
+                            ? undefined
+                            : scene.versionId
+                              ? `Delete take v${scene.take} of scene ${scene.idx}?`
+                              : `Delete scene ${scene.idx}? Every version of this clip goes with it. You can restore it from Recently deleted.`
+                        }
+                      />
+                    </div>
+                  );
+                }),
               )}
             />
 

@@ -7,6 +7,11 @@ import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
 import { UgcColumn } from "@/components/ugc-column";
 import { UgcLiveRefresh } from "@/components/ugc-live-refresh";
 import { VideoRunsPanel, type VideoRun } from "@/components/video-runs-panel";
+import {
+  CLIP_EXPIRY_WARN_DAYS,
+  CLIP_RETENTION_DAYS,
+  clipExpiryWarnCutoff,
+} from "@/lib/clip-retention";
 import { KIE_MODELS } from "@/lib/kie/models";
 import type { AccountBudgetSnapshot } from "@/lib/spend";
 import { loadElementTags } from "@/lib/element-library";
@@ -96,7 +101,7 @@ export async function CreateVideoConsole({
       ? supabase
           .from("scenes")
           .select(
-            "id, project_id, status, video_prompt, duration_s, active_version_id, created_at, is_talking_head, render_settings_override",
+            "id, project_id, status, video_prompt, duration_s, active_version_id, created_at, is_talking_head, render_settings_override, keep",
           )
           .in(
             "project_id",
@@ -116,7 +121,7 @@ export async function CreateVideoConsole({
     const { data: requestedScene } = await supabase
       .from("scenes")
       .select(
-        "id, project_id, status, video_prompt, duration_s, active_version_id, created_at, is_talking_head, render_settings_override",
+        "id, project_id, status, video_prompt, duration_s, active_version_id, created_at, is_talking_head, render_settings_override, keep",
       )
       .eq("id", initialSceneId)
       .in(
@@ -294,6 +299,7 @@ export async function CreateVideoConsole({
       resolution: used.resolution,
       durationS: version.duration_s ?? scene.duration_s,
       createdAt: version.created_at,
+      keep: scene.keep,
       url: await signedUrl(asset.storage_key),
       posterUrl: await (async () => {
         const key = posterKeyFor(asset);
@@ -337,9 +343,36 @@ export async function CreateVideoConsole({
     }
   }
 
+  // How many of this account's clips are inside the expiry warning window.
+  // Counted, not read off the wall: the wall loads newest first, and the
+  // clips about to go are the oldest.
+  const { count: expiringCount } =
+    projects.length > 0
+      ? await supabase
+          .from("scenes")
+          .select("id", { count: "exact", head: true })
+          .in(
+            "project_id",
+            projects.map((p) => p.id),
+          )
+          .eq("status", "done")
+          .eq("keep", false)
+          .lt("created_at", clipExpiryWarnCutoff())
+      : { count: 0 };
+
   return (
     <>
       <UgcLiveRefresh inFlight={inFlight} />
+      {expiringCount ? (
+        <p
+          role="status"
+          className="mx-3 mt-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
+        >
+          {expiringCount === 1 ? "1 clip moves" : `${expiringCount} clips move`} to the bin within{" "}
+          {CLIP_EXPIRY_WARN_DAYS} days. Clips are kept for {CLIP_RETENTION_DAYS} days: download
+          them, or open a clip and press Keep.
+        </p>
+      ) : null}
       <VideoRunsPanel runs={[...pendingRuns, ...runs]} />
       <CreateClipWall
         key={initialVersionId ?? "wall"}

@@ -12,6 +12,8 @@ import {
   FolderPlus,
   Link2,
   MusicIcon,
+  Pin,
+  PinOff,
   Plus,
   RotateCcw,
   Trash2,
@@ -19,6 +21,7 @@ import {
   VideoIcon,
 } from "lucide-react";
 import { shareClipLink } from "@/actions/clip-actions";
+import { setSceneKeep } from "@/actions/scene-organize";
 import { deleteClipScene, deleteClipVersion, regenerateClip } from "@/actions/ugc";
 import {
   MoveClipDialog,
@@ -29,6 +32,7 @@ import { CreationLoading } from "@/components/creation-loading";
 import { PendingButton } from "@/components/pending-button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatAverageBitrate } from "@/lib/average-bitrate";
+import { clipExpiryLabel } from "@/lib/clip-retention";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { asAttachment } from "@/lib/download-url";
 import { findElementByTag, splitPromptIntoTagSegments, type ElementTag } from "@/lib/elements";
@@ -54,6 +58,8 @@ export type WallItem =
       resolution: string | null;
       durationS: number | null;
       createdAt: string;
+      /** The scene is exempt from the 14-day clip expiry (0144). */
+      keep: boolean;
       url: string;
       /** The worker's ~15 KB poster frame, or null. With one, the tile loads no video until hovered. */
       posterUrl?: string | null;
@@ -661,7 +667,22 @@ function ClipViewer({
     ["Size", size ? `${size.width}x${size.height}` : null],
     ["Avg. bitrate", bitrate],
     ["Created", dateTimeFormatter.format(new Date(item.createdAt))],
+    ["Auto-delete", clipExpiryLabel(item.keep, item.createdAt)],
   ];
+
+  function handleKeep(): void {
+    start(async () => {
+      const formData = new FormData();
+      formData.set("sceneId", item.sceneId);
+      formData.set("keep", String(!item.keep));
+      const result = await setSceneKeep(formData);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
 
   return (
     <>
@@ -725,6 +746,20 @@ function ClipViewer({
           >
             <RotateCcw aria-hidden="true" className="size-4" />
             Reuse prompt
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={handleKeep}
+            aria-pressed={item.keep}
+            className={cn(PANEL_BUTTON, "w-full")}
+          >
+            {item.keep ? (
+              <PinOff aria-hidden="true" className="size-4" />
+            ) : (
+              <Pin aria-hidden="true" className="size-4" />
+            )}
+            {item.keep ? "Stop keeping" : "Keep (never auto-delete)"}
           </button>
           <div className="flex gap-2">
             <a

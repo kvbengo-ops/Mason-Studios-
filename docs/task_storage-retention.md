@@ -4,7 +4,9 @@ Owner decisions (2026-11-11):
 
 - **Keep the 480p → 1080x1920 upscale and CRF 17.** Not touched by this task.
 - **Bin retention is 3 days** (was 14).
-- **Live work is never auto-deleted.** No auto-binning of old takes.
+- ~~**Live work is never auto-deleted.**~~ Reversed 2026-11-15: a finished scene moves to
+  the bin 14 days after its newest take unless it is marked Keep (`scenes.keep`, 0144;
+  worker `ExpireClips`). Old takes are still not binned on their own.
 - **One storage quota for every non-admin account**, adjustable by an admin.
 
 ## Facts this task builds on

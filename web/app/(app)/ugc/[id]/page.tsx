@@ -301,7 +301,7 @@ export default async function UgcPage({
     const { data: sceneRows } = await supabase
       .from("scenes")
       .select(
-        "id, idx, title, position, duration_s, status, video_prompt, active_version_id, render_settings_override, is_talking_head, script_line, ref_frame_asset_id",
+        "id, idx, title, position, keep, duration_s, status, video_prompt, active_version_id, render_settings_override, is_talking_head, script_line, ref_frame_asset_id",
       )
       .eq("project_id", project.id)
       .order("idx", { ascending: false })
@@ -443,6 +443,7 @@ export default async function UgcPage({
           id: row.id,
           idx: row.idx,
           title: row.title,
+          keep: row.keep,
           position: row.position,
           commentCount: (commentRows ?? []).filter((c) => c.scene_id === row.id).length,
           duration_s: row.duration_s,

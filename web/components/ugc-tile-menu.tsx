@@ -15,7 +15,7 @@
 // stopPropagation on the trigger so opening the menu never fires the tile.
 
 import { useState, type JSX } from "react";
-import { ChevronDownIcon, DownloadIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, DownloadIcon, PinIcon, PinOffIcon, Trash2Icon } from "lucide-react";
 import { unstable_rethrow } from "next/navigation";
 import { toast } from "sonner";
 import { Spinner } from "@/components/spinner";
@@ -60,6 +60,14 @@ export interface UgcTileMenuProps {
   downloadUrl?: string | null;
   filename?: string | null;
   /**
+   * The Keep toggle (0144's exemption from the 14-day clip expiry) and the
+   * scene id it acts on, or omitted when this tile cannot be kept.
+   */
+  onKeep?: (formData: FormData) => Promise<ActionResult | void>;
+  keepSceneId?: string;
+  /** Whether the scene is kept now; the item offers the opposite. */
+  kept?: boolean;
+  /**
    * The delete action and the fields it needs, or omitted when this tile has
    * nothing to delete. Passing the action rather than a boolean keeps the
    * server action next to the fields it reads.
@@ -87,6 +95,9 @@ export function UgcTileMenu({
   label,
   downloadUrl,
   filename,
+  onKeep,
+  keepSceneId,
+  kept,
   onDelete,
   deleteFields,
   deleteUnavailableReason,
@@ -95,6 +106,23 @@ export function UgcTileMenu({
   const [pending, setPending] = useState(false);
 
   if (!downloadUrl && !onDelete) return null;
+
+  async function submitKeep(): Promise<void> {
+    if (!onKeep || !keepSceneId) return;
+    setPending(true);
+    try {
+      const formData = new FormData();
+      formData.set("sceneId", keepSceneId);
+      formData.set("keep", String(!kept));
+      const result = await onKeep(formData);
+      if (result?.error) toast.error(result.error);
+    } catch (err) {
+      unstable_rethrow(err);
+      toast.error("That did not save. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function submitDelete(): Promise<void> {
     if (!onDelete || !deleteFields) return;
@@ -167,6 +195,23 @@ export function UgcTileMenu({
               <DownloadIcon aria-hidden="true" className="size-3.5" />
               Download
             </a>
+          </DropdownMenuItem>
+        ) : null}
+
+        {onKeep && keepSceneId ? (
+          <DropdownMenuItem
+            disabled={pending}
+            onSelect={(e) => {
+              e.preventDefault();
+              void submitKeep();
+            }}
+          >
+            {kept ? (
+              <PinOffIcon aria-hidden="true" className="size-3.5" />
+            ) : (
+              <PinIcon aria-hidden="true" className="size-3.5" />
+            )}
+            {kept ? "Stop keeping" : "Keep (never auto-delete)"}
           </DropdownMenuItem>
         ) : null}
 

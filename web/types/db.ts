@@ -1696,6 +1696,8 @@ export type Database = {
           id: string;
           idx: number;
           is_talking_head: boolean;
+          // Exempt from the 14-day clip expiry (0144).
+          keep: boolean;
           prepare_started_at: string | null;
           prepare_token: string | null;
           project_id: string;
@@ -1743,6 +1745,7 @@ export type Database = {
           id?: string;
           idx: number;
           is_talking_head?: boolean;
+          keep?: boolean;
           prepare_started_at?: string | null;
           prepare_token?: string | null;
           project_id: string;
@@ -1775,6 +1778,7 @@ export type Database = {
           id?: string;
           idx?: number;
           is_talking_head?: boolean;
+          keep?: boolean;
           prepare_started_at?: string | null;
           prepare_token?: string | null;
           project_id?: string;
