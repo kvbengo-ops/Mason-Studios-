@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe("TopBar", () => {
-  it("places the notification icon and account together at the top right", () => {
+  it("places the notification icon and account together at the top right", async () => {
     const notifications: Notification[] = Array.from({ length: 6 }, (_, index) => ({
       id: `notification-${index + 1}`,
       kind: "scene_completed",
@@ -83,7 +83,7 @@ describe("TopBar", () => {
     expect(screen.getByRole("link", { name: "See all notifications" }).getAttribute("href")).toBe(
       "/notifications",
     );
-    expect(channel.subscribe).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(channel.subscribe).toHaveBeenCalledOnce());
   });
 
   it("filters credit notices and opens the selected notice from the hover panel", async () => {
