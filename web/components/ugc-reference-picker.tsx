@@ -437,7 +437,7 @@ export async function uploadDroppedReference(
   const base = tagFromFilename(file.name);
   let name = base;
   // ponytail: one name check per taken suffix; 20 tries is plenty for one person's library.
-  for (let n = 2; (await checkElementUploadName(name)) !== null; n++) {
+  for (let n = 2; (await checkElementUploadName(name, false)) !== null; n++) {
     if (n > 20) return { error: `Could not find a free tag for ${file.name}.` };
     name = `${base}-${n}`;
   }
@@ -445,6 +445,7 @@ export async function uploadDroppedReference(
   if (projectId) fd.set("projectId", projectId);
   fd.set("image", file);
   fd.set("name", name);
+  fd.set("destination", "mine");
   await attachVideoDuration(fd, file);
   await stageFiles(fd);
   const result = await registerElement(fd);
@@ -907,7 +908,7 @@ export function UgcReferencePicker({
       addProjectId(fd);
       fd.set("image", f);
       const name = (uploadNames.get(f) ?? "").trim();
-      const nameError = await checkElementUploadName(name);
+      const nameError = await checkElementUploadName(name, false);
       if (nameError) {
         setFileErrors((old) => ({ ...old, [index]: nameError }));
         toast.error(nameError);
@@ -915,6 +916,7 @@ export function UgcReferencePicker({
       }
       setUploadProgress({ done: index, total: pendingFiles.length });
       fd.set("name", name);
+      fd.set("destination", "mine");
       await attachVideoDuration(fd, f);
       await stageFiles(fd);
       const one = await registerElement(fd);
@@ -1366,13 +1368,14 @@ export function UgcReferencePicker({
         addProjectId(fd);
         fd.set("image", f);
         const name = (uploadNames.get(f) ?? "").trim();
-        const nameError = await checkElementUploadName(name);
+        const nameError = await checkElementUploadName(name, false);
         if (nameError) {
           errors[i] = nameError;
           setUploadProgress({ done: i + 1, total: files.length });
           continue;
         }
         fd.set("name", name);
+        fd.set("destination", "mine");
         const measuredVideoDurationS = await attachVideoDuration(fd, f);
         if (i === attachIndex) attachedVideoDurationS = measuredVideoDurationS;
         await stageFiles(fd);
@@ -2020,6 +2023,7 @@ export function UgcReferencePicker({
                                 </span>
                                 <ElementTagNameField
                                   label={`Tag name for ${f.name}`}
+                                  shared={false}
                                   value={uploadNames.get(f) ?? ""}
                                   disabled={uploadProgress !== null}
                                   onChange={(value) =>

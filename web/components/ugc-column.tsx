@@ -53,6 +53,8 @@ import {
 } from "@/components/ugc-reference-picker";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
 import { saveGeneratedElement } from "@/actions/save-generated-element";
+import { TagRenameLabel } from "@/components/tag-rename-label";
+import { renameTagInPrompt } from "@/lib/rename-tag";
 import { dragReferenceName, UGC_CLIP_DRAG_TYPE } from "@/lib/image-reuse";
 import { toast } from "sonner";
 import { findElementByTag, KLING_FRAME_EXTS, TAG_PATTERN, type ElementTag } from "@/lib/elements";
@@ -682,6 +684,14 @@ export function UgcColumn({
       }
       return next;
     });
+  }
+
+  /** A chip's tag renamed in place (TagRenameLabel): follow it in the box and the prompt. */
+  function renameBoxTag(from: string, to: string): void {
+    const same = (t: string): boolean => t.toLowerCase() === from.toLowerCase();
+    setSelectedTags((prev) => prev.map((t) => (same(t) ? to : t)));
+    setPrompt((prev) => renameTagInPrompt(prev, from, to));
+    router.refresh();
   }
 
   function removeTagFromBox(name: string): void {
@@ -1598,7 +1608,14 @@ export function UgcColumn({
                                   className="size-6 shrink-0 rounded-sm border object-cover"
                                 />
                               )}
-                              <span className="max-w-[9rem] truncate font-medium">@{tag}</span>
+                              <TagRenameLabel
+                                tag={tag}
+                                element={element}
+                                projectId={projectId || null}
+                                disabled={readOnly}
+                                onRenamed={renameBoxTag}
+                                onError={(message) => toast.error(message)}
+                              />
                               {inPrompt ? null : <span className="sr-only">not in prompt</span>}
                               <button
                                 type="button"

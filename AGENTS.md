@@ -103,6 +103,9 @@ Captions are gone. Subtitles are added in CapCut after export.
   limits-changed notices, `outstanding_allowance_usd`) include both.
 - **`profiles.last_seen_at`** is the presence heartbeat (`touchPresence`, every 60 s per
   visible tab); Accounts Control shows green within 2 minutes.
+- **A reference upload lands in Mine** (owner, 2026-11-16) — the picker's Upload and a bar
+  drop both send `destination=mine`; the Elements Library's Share moves it to Shared. A
+  reference chip's @tag renames in place (`TagRenameLabel` → `updateElement`).
 - **Uploads keep PNG and JPEG as sent.** `toJpeg` converts WebP only (Kling rejects it).
 - **Prompts are capped at `MAX_PROMPT_CHARS` = 20,000** (`lib/prompt-limits.ts`) on `/ugc`
   and the Image Generator (checked again after `@tag` expansion);

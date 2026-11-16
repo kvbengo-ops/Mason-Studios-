@@ -38,7 +38,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { removeTagFromPrompt } from "@/lib/rename-tag";
+import { removeTagFromPrompt, renameTagInPrompt } from "@/lib/rename-tag";
+import { TagRenameLabel } from "@/components/tag-rename-label";
 import { MAX_REFERENCES } from "@/lib/ugc-references";
 import { usableReferenceDrop } from "@/lib/file-type";
 import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
@@ -698,9 +699,16 @@ export function ImageGeneratorForm({
                               alt=""
                               className="size-6 shrink-0 rounded-sm border object-cover"
                             />
-                            <span className="max-w-[9rem] truncate font-medium">
-                              @{element.name}
-                            </span>
+                            <TagRenameLabel
+                              tag={element.name}
+                              element={element}
+                              projectId={projectId}
+                              onRenamed={(from, to) => {
+                                setPrompt((current) => renameTagInPrompt(current, from, to));
+                                startRefresh(() => router.refresh());
+                              }}
+                              onError={setErrorMessage}
+                            />
                             <button
                               type="button"
                               onClick={() =>
