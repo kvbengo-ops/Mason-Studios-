@@ -4,11 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import AdminUserCreationsPage from "./page";
 import { createClient } from "@/lib/supabase/server";
-import {
-  loadEditorDeleted,
-  loadEditorImageRuns,
-  loadEditorImages,
-} from "@/lib/admin-creations";
+import { loadEditorDeleted, loadEditorImageRuns, loadEditorImages } from "@/lib/admin-creations";
 import type { ProfileRole } from "@/types/db";
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -50,8 +46,8 @@ function fakeSupabaseForPage(caller: FakeProfile, target: FakeProfile | null) {
 
   return {
     auth: {
-      getUser: vi.fn(async () => ({
-        data: { user: { id: caller.id, email: caller.email } },
+      getClaims: vi.fn(async () => ({
+        data: { claims: { sub: caller.id, email: caller.email } },
       })),
     },
     from: vi.fn((table: string) => {

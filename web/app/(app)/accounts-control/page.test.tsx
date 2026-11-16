@@ -66,8 +66,8 @@ interface FakeProfile {
 function fakeSupabaseForCaller(caller: FakeProfile) {
   return {
     auth: {
-      getUser: vi.fn(async () => ({
-        data: { user: { id: caller.id, email: caller.email } },
+      getClaims: vi.fn(async () => ({
+        data: { claims: { sub: caller.id, email: caller.email } },
       })),
     },
     from: vi.fn((table: string) => {
@@ -202,7 +202,9 @@ describe("AccountsControlPage", () => {
     expect(dailySpendBar.getAttribute("aria-valuenow")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     expect(dailySpendBar.getAttribute("aria-valuemax")).toBe(String(DEFAULT_GLOBAL_SPEND_CAP_USD));
     // $2.50 today, read from the Today tile: the figure can repeat elsewhere on the page.
-    expect(screen.getByText("Today · since 5 AM").closest("div")?.parentElement?.textContent).toContain("$2.50");
+    expect(
+      screen.getByText("Today · since 5 AM").closest("div")?.parentElement?.textContent,
+    ).toContain("$2.50");
     expect(loadEditorVideos).not.toHaveBeenCalled();
     cleanup();
 

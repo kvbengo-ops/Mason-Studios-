@@ -32,17 +32,21 @@ export class RateLimitError extends Error {
   }
 }
 
-// One /auth/v1/user round trip per request. The layout and the page (or action)
-// both pass through requireUser, so without this every request paid for it
-// twice. Only the identity is cached, not the profile read: a Server Action
-// re-renders the page in the same request, and a cached profile there would
-// show the pre-mutation row (username, role, status).
-const getSessionUser = cache(async () => {
+// Resolved once per request: the layout and the page (or action) both pass
+// through requireUser. Only the identity is cached, not the profile read: a
+// Server Action re-renders the page in the same request, and a cached profile
+// there would show the pre-mutation row (username, role, status).
+//
+// getClaims() verifies the JWT signature against the project's cached public
+// key instead of calling /auth/v1/user. It cannot see a session revoked since
+// the token was issued (sign-out elsewhere), so the token stays good until it
+// expires; a deactivated or deleted account is still stopped by the profile
+// read in requireUser, which runs on every request.
+const getSessionUser = cache(async (): Promise<User | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  return claims?.sub ? { id: claims.sub, email: claims.email } : null;
 });
 
 /**

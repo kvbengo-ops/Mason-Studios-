@@ -65,7 +65,7 @@ const ADMIN = { id: "admin-1", email: "admin@example.com" };
 const TRUSTED = { id: "trusted-1", email: "trusted@example.com" };
 
 /**
- * Fakes the two tables requireProject/requireUser touch: auth.getUser()
+ * Fakes the two tables requireProject/requireUser touch: auth.getClaims()
  * (via a `.auth` stub, not `.from`) and the `profiles`/`projects` rows via
  * `.from`. `projectRow` stands in for the *entire* result RLS's
  * projects_select would produce for the caller: pass `null` to simulate a
@@ -84,7 +84,7 @@ function fakeSupabase(
   projectRow: Record<string, unknown> | null,
   role: "editor" | "trusted_editor" | "admin" = "editor",
   status: "pending" | "active" | "rejected" = "active",
-): { auth: { getUser: ReturnType<typeof vi.fn> }; from: ReturnType<typeof vi.fn> } {
+): { auth: { getClaims: ReturnType<typeof vi.fn> }; from: ReturnType<typeof vi.fn> } {
   const profilesBuilder = fakeBuilder({
     data: { id: user.id, role, status },
     error: null,
@@ -94,7 +94,9 @@ function fakeSupabase(
     error: projectRow ? null : { message: "no rows" },
   });
   return {
-    auth: { getUser: vi.fn(async () => ({ data: { user } })) },
+    auth: {
+      getClaims: vi.fn(async () => ({ data: { claims: { sub: user.id, email: user.email } } })),
+    },
     from: vi.fn((table: string) => {
       if (table === "profiles") return profilesBuilder;
       if (table === "projects") return projectsBuilder;
