@@ -122,8 +122,9 @@ refuses any model missing from `spend_category_totals`'s render list.
 
 - **References box** — `scene_references` (PR #140), up to `maxReferencesFor(model)` (12
   on Seedance 2.5, either route; `MAX_REFERENCES` = 10 elsewhere; `ugc-references.ts`), ordinal per kind (image 1 = start frame, 2 = end frame). Only
-  "Use element" and a strip clip dragged onto the bar (saved as `@clip-…`) add; an upload
-  or a dropped local file never does, and the prompt may only `@tag` what's in the
+  "Use element" and a drop on the bar add: a strip clip (saved as `@clip-…`) or a local
+  file (uploaded at once by `uploadDroppedReference`, tagged from its file name). The
+  dialog's Upload never does, and the prompt may only `@tag` what's in the
   box. `attachSceneReferences` writes it on Generate; reopening a scene reseeds it from
   `scene_references` via `referenceTags` (`ugc/[id]/page.tsx`, user-scoped read).
 - **Kling is start+end frame, no `@tags`** — `klingTagRefusal` blocks any `@tag`; frames

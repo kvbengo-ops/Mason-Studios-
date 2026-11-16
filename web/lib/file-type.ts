@@ -211,3 +211,18 @@ export function usableReferenceDrop<T extends { type: string; name: string }>(
       (!imagesOnly && isAcceptedReferenceVideo(f)),
   );
 }
+
+/**
+ * An element tag made from a dropped file's name ("My photo (1).png" →
+ * "My-photo-1"), so a drop can save without asking for one. At most 60
+ * characters, leaving room for a "-N" suffix when the tag is taken.
+ */
+export function tagFromFilename(fileName: string): string {
+  const base = fileName
+    .replace(/\.[^.]*$/, "")
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^[^A-Za-z0-9]+/, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
+  return base || "ref";
+}
