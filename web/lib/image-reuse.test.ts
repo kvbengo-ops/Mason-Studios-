@@ -25,4 +25,8 @@ describe("dragReferenceName", () => {
     expect(name).toBe("img-3f2a9c1e");
     expect(name).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/);
   });
+  it("takes a prefix for a dragged /ugc clip", async () => {
+    const { dragReferenceName } = await import("./image-reuse");
+    expect(dragReferenceName("3f2a9c1e-77aa-4b1c-9d2e-000000000000", "clip")).toBe("clip-3f2a9c1e");
+  });
 });

@@ -27,9 +27,16 @@ export function requestImageReuse(detail: ImageReuseDetail): void {
 export const GENERATED_IMAGE_DRAG_TYPE = "application/x-generated-image";
 
 /** One fixed tag per picture, so dropping it twice reuses the element it made. */
-export function dragReferenceName(assetId: string): string {
-  return `img-${assetId.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`;
+export function dragReferenceName(assetId: string, prefix = "img"): string {
+  return `${prefix}-${assetId.replace(/[^A-Za-z0-9]/g, "").slice(0, 8)}`;
 }
+
+/**
+ * The /ugc twin: a finished clip tile dragged onto the video bar carries its
+ * clip asset id under this type, and the bar saves it as a video element
+ * tagged `@clip-…` (dragReferenceName(id, "clip")).
+ */
+export const UGC_CLIP_DRAG_TYPE = "application/x-ugc-clip";
 
 /**
  * The standard ratio a picture's pixel size is closest to, by log distance so
