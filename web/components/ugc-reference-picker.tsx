@@ -99,6 +99,7 @@ import {
   isAcceptedReferenceImageSize,
   isAcceptedReferenceVideo,
   isAcceptedReferenceVideoSize,
+  usableReferenceDrop,
   MAX_REFERENCE_AUDIO_BYTES,
   MAX_REFERENCE_AUDIO_SECONDS,
   MAX_REFERENCE_IMAGE_BYTES,
@@ -364,6 +365,40 @@ function joinNames(names: readonly string[]): string {
 }
 
 /**
+ * The type check for every drop of local files — this dialog's own drop zone
+ * and the prompt bars' (ugc-column.tsx, image-generator-form.tsx). Toasts what
+ * was left out and returns what the Uploads tab can take.
+ */
+export function takeReferenceDrop(dropped: readonly File[], imagesOnly: boolean): File[] {
+  if (dropped.length === 0) return [];
+
+  // A DROP CAN CARRY ANY OF THE THREE KINDS, and `accept` on the input
+  // filters only the browse dialog, so this is the only place a dropped
+  // file's type is checked at all.
+  //
+  // WRONG TYPES ARE DROPPED, NOT REFUSED WHOLESALE. Dragging a folder's
+  // worth of files onto this box is the point of the batch; refusing all
+  // eight because one was a .txt would make the operator find and remove it
+  // by hand. The message says how many were left out.
+  const usable = usableReferenceDrop(dropped, imagesOnly);
+  if (usable.length === 0) {
+    toast.error("Nothing there can be used as a reference", {
+      description: imagesOnly
+        ? `Nothing dropped was a picture. ${referenceRules(true)}`
+        : `Nothing dropped was a picture, a voice clip, or a video. ${referenceRules(imagesOnly)}`,
+    });
+    return [];
+  }
+  if (usable.length < dropped.length) {
+    toast.error(`Skipped ${dropped.length - usable.length} of ${dropped.length} files`, {
+      description: `The rest were added. ${referenceRules(imagesOnly)}`,
+    });
+  }
+
+  return usable;
+}
+
+/**
  * The end-of-batch toast — fired once a save loop (saveElement/retryOne)
  * finishes, regardless of whether the dialog that started it is still open.
  *
@@ -430,6 +465,7 @@ export function UgcReferencePicker({
   onUseElement,
   boxTags,
   boxLimit,
+  droppedFiles,
 }: {
   projectId: string | null;
   /** The operator's own saved references — resolved server-side, signed thumbnail URLs included. */
@@ -506,6 +542,12 @@ export function UgcReferencePicker({
   boxTags?: readonly string[];
   /** The box's cap, for "References are full (N)" below. */
   boxLimit?: number;
+  /**
+   * Files dropped on the caller's prompt bar, already type-filtered
+   * (usableReferenceDrop). A new array stages them on the Uploads tab exactly as
+   * a drop on this dialog's own zone would; the caller opens the dialog.
+   */
+  droppedFiles?: readonly File[] | null;
 }): JSX.Element {
   const [internalOpen, setInternalOpen] = useState(false);
   // CONTROLLED WHEN `openProp` IS GIVEN, uncontrolled otherwise — the same
@@ -926,39 +968,23 @@ export function UgcReferencePicker({
     // browser when the answer is an upload replacing itself mid-flight.
     if (saving()) return;
 
-    const dropped = Array.from(e.dataTransfer.files);
-    if (dropped.length === 0) return;
+    acceptFiles(takeReferenceDrop(Array.from(e.dataTransfer.files), imagesOnly));
+  }
 
-    // A DROP CAN CARRY ANY OF THE THREE KINDS, and `accept` on the input
-    // filters only the browse dialog, so this is the only place a dropped
-    // file's type is checked at all.
-    //
-    // WRONG TYPES ARE DROPPED, NOT REFUSED WHOLESALE. Dragging a folder's
-    // worth of files onto this box is the point of the batch; refusing all
-    // eight because one was a .txt would make the operator find and remove it
-    // by hand. The message says how many were left out.
-    const usable = dropped.filter(
-      (f) =>
-        ACCEPTED_IMAGE_TYPES.split(",").includes(f.type) ||
-        (!imagesOnly && isAcceptedReferenceAudio(f)) ||
-        (!imagesOnly && isAcceptedReferenceVideo(f)),
-    );
-    if (usable.length === 0) {
-      toast.error("Nothing there can be used as a reference", {
-        description: imagesOnly
-          ? `Nothing dropped was a picture. ${referenceRules(true)}`
-          : `Nothing dropped was a picture, a voice clip, or a video. ${referenceRules(imagesOnly)}`,
+  useEffect(() => {
+    if (!droppedFiles || droppedFiles.length === 0) return;
+    // A batch still saving would overwrite the batch list when it finishes,
+    // taking these with it — the same reason handleDrop refuses mid-save.
+    if (isSavingRef.current) {
+      toast.error("Still uploading", {
+        description: "Drop them again once the current upload has finished.",
       });
       return;
     }
-    if (usable.length < dropped.length) {
-      toast.error(`Skipped ${dropped.length - usable.length} of ${dropped.length} files`, {
-        description: `The rest were added. ${referenceRules(imagesOnly)}`,
-      });
-    }
-
-    acceptFiles(usable);
-  }
+    acceptFiles([...droppedFiles]);
+    // Keyed on the array alone: each bar drop is a new one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [droppedFiles]);
 
   /**
    * Asks for a fresh description of an element that is already saved.

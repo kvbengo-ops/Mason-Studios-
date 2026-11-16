@@ -9,7 +9,7 @@
 // problem was never how many fields it has; it is that they are spread over
 // six screens.
 
-import { useEffect, useLayoutEffect, useRef, useState, type JSX } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type JSX } from "react";
 import { GEMINI_VOICES } from "@/lib/gemini-voices";
 import { useRouter } from "next/navigation";
 import { flushSync } from "react-dom";
@@ -45,7 +45,11 @@ import { generateClip, regenerateClip } from "@/actions/ugc";
 import { supportsPromptOnlyVideo } from "@/lib/prompt-only-video";
 import { stageFiles } from "@/lib/stage-files";
 import { SceneRerenderDialog } from "@/components/scene-rerender-dialog";
-import { UgcReferencePicker, type PickedReference } from "@/components/ugc-reference-picker";
+import {
+  takeReferenceDrop,
+  UgcReferencePicker,
+  type PickedReference,
+} from "@/components/ugc-reference-picker";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
 import { findElementByTag, KLING_FRAME_EXTS, TAG_PATTERN, type ElementTag } from "@/lib/elements";
 import { tagLeadIsWordish, tagsInOrder } from "@/lib/element-tags";
@@ -474,6 +478,11 @@ export function UgcColumn({
   const [boxPickerOpen, setBoxPickerOpen] = useState(false);
   // The bar's "+" opens this same dialog on Uploads, its "@" on Elements.
   const [boxPickerTab, setBoxPickerTab] = useState<"uploads" | "elements">("elements");
+  // Local files dropped on the bar, handed to the box's dialog to stage on
+  // Uploads — the same place the "+" leads. A drop only uploads; like the
+  // "+", it never adds to the References box (only "Use element" does).
+  const [barDroppedFiles, setBarDroppedFiles] = useState<File[] | null>(null);
+  const [barFileDragOver, setBarFileDragOver] = useState(false);
   const [boxExpanded, setBoxExpanded] = useState(false);
 
   /**
@@ -824,6 +833,24 @@ export function UgcColumn({
   // comment on UgcOption for why a model-table flag is the right question to
   // ask, the same way maxPromptChars already is.
   const isKling = option.nativeAudio;
+  const boxImagesOnly =
+    option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2";
+  // Same reach as the bar's "+": not on Kling (frames come from Elements
+  // only) and not read-only.
+  const acceptsFileDrop = bar && !isKling && !readOnly;
+  function isFileDrag(event: DragEvent): boolean {
+    return acceptsFileDrop && event.dataTransfer.types.includes("Files");
+  }
+  function handleBarFileDrop(event: DragEvent): void {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    setBarFileDragOver(false);
+    const usable = takeReferenceDrop(Array.from(event.dataTransfer.files), boxImagesOnly);
+    if (usable.length === 0) return;
+    setBarDroppedFiles(usable);
+    setBoxPickerTab("uploads");
+    setBoxPickerOpen(true);
+  }
   // Only for models that take a ratio; the rest render 9:16 and send none.
   const aspectRatios = kieModel(option.modelId)?.aspectRatios ?? [];
   const activeAspectRatio = aspectRatios.find((r) => r === aspectRatio);
@@ -1147,35 +1174,60 @@ export function UgcColumn({
   }
 
   return (
-    <ActionForm
-      action={submit}
-      fallbackErrorMessage="The clip could not be queued."
-      // min-h-0 + overflow-y-auto so the column scrolls INSIDE the row rather
-      // than being clipped by the page's overflow-hidden. On a short screen the
-      // prompt box, the four settings and the Generate button do not all fit,
-      // and the button is the one that would fall off the bottom — a control
-      // that spends money, unreachable, with no scrollbar to say so.
-      className={
-        bar
-          ? "relative w-full rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur"
-          : "flex min-h-0 w-full max-w-md flex-1 flex-col gap-3 overflow-y-auto"
-      }
+    // display:contents — only here to catch a local file dragged onto the
+    // bar; drag events bubble through it without it taking up layout.
+    <div
+      className="contents"
+      onDragOver={(event) => {
+        if (!isFileDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setBarFileDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        // Crossing onto a child fires dragleave too; only leaving the bar counts.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setBarFileDragOver(false);
+      }}
+      onDrop={handleBarFileDrop}
     >
-      <PendingFieldset className={bar ? "!flex items-stretch gap-3" : undefined}>
-        {selectedScene ? <input type="hidden" name="sceneId" value={selectedScene.id} /> : null}
-        <input type="hidden" name="projectId" value={targetProjectId} />
-        <input type="hidden" name="modelId" value={option.modelId} />
-        <input type="hidden" name="resolution" value={option.resolution} />
-        <input type="hidden" name="durationS" value={activeDuration} />
-        {option.modelId === "gemini-omni-video" && geminiVoice ? (
-          <input type="hidden" name="geminiVoice" value={geminiVoice} />
+      <ActionForm
+        action={submit}
+        fallbackErrorMessage="The clip could not be queued."
+        // min-h-0 + overflow-y-auto so the column scrolls INSIDE the row rather
+        // than being clipped by the page's overflow-hidden. On a short screen the
+        // prompt box, the four settings and the Generate button do not all fit,
+        // and the button is the one that would fall off the bottom — a control
+        // that spends money, unreachable, with no scrollbar to say so.
+        className={
+          bar
+            ? "relative w-full rounded-2xl border border-border bg-card/95 p-3 shadow-2xl backdrop-blur"
+            : "flex min-h-0 w-full max-w-md flex-1 flex-col gap-3 overflow-y-auto"
+        }
+      >
+        {barFileDragOver ? (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-primary/25 text-sm font-semibold text-primary backdrop-blur-sm"
+          >
+            Release to upload
+          </div>
         ) : null}
-        {activeAspectRatio ? (
-          <input type="hidden" name="aspectRatio" value={activeAspectRatio} />
-        ) : null}
-        {isKling ? (
-          <>
-            {/* KLING'S OWN PAIR, not elementId/referencesBox. actions/ugc.ts's
+        <PendingFieldset className={bar ? "!flex items-stretch gap-3" : undefined}>
+          {selectedScene ? <input type="hidden" name="sceneId" value={selectedScene.id} /> : null}
+          <input type="hidden" name="projectId" value={targetProjectId} />
+          <input type="hidden" name="modelId" value={option.modelId} />
+          <input type="hidden" name="resolution" value={option.resolution} />
+          <input type="hidden" name="durationS" value={activeDuration} />
+          {option.modelId === "gemini-omni-video" && geminiVoice ? (
+            <input type="hidden" name="geminiVoice" value={geminiVoice} />
+          ) : null}
+          {activeAspectRatio ? (
+            <input type="hidden" name="aspectRatio" value={activeAspectRatio} />
+          ) : null}
+          {isKling ? (
+            <>
+              {/* KLING'S OWN PAIR, not elementId/referencesBox. actions/ugc.ts's
                 generateClip/regenerateClip read these only when the chosen
                 model is Kling — see that file's own comment on why the two
                 shapes cannot both be present on one submission. endElementId
@@ -1184,35 +1236,37 @@ export function UgcColumn({
                 a submitted-but-empty end frame would read as "clear the
                 existing one" on a Regenerate, which is not what leaving a
                 slot untouched means. */}
-            {startElement ? (
-              <input type="hidden" name="startElementId" value={startElement.id} />
-            ) : null}
-            {endElement ? <input type="hidden" name="endElementId" value={endElement.id} /> : null}
-            {/* "1"/"0", not a checkbox's own on/absent shape — Regenerate has
+              {startElement ? (
+                <input type="hidden" name="startElementId" value={startElement.id} />
+              ) : null}
+              {endElement ? (
+                <input type="hidden" name="endElementId" value={endElement.id} />
+              ) : null}
+              {/* "1"/"0", not a checkbox's own on/absent shape — Regenerate has
                 to be able to tell "sound off" apart from "sound field never
                 submitted", the same reason referencesBox below is a marker
                 rather than inferred from referenceTag's presence. */}
-            <input type="hidden" name="sound" value={effectiveSoundOn ? "1" : "0"} />
-          </>
-        ) : (
-          <>
-            {effectiveReference?.kind === "element" ? (
-              <input type="hidden" name="elementId" value={effectiveReference.elementId} />
-            ) : null}
-            {effectiveReference?.kind === "upload" &&
-            isAcceptedReferenceVideo(effectiveReference.file) ? (
-              <input
-                type="hidden"
-                name="primaryVideoDurationS"
-                value={
-                  typeof effectiveReference.durationS === "number"
-                    ? String(effectiveReference.durationS)
-                    : ""
-                }
-              />
-            ) : null}
+              <input type="hidden" name="sound" value={effectiveSoundOn ? "1" : "0"} />
+            </>
+          ) : (
+            <>
+              {effectiveReference?.kind === "element" ? (
+                <input type="hidden" name="elementId" value={effectiveReference.elementId} />
+              ) : null}
+              {effectiveReference?.kind === "upload" &&
+              isAcceptedReferenceVideo(effectiveReference.file) ? (
+                <input
+                  type="hidden"
+                  name="primaryVideoDurationS"
+                  value={
+                    typeof effectiveReference.durationS === "number"
+                      ? String(effectiveReference.durationS)
+                      : ""
+                  }
+                />
+              ) : null}
 
-            {/* THE BOX, SUBMITTED. `referencesBox` is the marker generateClip
+              {/* THE BOX, SUBMITTED. `referencesBox` is the marker generateClip
                 (actions/ugc.ts) reads to know this request came through a column
                 that rendered a box at all — its ABSENCE, not just an empty
                 `referenceTag` list, is what lets retryClip's marker-less
@@ -1221,88 +1275,88 @@ export function UgcColumn({
                 with an empty box still submits the marker with zero
                 `referenceTag` fields, and that is a real, enforceable box —
                 "empty" — not "no box was ever shown". */}
-            <input type="hidden" name="referencesBox" value="1" />
-            {boxTags.map((tag) => (
-              <input key={tag} type="hidden" name="referenceTag" value={tag} />
-            ))}
-          </>
-        )}
+              <input type="hidden" name="referencesBox" value="1" />
+              {boxTags.map((tag) => (
+                <input key={tag} type="hidden" name="referenceTag" value={tag} />
+              ))}
+            </>
+          )}
 
-        {/* NO operatorPrompt. It carried what the operator typed BEFORE
+          {/* NO operatorPrompt. It carried what the operator typed BEFORE
             Refine rewrote it, and Refine is gone — the box is now the only
             prompt there has ever been for a clip. 0072's pair still means
             something: video_prompt is what is written here, and
             ai_generated_prompt is that same text with every "@name" replaced
             by its element's description, which generateClip does itself. */}
-        {/* The file this form actually submits when `reference` is an
+          {/* The file this form actually submits when `reference` is an
             upload — populated imperatively by handlePick above, never by a
             React `value` (file inputs don't take one). Kept mounted
             unconditionally (not swapped in/out with the elementId field)
             so `fileRef` stays attached to the same DOM node across
             re-renders. */}
-        <input
-          ref={fileRef}
-          type="file"
-          name="image"
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-        />
+          <input
+            ref={fileRef}
+            type="file"
+            name="image"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden="true"
+          />
 
-        {/* In "bar" layout everything up to Generate is the left column;
+          {/* In "bar" layout everything up to Generate is the left column;
             "contents" leaves the column layout exactly as it was. */}
-        <div className={bar ? "flex min-w-0 flex-1 flex-col gap-2" : "contents"}>
-          {/* ---- frames (Kling) / references (everything else) ----
+          <div className={bar ? "flex min-w-0 flex-1 flex-col gap-2" : "contents"}>
+            {/* ---- frames (Kling) / references (everything else) ----
 
             KLING GETS ITS OWN SECTION, not the box below. Kling is
             start-frame-plus-optional-end-frame, a fixed two positions kie's
             own image_urls documents, not an open-ended allowlist a prompt
             @tags into — so it gets two tiles instead of a grid, and neither
             one is reachable through the box's own "Add" dialog. */}
-          {isKling ? (
-            <section className="flex flex-col gap-1.5">
-              <Label
-                className={cn(
-                  "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
-                  bar && "sr-only",
-                )}
-              >
-                Frames
-              </Label>
-              <div className={bar ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-1.5"}>
-                <KlingFrameSlot
-                  label="Start frame"
-                  required={!promptOnlyAllowed || !!endElement}
-                  element={startElement}
-                  disabled={readOnly}
-                  onOpen={() => setFramePickerSlot("start")}
-                  onRemove={() => setStartElement(null)}
-                  badExt={startFrameBadExt}
-                  compact={bar}
-                />
-                <KlingFrameSlot
-                  label="End frame"
-                  required={false}
-                  element={endElement}
-                  disabled={readOnly}
-                  onOpen={() => setFramePickerSlot("end")}
-                  onRemove={() => setEndElement(null)}
-                  badExt={endFrameBadExt}
-                  compact={bar}
-                />
-              </div>
-              {/* NAMED, same "silent refusal is a bug class" rule as the @tag
+            {isKling ? (
+              <section className="flex flex-col gap-1.5">
+                <Label
+                  className={cn(
+                    "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground",
+                    bar && "sr-only",
+                  )}
+                >
+                  Frames
+                </Label>
+                <div className={bar ? "flex flex-wrap gap-2" : "grid grid-cols-2 gap-1.5"}>
+                  <KlingFrameSlot
+                    label="Start frame"
+                    required={!promptOnlyAllowed || !!endElement}
+                    element={startElement}
+                    disabled={readOnly}
+                    onOpen={() => setFramePickerSlot("start")}
+                    onRemove={() => setStartElement(null)}
+                    badExt={startFrameBadExt}
+                    compact={bar}
+                  />
+                  <KlingFrameSlot
+                    label="End frame"
+                    required={false}
+                    element={endElement}
+                    disabled={readOnly}
+                    onOpen={() => setFramePickerSlot("end")}
+                    onRemove={() => setEndElement(null)}
+                    badExt={endFrameBadExt}
+                    compact={bar}
+                  />
+                </div>
+                {/* NAMED, same "silent refusal is a bug class" rule as the @tag
                 line below — kie's Kling 3.0 refuses a webp frame at submit
                 (KLING_FRAME_EXTS' own comment), so this has to say which
                 slot is the problem before Generate/Regenerate ever go out
                 and get refused for real. */}
-              {klingBadFrames.length > 0 ? (
-                <p className="text-xs text-destructive">
-                  {klingBadFrames.map((f) => `@${f.name} is a ${f.ext.toUpperCase()}`).join("; ")} —
-                  Kling only takes PNG or JPG frames. Pick another image.
-                </p>
-              ) : null}
-              {/* THE SAME DIALOG, NOT A COPY — same reasoning as the box's own
+                {klingBadFrames.length > 0 ? (
+                  <p className="text-xs text-destructive">
+                    {klingBadFrames.map((f) => `@${f.name} is a ${f.ext.toUpperCase()}`).join("; ")}{" "}
+                    — Kling only takes PNG or JPG frames. Pick another image.
+                  </p>
+                ) : null}
+                {/* THE SAME DIALOG, NOT A COPY — same reasoning as the box's own
                 second instance below: Elements-only (elementsOnly) and
                 pictures-only (imagesOnly), no Uploads tab and no non-image
                 element pickable, because a Kling frame is a picture and
@@ -1312,29 +1366,29 @@ export function UgcColumn({
                 replaces whichever slot is open. onPick is unused on this
                 path (Elements-only has no Uploads tab to hand a fresh file
                 back from) but the prop is required, so a no-op stands in. */}
-              <UgcReferencePicker
-                projectId={projectId}
-                elements={elements}
-                current={null}
-                onPick={() => {}}
-                elementsOnly
-                imagesOnly
-                hideTrigger
-                initialTab="elements"
-                open={framePickerSlot !== null}
-                onOpenChange={(next) => {
-                  if (!next) setFramePickerSlot(null);
-                }}
-                onUseElement={(el) => {
-                  if (framePickerSlot === "start") setStartElement(el);
-                  else if (framePickerSlot === "end") setEndElement(el);
-                  setFramePickerSlot(null);
-                }}
-              />
-            </section>
-          ) : (
-            <>
-              {/* ---- references ----
+                <UgcReferencePicker
+                  projectId={projectId}
+                  elements={elements}
+                  current={null}
+                  onPick={() => {}}
+                  elementsOnly
+                  imagesOnly
+                  hideTrigger
+                  initialTab="elements"
+                  open={framePickerSlot !== null}
+                  onOpenChange={(next) => {
+                    if (!next) setFramePickerSlot(null);
+                  }}
+                  onUseElement={(el) => {
+                    if (framePickerSlot === "start") setStartElement(el);
+                    else if (framePickerSlot === "end") setEndElement(el);
+                    setFramePickerSlot(null);
+                  }}
+                />
+              </section>
+            ) : (
+              <>
+                {/* ---- references ----
 
             ABOVE the prompt, on purpose: this is the box that decides what a
             @tag can actually resolve to in the editor below it, so it reads
@@ -1346,181 +1400,191 @@ export function UgcColumn({
             below relearned once already (see its own header). FILLED STATE
             is a grid of small tiles so a scene with several references reads
             at a glance, the way the Elements tab's own grid does. */}
-              {/* Hidden in the bar while empty: the "Add references" pill in the
+                {/* Hidden in the bar while empty: the "Add references" pill in the
                 controls row is the way in there, and an empty box would spend
                 the bar's one spare line saying nothing. */}
-              <section
-                className={cn("flex flex-col gap-1.5", bar && boxTags.length === 0 && "hidden")}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    References{" "}
-                    <span className="font-normal tabular-nums normal-case tracking-normal">
-                      {boxTags.length}/{maxReferences}
-                    </span>
-                  </Label>
-                  {/* Not in the bar: Generate sits on top of this corner there,
+                <section
+                  className={cn("flex flex-col gap-1.5", bar && boxTags.length === 0 && "hidden")}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      References{" "}
+                      <span className="font-normal tabular-nums normal-case tracking-normal">
+                        {boxTags.length}/{maxReferences}
+                      </span>
+                    </Label>
+                    {/* Not in the bar: Generate sits on top of this corner there,
                       and the bar's own "+" / "@" open the same picker. */}
-                  {boxTags.length > 0 && !bar ? (
-                    <button
-                      type="button"
-                      onClick={() => setBoxPickerOpen(true)}
-                      disabled={readOnly || boxTags.length >= maxReferences}
-                      title={
-                        boxTags.length >= maxReferences
-                          ? `A scene holds at most ${maxReferences} references. Remove one to add another.`
-                          : undefined
-                      }
-                      className="inline-flex h-6 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <PlusIcon aria-hidden="true" className="size-3" />
-                      Add
-                    </button>
-                  ) : null}
-                </div>
-                {boxTags.length === 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setBoxPickerOpen(true)}
-                    disabled={readOnly}
-                    className={cn(
-                      "flex flex-col items-center gap-2 rounded-lg border border-dashed p-4 text-center",
-                      "transition-colors hover:border-foreground/40 hover:bg-accent/20",
-                      "disabled:cursor-not-allowed disabled:opacity-60",
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
-                        <ImageIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                      </span>
-                      <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
-                        <VideoIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                      </span>
-                      <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
-                        <MusicIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                      </span>
-                    </span>
-                    <span className="text-sm font-medium">Add references</span>
-                    <span className="text-xs text-muted-foreground">
-                      Image, video or audio from your Elements
-                    </span>
-                  </button>
-                ) : (
-                  // CHIPS, NOT TILES, AND AT MOST TWO ROWS OF THEM. The first cut
-                  // was a five-column grid of square thumbnails: ten references
-                  // stood two rows of 150px tiles between the operator and the
-                  // prompt, clipped half the names, and spent a line per tile on
-                  // "not in prompt". A 32px chip carries the same three facts
-                  // (what it is, its tag, remove) and lets the prompt keep the
-                  // room. Past BOX_COLLAPSED_CHIPS the rest fold behind "+N more".
-                  <div className="flex flex-wrap gap-1.5">
-                    {(boxExpanded ? boxTags : boxTags.slice(0, BOX_COLLAPSED_CHIPS)).map((tag) => {
-                      // Resolved against the FULL library here, not boxElements —
-                      // a tag whose element has since been deleted or renamed
-                      // must still show a chip the operator can remove, not
-                      // vanish silently from the box.
-                      const element = findElementByTag(elements, tag);
-                      const inPrompt = promptTags.includes(tag.toLowerCase());
-                      return (
-                        <span
-                          key={tag}
-                          title={
-                            inPrompt
-                              ? `@${tag}`
-                              : `@${tag} is not in the prompt, so it won't be sent`
-                          }
-                          className={cn(
-                            "inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border bg-card pl-1 pr-0.5 text-xs",
-                            !inPrompt && "border-dashed opacity-60",
-                          )}
-                        >
-                          {element === undefined ? (
-                            <span className="size-6 shrink-0 rounded-sm border bg-muted/50" />
-                          ) : element.assetKind === "audio" ? (
-                            <span className="grid size-6 shrink-0 place-items-center rounded-sm border bg-muted/50">
-                              <MusicIcon
-                                aria-hidden="true"
-                                className="size-3 text-muted-foreground"
-                              />
-                            </span>
-                          ) : element.assetKind === "video_ref" ? (
-                            <span className="grid size-6 shrink-0 place-items-center rounded-sm border bg-muted/50">
-                              <VideoIcon
-                                aria-hidden="true"
-                                className="size-3 text-muted-foreground"
-                              />
-                            </span>
-                          ) : (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={element.previewUrl}
-                              alt=""
-                              className="size-6 shrink-0 rounded-sm border object-cover"
-                            />
-                          )}
-                          <span className="max-w-[9rem] truncate font-medium">@{tag}</span>
-                          {inPrompt ? null : <span className="sr-only">not in prompt</span>}
-                          <button
-                            type="button"
-                            onClick={() => removeTagFromBox(tag)}
-                            disabled={readOnly}
-                            aria-label={`Remove @${tag}`}
-                            className="grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed"
-                          >
-                            <XIcon aria-hidden="true" className="size-3" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                    {boxTags.length > BOX_COLLAPSED_CHIPS ? (
+                    {boxTags.length > 0 && !bar ? (
                       <button
                         type="button"
-                        onClick={() => setBoxExpanded((v) => !v)}
-                        aria-expanded={boxExpanded}
-                        className="inline-flex h-8 items-center rounded-md px-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        onClick={() => setBoxPickerOpen(true)}
+                        disabled={readOnly || boxTags.length >= maxReferences}
+                        title={
+                          boxTags.length >= maxReferences
+                            ? `A scene holds at most ${maxReferences} references. Remove one to add another.`
+                            : undefined
+                        }
+                        className="inline-flex h-6 items-center gap-1 rounded-md border px-2 text-xs text-muted-foreground hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {boxExpanded
-                          ? "Show less"
-                          : `+${boxTags.length - BOX_COLLAPSED_CHIPS} more`}
+                        <PlusIcon aria-hidden="true" className="size-3" />
+                        Add
                       </button>
                     ) : null}
                   </div>
-                )}
-                {/* The box's own second instance of the dialog — hidden trigger,
+                  {boxTags.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setBoxPickerOpen(true)}
+                      disabled={readOnly}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border border-dashed p-4 text-center",
+                        "transition-colors hover:border-foreground/40 hover:bg-accent/20",
+                        "disabled:cursor-not-allowed disabled:opacity-60",
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
+                          <ImageIcon
+                            aria-hidden="true"
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        </span>
+                        <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
+                          <VideoIcon
+                            aria-hidden="true"
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        </span>
+                        <span className="grid size-7 place-items-center rounded-full border bg-muted/50">
+                          <MusicIcon
+                            aria-hidden="true"
+                            className="size-3.5 text-muted-foreground"
+                          />
+                        </span>
+                      </span>
+                      <span className="text-sm font-medium">Add references</span>
+                      <span className="text-xs text-muted-foreground">
+                        Image, video or audio from your Elements
+                      </span>
+                    </button>
+                  ) : (
+                    // CHIPS, NOT TILES, AND AT MOST TWO ROWS OF THEM. The first cut
+                    // was a five-column grid of square thumbnails: ten references
+                    // stood two rows of 150px tiles between the operator and the
+                    // prompt, clipped half the names, and spent a line per tile on
+                    // "not in prompt". A 32px chip carries the same three facts
+                    // (what it is, its tag, remove) and lets the prompt keep the
+                    // room. Past BOX_COLLAPSED_CHIPS the rest fold behind "+N more".
+                    <div className="flex flex-wrap gap-1.5">
+                      {(boxExpanded ? boxTags : boxTags.slice(0, BOX_COLLAPSED_CHIPS)).map(
+                        (tag) => {
+                          // Resolved against the FULL library here, not boxElements —
+                          // a tag whose element has since been deleted or renamed
+                          // must still show a chip the operator can remove, not
+                          // vanish silently from the box.
+                          const element = findElementByTag(elements, tag);
+                          const inPrompt = promptTags.includes(tag.toLowerCase());
+                          return (
+                            <span
+                              key={tag}
+                              title={
+                                inPrompt
+                                  ? `@${tag}`
+                                  : `@${tag} is not in the prompt, so it won't be sent`
+                              }
+                              className={cn(
+                                "inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border bg-card pl-1 pr-0.5 text-xs",
+                                !inPrompt && "border-dashed opacity-60",
+                              )}
+                            >
+                              {element === undefined ? (
+                                <span className="size-6 shrink-0 rounded-sm border bg-muted/50" />
+                              ) : element.assetKind === "audio" ? (
+                                <span className="grid size-6 shrink-0 place-items-center rounded-sm border bg-muted/50">
+                                  <MusicIcon
+                                    aria-hidden="true"
+                                    className="size-3 text-muted-foreground"
+                                  />
+                                </span>
+                              ) : element.assetKind === "video_ref" ? (
+                                <span className="grid size-6 shrink-0 place-items-center rounded-sm border bg-muted/50">
+                                  <VideoIcon
+                                    aria-hidden="true"
+                                    className="size-3 text-muted-foreground"
+                                  />
+                                </span>
+                              ) : (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={element.previewUrl}
+                                  alt=""
+                                  className="size-6 shrink-0 rounded-sm border object-cover"
+                                />
+                              )}
+                              <span className="max-w-[9rem] truncate font-medium">@{tag}</span>
+                              {inPrompt ? null : <span className="sr-only">not in prompt</span>}
+                              <button
+                                type="button"
+                                onClick={() => removeTagFromBox(tag)}
+                                disabled={readOnly}
+                                aria-label={`Remove @${tag}`}
+                                className="grid size-6 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed"
+                              >
+                                <XIcon aria-hidden="true" className="size-3" />
+                              </button>
+                            </span>
+                          );
+                        },
+                      )}
+                      {boxTags.length > BOX_COLLAPSED_CHIPS ? (
+                        <button
+                          type="button"
+                          onClick={() => setBoxExpanded((v) => !v)}
+                          aria-expanded={boxExpanded}
+                          className="inline-flex h-8 items-center rounded-md px-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                        >
+                          {boxExpanded
+                            ? "Show less"
+                            : `+${boxTags.length - BOX_COLLAPSED_CHIPS} more`}
+                        </button>
+                      ) : null}
+                    </div>
+                  )}
+                  {/* The box's own second instance of the dialog — hidden trigger,
               opened on the Elements tab, controlled by boxPickerOpen. See
               hideTrigger/initialTab/open's own comments on UgcReferencePicker
               for why this is the same component and not a copy. */}
-                <UgcReferencePicker
-                  projectId={projectId}
-                  elements={elements}
-                  current={null}
-                  onPick={handlePick}
-                  hideTrigger
-                  initialTab={boxPickerTab}
-                  open={boxPickerOpen}
-                  onOpenChange={setBoxPickerOpen}
-                  onUseElement={(el) => addTagsToBox([el.name])}
-                  imagesOnly={
-                    option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2"
-                  }
-                  boxTags={boxTags}
-                  boxLimit={maxReferences}
-                />
-              </section>
-            </>
-          )}
+                  <UgcReferencePicker
+                    projectId={projectId}
+                    elements={elements}
+                    current={null}
+                    onPick={handlePick}
+                    hideTrigger
+                    initialTab={boxPickerTab}
+                    open={boxPickerOpen}
+                    onOpenChange={setBoxPickerOpen}
+                    onUseElement={(el) => addTagsToBox([el.name])}
+                    imagesOnly={boxImagesOnly}
+                    boxTags={boxTags}
+                    boxLimit={maxReferences}
+                    droppedFiles={barDroppedFiles}
+                  />
+                </section>
+              </>
+            )}
 
-          {/* ---- prompt ----
+            {/* ---- prompt ----
 
             flex-1: this is the only thing in the column that benefits from
             more room, and everything below it is a fixed-height row. The
             settings and the button stay pinned where the hand expects them
             while the field an editor actually writes in takes whatever is
             left, instead of stopping at 160px above a band of empty page. */}
-          {/* No padding on the section itself — the header is a filled bar and
+            {/* No padding on the section itself — the header is a filled bar and
             has to reach the panel's edges, so the inset moves down to the
             editor's own wrapper. */}
-          {/* NOT min-h-0: the section is allowed to grow with flex-1, but must
+            {/* NOT min-h-0: the section is allowed to grow with flex-1, but must
             never shrink below the editor's own min-h-40 floor. min-h-0 here
             let it shrink past that floor while the textarea inside refused
             to, so the box overflowed its own (too-short) border and painted
@@ -1530,88 +1594,88 @@ export function UgcColumn({
             min-h-0 divs to the textarea's real minimum — so on a short
             window the OUTER column's overflow-y-auto scrolls to reach
             Settings/Generate instead of this section clipping or bleeding. */}
-          <section
-            className={
-              bar
-                ? "flex min-w-0 flex-1 flex-col"
-                : "flex flex-1 flex-col rounded-lg border bg-card"
-            }
-          >
-            <div
-              className={cn(
-                "flex items-center justify-between gap-2 rounded-t-[7px] border-b bg-muted/60 px-3 py-1.5",
-                bar && "sr-only",
-              )}
+            <section
+              className={
+                bar
+                  ? "flex min-w-0 flex-1 flex-col"
+                  : "flex flex-1 flex-col rounded-lg border bg-card"
+              }
             >
-              <Label
-                htmlFor="ugc-prompt"
-                className="text-[11px] font-semibold uppercase tracking-wider text-foreground"
+              <div
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-t-[7px] border-b bg-muted/60 px-3 py-1.5",
+                  bar && "sr-only",
+                )}
               >
-                Prompt
-              </Label>
-            </div>
-            {/* Carries the inset the section gave up, and re-declares flex-1
+                <Label
+                  htmlFor="ugc-prompt"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-foreground"
+                >
+                  Prompt
+                </Label>
+              </div>
+              {/* Carries the inset the section gave up, and re-declares flex-1
               (no min-h-0 — see the section's own comment above) so the
               editor still takes the whole panel without shrinking past its
               floor. */}
-            <div className={bar ? "flex flex-col" : "flex flex-1 flex-col p-3"}>
-              <UgcPromptEditor
-                id="ugc-prompt"
-                // Height and colour only, same rule as the image bar — see
-                // UgcPromptEditorProps.textareaClassName.
-                controlsDisabled={readOnly}
-                textareaClassName={
-                  bar
-                    ? "h-20 max-h-20 min-h-20 flex-none rounded-xl border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0"
-                    : undefined
-                }
-                boxClassName={bar ? "pr-32" : undefined}
-                name="prompt"
-                value={prompt}
-                charCount={submittedPromptLength}
-                maxChars={option.maxPromptChars}
-                onChange={updatePromptDraft}
-                // The scene the history belongs to. "new" rather than
-                // undefined for the unsaved one, so switching from a saved
-                // scene back to the draft still clears — undefined would read
-                // as "unchanged" and carry the other scene's steps across.
-                historyKey={selectedScene?.id ?? "new"}
-                // Start/end frame models have no element tags; Kling Reference takes images.
-                elements={
-                  isKling
-                    ? []
-                    : option.modelId === "kling-4.0-reference"
-                      ? elements.filter((element) => IMAGE_ASSET_KINDS.has(element.assetKind))
-                      : elements
-                }
-                placeholder={
-                  bar
-                    ? "Describe the scene you imagine — subject, motion, camera. Type @ for a saved reference."
-                    : // A TEMPLATE, not an example prompt.
-                      //
-                      // This was three finished paragraphs of prose — a woman, a
-                      // marble counter, a push-in at 0.2 km/h — in the same
-                      // monospace face as real text. It read as a prompt somebody
-                      // had already written, and an operator opened a new project,
-                      // saw it, and asked why Generate was refusing them. Nothing
-                      // was broken: the box was empty and the button said so.
-                      //
-                      // Length was not the problem; PROSE was. A finished sentence
-                      // looks like an answer at a glance whatever its length,
-                      // whereas a labelled fragment ending in an ellipsis cannot be
-                      // mistaken for one. Same structure taught — Seedance wants
-                      // subject and motion first, and this still says so — without
-                      // pretending to be filled in.
-                      "Scene & Mood: …\n" +
-                      "Movement: 0.0s–2.5s …\n" +
-                      "Camera: one move, not two …\n" +
-                      "Sound Bed: …"
-                }
-              />
-            </div>
-          </section>
+              <div className={bar ? "flex flex-col" : "flex flex-1 flex-col p-3"}>
+                <UgcPromptEditor
+                  id="ugc-prompt"
+                  // Height and colour only, same rule as the image bar — see
+                  // UgcPromptEditorProps.textareaClassName.
+                  controlsDisabled={readOnly}
+                  textareaClassName={
+                    bar
+                      ? "h-20 max-h-20 min-h-20 flex-none rounded-xl border-transparent bg-transparent shadow-none focus-visible:border-transparent focus-visible:ring-0"
+                      : undefined
+                  }
+                  boxClassName={bar ? "pr-32" : undefined}
+                  name="prompt"
+                  value={prompt}
+                  charCount={submittedPromptLength}
+                  maxChars={option.maxPromptChars}
+                  onChange={updatePromptDraft}
+                  // The scene the history belongs to. "new" rather than
+                  // undefined for the unsaved one, so switching from a saved
+                  // scene back to the draft still clears — undefined would read
+                  // as "unchanged" and carry the other scene's steps across.
+                  historyKey={selectedScene?.id ?? "new"}
+                  // Start/end frame models have no element tags; Kling Reference takes images.
+                  elements={
+                    isKling
+                      ? []
+                      : option.modelId === "kling-4.0-reference"
+                        ? elements.filter((element) => IMAGE_ASSET_KINDS.has(element.assetKind))
+                        : elements
+                  }
+                  placeholder={
+                    bar
+                      ? "Describe the scene you imagine — subject, motion, camera. Type @ for a saved reference."
+                      : // A TEMPLATE, not an example prompt.
+                        //
+                        // This was three finished paragraphs of prose — a woman, a
+                        // marble counter, a push-in at 0.2 km/h — in the same
+                        // monospace face as real text. It read as a prompt somebody
+                        // had already written, and an operator opened a new project,
+                        // saw it, and asked why Generate was refusing them. Nothing
+                        // was broken: the box was empty and the button said so.
+                        //
+                        // Length was not the problem; PROSE was. A finished sentence
+                        // looks like an answer at a glance whatever its length,
+                        // whereas a labelled fragment ending in an ellipsis cannot be
+                        // mistaken for one. Same structure taught — Seedance wants
+                        // subject and motion first, and this still says so — without
+                        // pretending to be filled in.
+                        "Scene & Mood: …\n" +
+                        "Movement: 0.0s–2.5s …\n" +
+                        "Camera: one move, not two …\n" +
+                        "Sound Bed: …"
+                  }
+                />
+              </div>
+            </section>
 
-          {/* KLING'S OWN LINE, replacing the box's outside-the-box warning
+            {/* KLING'S OWN LINE, replacing the box's outside-the-box warning
             entirely — there is no box to be outside of. This USED to be
             informational only ("Kling doesn't read @tags — they're sent as
             plain words"), because 42d29e3 (worker) made an '@' in a Kling
@@ -1623,25 +1687,25 @@ export function UgcColumn({
             destructive-red, same-shape line as the reference-limit warning below —
             named, not silent, per the standing "a disabled control must say
             why" rule. */}
-          {isKling && promptTags.length > 0 ? (
-            <p className="text-xs text-destructive">
-              Kling can&rsquo;t use @tags — remove{" "}
-              {promptTags
-                .slice(0, 3)
-                .map((name) => `@${name}`)
-                .join(", ")}
-              {promptTags.length > 3 ? ` +${promptTags.length - 3} more` : ""} to generate.
-            </p>
-          ) : null}
+            {isKling && promptTags.length > 0 ? (
+              <p className="text-xs text-destructive">
+                Kling can&rsquo;t use @tags — remove{" "}
+                {promptTags
+                  .slice(0, 3)
+                  .map((name) => `@${name}`)
+                  .join(", ")}
+                {promptTags.length > 3 ? ` +${promptTags.length - 3} more` : ""} to generate.
+              </p>
+            ) : null}
 
-          {!isKling && tooManyReferences ? (
-            <p className="text-xs text-destructive">
-              A scene holds at most {maxReferences} references. Remove a tag or reference to
-              generate.
-            </p>
-          ) : null}
+            {!isKling && tooManyReferences ? (
+              <p className="text-xs text-destructive">
+                A scene holds at most {maxReferences} references. Remove a tag or reference to
+                generate.
+              </p>
+            ) : null}
 
-          {/* ---- prompt preview: NOT MOUNTED ----
+            {/* ---- prompt preview: NOT MOUNTED ----
 
             The "What actually gets sent" disclosure used to sit here, showing
             what lib/ugc-prompt-preview.ts computes from the box above. Taken
@@ -1656,20 +1720,20 @@ export function UgcColumn({
             would quietly retire a check on the real submit path. Putting the
             disclosure back is this block, restored. */}
 
-          {/* Each setting is directly editable; the length slider only stops on
+            {/* Each setting is directly editable; the length slider only stops on
             durations supported by the selected model. */}
-          {/* flex-wrap is the fallback, not the plan. Everything below is sized
+            {/* flex-wrap is the fallback, not the plan. Everything below is sized
             to fit one line in a max-w-md column; if a longer model name or a
             narrower viewport breaks that, wrapping is a better failure than a
             squeezed, unreadable row. */}
-          <div
-            className={cn(
-              "flex flex-wrap items-center gap-2 text-sm",
-              // The image bar's pill skin: filled, borderless, same height.
-              bar && "gap-2 [&>*]:!border-transparent [&>*]:!bg-muted/60 [&>*]:hover:!bg-muted",
-            )}
-          >
-            {/* Priced live: the button below reads `option`, so changing this
+            <div
+              className={cn(
+                "flex flex-wrap items-center gap-2 text-sm",
+                // The image bar's pill skin: filled, borderless, same height.
+                bar && "gap-2 [&>*]:!border-transparent [&>*]:!bg-muted/60 [&>*]:hover:!bg-muted",
+              )}
+            >
+              {/* Priced live: the button below reads `option`, so changing this
               changes the credits on it before anything is spent.
 
               EVERY ENTRY HERE HAS A RECEIPT. `options` is built from
@@ -1677,178 +1741,179 @@ export function UgcColumn({
               so this cannot offer a price that would turn out to be a guess. A
               model in the rate table but not in this list is one still waiting
               to be measured. */}
-            {bar && !isKling ? (
-              <div className="flex h-9 items-center">
-                <button
-                  type="button"
-                  disabled={readOnly}
-                  onClick={() => {
-                    setBoxPickerTab("uploads");
-                    setBoxPickerOpen(true);
-                  }}
-                  aria-label="Upload a reference"
-                  title="Upload a reference"
-                  className="grid h-full w-9 place-items-center rounded-l-lg text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                >
-                  <PlusIcon aria-hidden="true" className="size-4" />
-                </button>
-                <span aria-hidden="true" className="h-4 w-px bg-border" />
-                <button
-                  type="button"
-                  disabled={readOnly || boxTags.length >= maxReferences}
-                  onClick={() => {
-                    setBoxPickerTab("elements");
-                    setBoxPickerOpen(true);
-                  }}
-                  aria-label="Add references"
-                  title="Add an element as a reference"
-                  className="grid h-full w-9 place-items-center rounded-r-lg text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                >
-                  <AtSign aria-hidden="true" className="size-4" />
-                </button>
-              </div>
-            ) : null}
-            {bar ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={readOnly}
-                  aria-label={`Model: ${modelLabel}`}
-                  className="flex h-9 max-w-[16rem] cursor-pointer items-center gap-2 rounded-lg border px-3 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  <Sparkles aria-hidden="true" className="size-4 text-primary" />
-                  <span className="truncate">{modelLabel}</span>
-                  {modelMenuId(option.modelId) === "kling-4.0" ? (
-                    <span className="text-xs text-muted-foreground">
-                      {option.modelId === "kling-4.0-reference" ? "References" : "Frames"}
-                    </span>
-                  ) : null}
-                  <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  className="w-80 rounded-2xl p-2"
-                >
-                  <DropdownMenuLabel className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Sparkles aria-hidden="true" className="size-3.5" />
-                    Models
-                  </DropdownMenuLabel>
-                  {modelMenuOptions.map((o) => (
-                    <DropdownMenuItem
-                      key={`${o.modelId}/${o.resolution}`}
-                      onSelect={() => {
-                        if (modelMenuId(o.modelId) !== modelMenuId(option.modelId))
-                          setModelIdx(options.indexOf(o));
-                      }}
-                      className="gap-3 rounded-xl px-2 py-2"
-                    >
-                      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-sm font-semibold text-foreground">
-                        {o.label.charAt(0)}
-                      </span>
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate font-semibold">
-                          {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label}
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground">
-                          {rateLabel(o.creditsPerSecond)} · {ugcTierLabel(o.modelId, o.resolution)}
-                        </span>
-                      </span>
-                      {modelMenuId(o.modelId) === modelMenuId(option.modelId) ? (
-                        <Check aria-hidden="true" className="size-4 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            <label
-              htmlFor="ugc-model"
-              className={cn(
-                // min-w-0, not a floor. Model was min-w-[9rem], and that floor is
-                // what wrapped the row: when the line is a few pixels short
-                // something has to give, and the least costly thing to lose is the
-                // tail of a model name the operator just picked off a list. It
-                // truncates now and the row stays one line.
-                "flex h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-card px-2.5",
-                // A compact pill on the bar, like the image bar's model pill.
-                // On the bar the menu below replaces it; the select stays
-                // mounted (hidden) because the form-reset fix reads its ref.
-                bar ? "hidden" : "flex-1",
-                // The micro-interaction, and it is the same one on all three
-                // live controls so they read as a set. Colour on hover, a small
-                // give on press. `motion-safe:` on the transform only: a scale
-                // is exactly what prefers-reduced-motion exists to suppress,
-                // while a border changing colour is not motion at all.
-                "transition-[color,background-color,border-color] duration-150",
-                "hover:border-foreground/40 hover:bg-accent/40",
-                "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
-                "motion-safe:transition-transform motion-safe:active:scale-[0.98]",
-              )}
-            >
-              <span className="sr-only">Model</span>
-              <select
-                ref={modelSelectRef}
-                id="ugc-model"
-                value={optionIdx}
-                onChange={(e) => setModelIdx(Number(e.target.value))}
-                className={cn(
-                  "w-full min-w-0 cursor-pointer truncate bg-transparent font-medium text-foreground outline-none",
-                  // Sized to the chosen model's name rather than the row.
-                  bar && "w-auto [field-sizing:content]",
-                )}
-              >
-                {options.map((o, i) =>
-                  modelMenuId(o.modelId) === "kling-4.0" &&
-                  o.modelId !== selectedKling4Id ? null : (
-                    <option
-                      key={`${o.modelId}/${o.resolution}`}
-                      value={i}
-                      className="bg-popover text-popover-foreground"
-                    >
-                      {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label} ·{" "}
-                      {ugcTierLabel(o.modelId, o.resolution)}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
-
-            {modelMenuId(option.modelId) === "kling-4.0" ? (
-              <div
-                role="group"
-                aria-label="Kling 4.0 mode"
-                className="flex h-9 items-center gap-0.5 rounded-lg bg-muted/60 p-1"
-              >
-                {kling4Modes.map((mode) => (
+              {bar && !isKling ? (
+                <div className="flex h-9 items-center">
                   <button
-                    key={mode.modelId}
                     type="button"
                     disabled={readOnly}
-                    aria-pressed={mode.modelId === option.modelId}
                     onClick={() => {
-                      const tier =
-                        options.find(
-                          (candidate) =>
-                            candidate.modelId === mode.modelId &&
-                            candidate.resolution === option.resolution,
-                        ) ?? mode;
-                      setModelIdx(options.indexOf(tier));
+                      setBoxPickerTab("uploads");
+                      setBoxPickerOpen(true);
                     }}
-                    className={cn(
-                      "h-full rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
-                      mode.modelId === option.modelId
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
+                    aria-label="Upload a reference"
+                    title="Upload a reference"
+                    className="grid h-full w-9 place-items-center rounded-l-lg text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                   >
-                    {mode.modelId === "kling-4.0-reference" ? "References" : "Start/end frames"}
+                    <PlusIcon aria-hidden="true" className="size-4" />
                   </button>
-                ))}
-              </div>
-            ) : null}
+                  <span aria-hidden="true" className="h-4 w-px bg-border" />
+                  <button
+                    type="button"
+                    disabled={readOnly || boxTags.length >= maxReferences}
+                    onClick={() => {
+                      setBoxPickerTab("elements");
+                      setBoxPickerOpen(true);
+                    }}
+                    aria-label="Add references"
+                    title="Add an element as a reference"
+                    className="grid h-full w-9 place-items-center rounded-r-lg text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  >
+                    <AtSign aria-hidden="true" className="size-4" />
+                  </button>
+                </div>
+              ) : null}
+              {bar ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={readOnly}
+                    aria-label={`Model: ${modelLabel}`}
+                    className="flex h-9 max-w-[16rem] cursor-pointer items-center gap-2 rounded-lg border px-3 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    <Sparkles aria-hidden="true" className="size-4 text-primary" />
+                    <span className="truncate">{modelLabel}</span>
+                    {modelMenuId(option.modelId) === "kling-4.0" ? (
+                      <span className="text-xs text-muted-foreground">
+                        {option.modelId === "kling-4.0-reference" ? "References" : "Frames"}
+                      </span>
+                    ) : null}
+                    <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="w-80 rounded-2xl p-2"
+                  >
+                    <DropdownMenuLabel className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Sparkles aria-hidden="true" className="size-3.5" />
+                      Models
+                    </DropdownMenuLabel>
+                    {modelMenuOptions.map((o) => (
+                      <DropdownMenuItem
+                        key={`${o.modelId}/${o.resolution}`}
+                        onSelect={() => {
+                          if (modelMenuId(o.modelId) !== modelMenuId(option.modelId))
+                            setModelIdx(options.indexOf(o));
+                        }}
+                        className="gap-3 rounded-xl px-2 py-2"
+                      >
+                        <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-sm font-semibold text-foreground">
+                          {o.label.charAt(0)}
+                        </span>
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span className="truncate font-semibold">
+                            {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {rateLabel(o.creditsPerSecond)} ·{" "}
+                            {ugcTierLabel(o.modelId, o.resolution)}
+                          </span>
+                        </span>
+                        {modelMenuId(o.modelId) === modelMenuId(option.modelId) ? (
+                          <Check aria-hidden="true" className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              <label
+                htmlFor="ugc-model"
+                className={cn(
+                  // min-w-0, not a floor. Model was min-w-[9rem], and that floor is
+                  // what wrapped the row: when the line is a few pixels short
+                  // something has to give, and the least costly thing to lose is the
+                  // tail of a model name the operator just picked off a list. It
+                  // truncates now and the row stays one line.
+                  "flex h-9 min-w-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-card px-2.5",
+                  // A compact pill on the bar, like the image bar's model pill.
+                  // On the bar the menu below replaces it; the select stays
+                  // mounted (hidden) because the form-reset fix reads its ref.
+                  bar ? "hidden" : "flex-1",
+                  // The micro-interaction, and it is the same one on all three
+                  // live controls so they read as a set. Colour on hover, a small
+                  // give on press. `motion-safe:` on the transform only: a scale
+                  // is exactly what prefers-reduced-motion exists to suppress,
+                  // while a border changing colour is not motion at all.
+                  "transition-[color,background-color,border-color] duration-150",
+                  "hover:border-foreground/40 hover:bg-accent/40",
+                  "has-[:focus-visible]:border-ring has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+                  "motion-safe:transition-transform motion-safe:active:scale-[0.98]",
+                )}
+              >
+                <span className="sr-only">Model</span>
+                <select
+                  ref={modelSelectRef}
+                  id="ugc-model"
+                  value={optionIdx}
+                  onChange={(e) => setModelIdx(Number(e.target.value))}
+                  className={cn(
+                    "w-full min-w-0 cursor-pointer truncate bg-transparent font-medium text-foreground outline-none",
+                    // Sized to the chosen model's name rather than the row.
+                    bar && "w-auto [field-sizing:content]",
+                  )}
+                >
+                  {options.map((o, i) =>
+                    modelMenuId(o.modelId) === "kling-4.0" &&
+                    o.modelId !== selectedKling4Id ? null : (
+                      <option
+                        key={`${o.modelId}/${o.resolution}`}
+                        value={i}
+                        className="bg-popover text-popover-foreground"
+                      >
+                        {modelMenuId(o.modelId) === "kling-4.0" ? "Kling 4.0" : o.label} ·{" "}
+                        {ugcTierLabel(o.modelId, o.resolution)}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
 
-            {/* A TRIGGER, so it is a button and nothing else. It used to be a
+              {modelMenuId(option.modelId) === "kling-4.0" ? (
+                <div
+                  role="group"
+                  aria-label="Kling 4.0 mode"
+                  className="flex h-9 items-center gap-0.5 rounded-lg bg-muted/60 p-1"
+                >
+                  {kling4Modes.map((mode) => (
+                    <button
+                      key={mode.modelId}
+                      type="button"
+                      disabled={readOnly}
+                      aria-pressed={mode.modelId === option.modelId}
+                      onClick={() => {
+                        const tier =
+                          options.find(
+                            (candidate) =>
+                              candidate.modelId === mode.modelId &&
+                              candidate.resolution === option.resolution,
+                          ) ?? mode;
+                        setModelIdx(options.indexOf(tier));
+                      }}
+                      className={cn(
+                        "h-full rounded-md px-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+                        mode.modelId === option.modelId
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {mode.modelId === "kling-4.0-reference" ? "References" : "Start/end frames"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* A TRIGGER, so it is a button and nothing else. It used to be a
               labelled cell holding a bordered circle beside a word, where the
               circle was outside the button and did nothing when pressed.
 
@@ -1857,280 +1922,286 @@ export function UgcColumn({
               Frame slots are the only way in for that model, and a second
               "Add references" control beside them would say there is a
               second box to add to when there is not. */}
-            {!isKling && !bar ? (
-              <UgcReferencePicker
-                projectId={projectId}
-                elements={elements}
-                // null on purpose: the control stays "Add references" whatever is
-                // attached. The reference itself still reaches the action through
-                // the hidden elementId/file fields above — this only decides what
-                // it SAYS, and it should always say there is room for another.
-                current={null}
-                onPick={handlePick}
-                allowVideoPrimary={option.modelId === "gemini-omni-video"}
-                // AN UPLOAD NEVER JOINS THE BOX. It is saved to the library and
-                // (first picture) becomes the conditioning frame via onPick, as
-                // always; "Use element" and prompt @tags put saved elements in the box. Darwin's
-                // call, 2026-09-12: three fresh uploads landing in the box
-                // unasked read as the box filling itself.
-                onUseElement={(el) => addTagsToBox([el.name])}
-                imagesOnly={
-                  option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2"
-                }
-                boxTags={boxTags}
-                boxLimit={maxReferences}
-              />
-            ) : null}
+              {!isKling && !bar ? (
+                <UgcReferencePicker
+                  projectId={projectId}
+                  elements={elements}
+                  // null on purpose: the control stays "Add references" whatever is
+                  // attached. The reference itself still reaches the action through
+                  // the hidden elementId/file fields above — this only decides what
+                  // it SAYS, and it should always say there is room for another.
+                  current={null}
+                  onPick={handlePick}
+                  allowVideoPrimary={option.modelId === "gemini-omni-video"}
+                  // AN UPLOAD NEVER JOINS THE BOX. It is saved to the library and
+                  // (first picture) becomes the conditioning frame via onPick, as
+                  // always; "Use element" and prompt @tags put saved elements in the box. Darwin's
+                  // call, 2026-09-12: three fresh uploads landing in the box
+                  // unasked read as the box filling itself.
+                  onUseElement={(el) => addTagsToBox([el.name])}
+                  imagesOnly={
+                    option.modelId === "kling-4.0-reference" || option.modelId === "gemini-omni-1.2"
+                  }
+                  boxTags={boxTags}
+                  boxLimit={maxReferences}
+                />
+              ) : null}
 
-            {/* KLING'S SOUND ON/OFF, default On. Hidden rather than disabled
+              {/* KLING'S SOUND ON/OFF, default On. Hidden rather than disabled
               when AUDIO_ENABLED is off globally: a control that cannot ever
               be turned on is not a choice, and this route's other gates
               (Model, Length) simply omit themselves rather than showing a
               permanently-greyed twin — same rule, applied here. */}
-            {isKling && audioEnabled ? (
-              <button
-                type="button"
-                onClick={() => setKlingSoundOn((v) => !v)}
-                disabled={readOnly}
-                aria-pressed={klingSoundOn}
-                className={cn(
-                  "flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-card px-2.5",
-                  "font-medium text-foreground",
-                  "transition-[color,background-color,border-color] duration-150",
-                  "hover:border-foreground/40 hover:bg-accent/40",
-                  "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
-                  "disabled:cursor-not-allowed disabled:opacity-60",
-                )}
-              >
-                <MusicIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                Sound {klingSoundOn ? "On" : "Off"}
-              </button>
-            ) : isKling ? (
-              <span
-                aria-disabled="true"
-                title="Audio is off for every render right now (AUDIO_ENABLED), so Kling renders silent."
-                className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground"
-              >
-                <MusicIcon aria-hidden="true" className="size-3.5" />
-                Sound off
-              </span>
-            ) : null}
-
-            <div ref={lengthRef} className="relative shrink-0">
-              <button
-                type="button"
-                disabled={readOnly}
-                aria-label={`Length: ${activeDuration} seconds`}
-                aria-expanded={lengthOpen}
-                onClick={() => setLengthOpen((open) => !open)}
-                className="flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                <ClockIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                {activeDuration}s
-              </button>
-              {lengthOpen ? (
-                <LengthSlider
-                  durations={durations}
-                  value={activeDuration}
+              {isKling && audioEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => setKlingSoundOn((v) => !v)}
                   disabled={readOnly}
-                  onChange={setDurationS}
-                  onDone={() => setLengthOpen(false)}
-                />
+                  aria-pressed={klingSoundOn}
+                  className={cn(
+                    "flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border bg-card px-2.5",
+                    "font-medium text-foreground",
+                    "transition-[color,background-color,border-color] duration-150",
+                    "hover:border-foreground/40 hover:bg-accent/40",
+                    "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                    "disabled:cursor-not-allowed disabled:opacity-60",
+                  )}
+                >
+                  <MusicIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  Sound {klingSoundOn ? "On" : "Off"}
+                </button>
+              ) : isKling ? (
+                <span
+                  aria-disabled="true"
+                  title="Audio is off for every render right now (AUDIO_ENABLED), so Kling renders silent."
+                  className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground"
+                >
+                  <MusicIcon aria-hidden="true" className="size-3.5" />
+                  Sound off
+                </span>
+              ) : null}
+
+              <div ref={lengthRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  disabled={readOnly}
+                  aria-label={`Length: ${activeDuration} seconds`}
+                  aria-expanded={lengthOpen}
+                  onClick={() => setLengthOpen((open) => !open)}
+                  className="flex h-9 items-center gap-1.5 rounded-lg border bg-card px-2.5 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <ClockIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  {activeDuration}s
+                </button>
+                {lengthOpen ? (
+                  <LengthSlider
+                    durations={durations}
+                    value={activeDuration}
+                    disabled={readOnly}
+                    onChange={setDurationS}
+                    onDone={() => setLengthOpen(false)}
+                  />
+                ) : null}
+              </div>
+
+              {aspectRatios.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={readOnly}
+                    aria-label={`Aspect ratio: ${activeAspectRatio ?? "9:16"}`}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    <AspectRatioIcon ratio={activeAspectRatio ?? "9:16"} />
+                    {activeAspectRatio ?? "9:16"}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="w-44 rounded-2xl p-2"
+                  >
+                    <DropdownMenuLabel>Aspect ratio</DropdownMenuLabel>
+                    {aspectRatios.map((ratio) => (
+                      <DropdownMenuItem
+                        key={ratio}
+                        onSelect={() => setAspectRatio(ratio)}
+                        className="gap-2 rounded-lg"
+                      >
+                        <AspectRatioIcon ratio={ratio} />
+                        <span className="flex-1">{ratio}</span>
+                        {ratio === (activeAspectRatio ?? "9:16") ? (
+                          <Check aria-hidden="true" className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <span
+                  aria-disabled="true"
+                  className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground"
+                >
+                  <RectangleVerticalIcon aria-hidden="true" className="size-3.5" />
+                  <span className="sr-only">Aspect ratio</span>
+                  9:16
+                </span>
+              )}
+
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  disabled={readOnly}
+                  aria-label={`Resolution: ${ugcTierLabel(option.modelId, option.resolution)}`}
+                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <GaugeIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  {ugcTierLabel(option.modelId, option.resolution)}
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className="w-48 rounded-2xl p-2"
+                >
+                  <DropdownMenuLabel>Resolution</DropdownMenuLabel>
+                  {resolutions.map((resolution) => {
+                    const tier = tierOptions.find((o) => o.resolution === resolution);
+                    const rate = tier?.nativeAudio
+                      ? effectiveSoundOn
+                        ? tier.soundCreditsPerSecond
+                        : tier.silentCreditsPerSecond
+                      : tier?.creditsPerSecond;
+                    return (
+                      <DropdownMenuItem
+                        key={resolution}
+                        disabled={!tier}
+                        onSelect={() => tier && setModelIdx(options.indexOf(tier))}
+                        className="gap-2 rounded-lg"
+                      >
+                        <span className="flex-1">{ugcTierLabel(option.modelId, resolution)}</span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {tier
+                            ? rate == null
+                              ? "Price unavailable"
+                              : rateLabel(rate)
+                            : "Price unverified"}
+                        </span>
+                        {resolution === option.resolution ? (
+                          <Check aria-hidden="true" className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <span className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground">
+                <Sparkles aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                <span className="sr-only">Quality: </span>
+                High
+              </span>
+
+              {bar && option.modelId === "gemini-omni-video" ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    disabled={readOnly}
+                    aria-label={`Voice: ${geminiVoice || "Auto"}`}
+                    className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 font-medium text-foreground capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                  >
+                    <MusicIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                    {geminiVoice || "Auto voice"}
+                    <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    align="start"
+                    sideOffset={8}
+                    className="max-h-80 w-64 overflow-y-auto rounded-2xl p-2"
+                  >
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      Voice
+                    </DropdownMenuLabel>
+                    {([["", "Gemini picks"], ...GEMINI_VOICES] as const).map(([name, style]) => (
+                      <DropdownMenuItem
+                        key={name || "auto"}
+                        onSelect={() => setGeminiVoice(name)}
+                        className="gap-2 rounded-lg"
+                      >
+                        <span className="flex-1 capitalize">
+                          {name || "Auto"}{" "}
+                          <span className="text-xs normal-case text-muted-foreground">{style}</span>
+                        </span>
+                        {name === geminiVoice ? (
+                          <Check aria-hidden="true" className="size-4 text-primary" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+
+              {bar && credits !== null ? (
+                // ml-auto pushes it to the far end; the pill skin above is
+                // cancelled so it reads as text, like the image bar's cost.
+                <p className="ml-auto whitespace-nowrap !border-0 !bg-transparent pr-1 text-xs text-muted-foreground">
+                  ${usd?.toFixed(2)} per {activeDuration}s clip
+                </p>
               ) : null}
             </div>
 
-            {aspectRatios.length > 0 ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={readOnly}
-                  aria-label={`Aspect ratio: ${activeAspectRatio ?? "9:16"}`}
-                  className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  <AspectRatioIcon ratio={activeAspectRatio ?? "9:16"} />
-                  {activeAspectRatio ?? "9:16"}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  className="w-44 rounded-2xl p-2"
-                >
-                  <DropdownMenuLabel>Aspect ratio</DropdownMenuLabel>
-                  {aspectRatios.map((ratio) => (
-                    <DropdownMenuItem
-                      key={ratio}
-                      onSelect={() => setAspectRatio(ratio)}
-                      className="gap-2 rounded-lg"
-                    >
-                      <AspectRatioIcon ratio={ratio} />
-                      <span className="flex-1">{ratio}</span>
-                      {ratio === (activeAspectRatio ?? "9:16") ? (
-                        <Check aria-hidden="true" className="size-4 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <span
-                aria-disabled="true"
-                className="flex h-9 shrink-0 cursor-default items-center gap-1.5 rounded-lg border border-dashed bg-muted/40 px-2.5 text-xs text-muted-foreground"
-              >
-                <RectangleVerticalIcon aria-hidden="true" className="size-3.5" />
-                <span className="sr-only">Aspect ratio</span>
-                9:16
-              </span>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                disabled={readOnly}
-                aria-label={`Resolution: ${ugcTierLabel(option.modelId, option.resolution)}`}
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                <GaugeIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                {ugcTierLabel(option.modelId, option.resolution)}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                align="start"
-                sideOffset={8}
-                className="w-48 rounded-2xl p-2"
-              >
-                <DropdownMenuLabel>Resolution</DropdownMenuLabel>
-                {resolutions.map((resolution) => {
-                  const tier = tierOptions.find((o) => o.resolution === resolution);
-                  const rate = tier?.nativeAudio
-                    ? effectiveSoundOn
-                      ? tier.soundCreditsPerSecond
-                      : tier.silentCreditsPerSecond
-                    : tier?.creditsPerSecond;
-                  return (
-                    <DropdownMenuItem
-                      key={resolution}
-                      disabled={!tier}
-                      onSelect={() => tier && setModelIdx(options.indexOf(tier))}
-                      className="gap-2 rounded-lg"
-                    >
-                      <span className="flex-1">{ugcTierLabel(option.modelId, resolution)}</span>
-                      <span className="text-xs tabular-nums text-muted-foreground">
-                        {tier
-                          ? rate == null
-                            ? "Price unavailable"
-                            : rateLabel(rate)
-                          : "Price unverified"}
-                      </span>
-                      {resolution === option.resolution ? (
-                        <Check aria-hidden="true" className="size-4 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <span className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2.5 text-xs font-medium text-foreground">
-              <Sparkles aria-hidden="true" className="size-3.5 text-muted-foreground" />
-              <span className="sr-only">Quality: </span>
-              High
-            </span>
-
-            {bar && option.modelId === "gemini-omni-video" ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={readOnly}
-                  aria-label={`Voice: ${geminiVoice || "Auto"}`}
-                  className="flex h-9 cursor-pointer items-center gap-2 rounded-lg border px-3 font-medium text-foreground capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  <MusicIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                  {geminiVoice || "Auto voice"}
-                  <ChevronRight aria-hidden="true" className="size-3.5 text-muted-foreground" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  className="max-h-80 w-64 overflow-y-auto rounded-2xl p-2"
-                >
-                  <DropdownMenuLabel className="text-xs text-muted-foreground">
-                    Voice
-                  </DropdownMenuLabel>
-                  {([["", "Gemini picks"], ...GEMINI_VOICES] as const).map(([name, style]) => (
-                    <DropdownMenuItem
-                      key={name || "auto"}
-                      onSelect={() => setGeminiVoice(name)}
-                      className="gap-2 rounded-lg"
-                    >
-                      <span className="flex-1 capitalize">
-                        {name || "Auto"}{" "}
-                        <span className="text-xs normal-case text-muted-foreground">{style}</span>
-                      </span>
-                      {name === geminiVoice ? (
-                        <Check aria-hidden="true" className="size-4 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {/* Says so when the pin could not be honoured, rather than silently
+            rendering a different model under a row that looks deliberate. */}
+            {!pinHonoured ? (
+              <p className="text-xs text-muted-foreground">
+                {PINNED_MODEL_ID} at {PINNED_RESOLUTION} is not offerable right now, so this is
+                rendering on {option.label} at {ugcTierLabel(option.modelId, option.resolution)}{" "}
+                instead.
+              </p>
             ) : null}
-
-            {bar && credits !== null ? (
-              // ml-auto pushes it to the far end; the pill skin above is
-              // cancelled so it reads as text, like the image bar's cost.
-              <p className="ml-auto whitespace-nowrap !border-0 !bg-transparent pr-1 text-xs text-muted-foreground">
-                ${usd?.toFixed(2)} per {activeDuration}s clip
+            {option.modelId === "gemini-omni-video" ? (
+              <>
+                <label
+                  className={cn(
+                    "flex items-center gap-2 text-xs text-muted-foreground",
+                    bar && "hidden",
+                  )}
+                >
+                  Voice
+                  <select
+                    value={geminiVoice}
+                    onChange={(e) => setGeminiVoice(e.target.value)}
+                    className="min-w-0 flex-1 cursor-pointer rounded-md border bg-transparent px-2 py-1 text-foreground"
+                  >
+                    <option value="" className="bg-popover text-popover-foreground">
+                      Auto (Gemini picks)
+                    </option>
+                    {GEMINI_VOICES.map(([name, style]) => (
+                      <option
+                        key={name}
+                        value={name}
+                        className="bg-popover text-popover-foreground"
+                      >
+                        {name.charAt(0).toUpperCase() + name.slice(1)} ({style})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Gemini Omni Video generates its own audio; it cannot use your audio references.
+                </p>
+              </>
+            ) : null}
+            {option.modelId === "gemini-omni-1.2" ? (
+              <p className="text-xs text-muted-foreground">
+                Gemini Omni 1.2 generates its own audio and accepts image references only.
               </p>
             ) : null}
           </div>
 
-          {/* Says so when the pin could not be honoured, rather than silently
-            rendering a different model under a row that looks deliberate. */}
-          {!pinHonoured ? (
-            <p className="text-xs text-muted-foreground">
-              {PINNED_MODEL_ID} at {PINNED_RESOLUTION} is not offerable right now, so this is
-              rendering on {option.label} at {ugcTierLabel(option.modelId, option.resolution)}{" "}
-              instead.
-            </p>
-          ) : null}
-          {option.modelId === "gemini-omni-video" ? (
-            <>
-              <label
-                className={cn(
-                  "flex items-center gap-2 text-xs text-muted-foreground",
-                  bar && "hidden",
-                )}
-              >
-                Voice
-                <select
-                  value={geminiVoice}
-                  onChange={(e) => setGeminiVoice(e.target.value)}
-                  className="min-w-0 flex-1 cursor-pointer rounded-md border bg-transparent px-2 py-1 text-foreground"
-                >
-                  <option value="" className="bg-popover text-popover-foreground">
-                    Auto (Gemini picks)
-                  </option>
-                  {GEMINI_VOICES.map(([name, style]) => (
-                    <option key={name} value={name} className="bg-popover text-popover-foreground">
-                      {name.charAt(0).toUpperCase() + name.slice(1)} ({style})
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="text-xs text-muted-foreground">
-                Gemini Omni Video generates its own audio; it cannot use your audio references.
-              </p>
-            </>
-          ) : null}
-          {option.modelId === "gemini-omni-1.2" ? (
-            <p className="text-xs text-muted-foreground">
-              Gemini Omni 1.2 generates its own audio and accepts image references only.
-            </p>
-          ) : null}
-        </div>
-
-        <div className={bar ? "absolute right-3 top-3 flex flex-col items-end gap-1" : "contents"}>
-          {/* ---- generate ---- */}
-          {/* Two buttons, because the two writes are not the same commitment.
+          <div
+            className={bar ? "absolute right-3 top-3 flex flex-col items-end gap-1" : "contents"}
+          >
+            {/* ---- generate ---- */}
+            {/* Two buttons, because the two writes are not the same commitment.
             A new scene submits the form directly. A regenerate opens the
             confirm first, because one of ITS choices — "update this version"
             — deletes the clip currently standing, and because the caps have
@@ -2140,118 +2211,118 @@ export function UgcColumn({
             balance, the cap refusal and the new-vs-update choice are one
             question, and asking it twice in two places is how two sets of
             numbers drift apart. */}
-          {selectedScene ? (
-            <>
-              <SceneRerenderDialog
-                sceneId={selectedScene.id}
-                sceneLabel={`Scene ${selectedScene.idx}`}
-                // THE CLIP-ONLY NUMBER, deliberately, and it is the honest one
-                // here: regenerateClip re-renders the SCENE, whose references
-                // live in scene_references and are not the prompt's tags this
-                // column can see. Pricing it off the tags would be a different
-                // render's bill. The page's retry control, which does have the
-                // scene's own references, prices those.
-                costUsd={regenerateUsd}
-                notice={unknownTagsNotice}
-                unpaidRate={option.unpaid}
-                rateSource={rateSource}
-                vendor={vendor}
-                budget={budget}
-                trigger={
-                  <Button
-                    type="button"
-                    className={cn(
-                      "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
-                      bar &&
-                        "h-9 min-h-0 w-auto whitespace-nowrap rounded-lg bg-primary px-4 text-xs font-bold uppercase text-primary-foreground hover:bg-primary/90",
-                    )}
-                    disabled={
-                      !prompt.trim() ||
-                      readOnly ||
-                      geminiSourceVideoUnavailable ||
-                      geminiAudioReference ||
-                      (!isKling && tooManyReferences) ||
-                      // Kling can't use @tags at all (see the red line above) —
-                      // regenerateClip refuses this server-side too, but the
-                      // button says so before a press ever reaches it.
-                      (isKling && promptTags.length > 0) ||
-                      // Nor a webp Start/End frame — same reasoning, same
-                      // server-side backstop, see klingBadFrames above.
-                      (isKling && klingBadFrames.length > 0)
+            {selectedScene ? (
+              <>
+                <SceneRerenderDialog
+                  sceneId={selectedScene.id}
+                  sceneLabel={`Scene ${selectedScene.idx}`}
+                  // THE CLIP-ONLY NUMBER, deliberately, and it is the honest one
+                  // here: regenerateClip re-renders the SCENE, whose references
+                  // live in scene_references and are not the prompt's tags this
+                  // column can see. Pricing it off the tags would be a different
+                  // render's bill. The page's retry control, which does have the
+                  // scene's own references, prices those.
+                  costUsd={regenerateUsd}
+                  notice={unknownTagsNotice}
+                  unpaidRate={option.unpaid}
+                  rateSource={rateSource}
+                  vendor={vendor}
+                  budget={budget}
+                  trigger={
+                    <Button
+                      type="button"
+                      className={cn(
+                        "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
+                        bar &&
+                          "h-9 min-h-0 w-auto whitespace-nowrap rounded-lg bg-primary px-4 text-xs font-bold uppercase text-primary-foreground hover:bg-primary/90",
+                      )}
+                      disabled={
+                        !prompt.trim() ||
+                        readOnly ||
+                        geminiSourceVideoUnavailable ||
+                        geminiAudioReference ||
+                        (!isKling && tooManyReferences) ||
+                        // Kling can't use @tags at all (see the red line above) —
+                        // regenerateClip refuses this server-side too, but the
+                        // button says so before a press ever reaches it.
+                        (isKling && promptTags.length > 0) ||
+                        // Nor a webp Start/End frame — same reasoning, same
+                        // server-side backstop, see klingBadFrames above.
+                        (isKling && klingBadFrames.length > 0)
+                      }
+                    >
+                      {geminiSourceVideoUnavailable
+                        ? "Gemini source-video regeneration unavailable"
+                        : `Regenerate scene ${selectedScene.idx} · $${regenerateUsd.toFixed(2)}`}
+                    </Button>
+                  }
+                  // Not rerenderScene directly: the prompt in the field may have
+                  // been edited since the scene was saved, and regenerateClip
+                  // writes it first so nobody pays for the words that WERE there.
+                  confirmAction={async (versionMode) => {
+                    const formData = new FormData();
+                    formData.set("sceneId", selectedScene.id);
+                    formData.set("prompt", prompt);
+                    formData.set("versionMode", versionMode);
+                    // The pickers reach the render through here. Without these three
+                    // the column showed a model and a length that Regenerate then
+                    // ignored, quoting a price for a clip it was not about to make.
+                    if (option) {
+                      formData.set("modelId", option.modelId);
+                      formData.set("resolution", option.resolution);
                     }
+                    formData.set("durationS", String(activeDuration));
+                    if (option?.modelId === "gemini-omni-video" && geminiVoice) {
+                      formData.set("geminiVoice", geminiVoice);
+                    }
+                    if (activeAspectRatio) formData.set("aspectRatio", activeAspectRatio);
+                    if (isKling) {
+                      // KLING'S OWN PAIR, not the box's marker/tags — see the
+                      // hidden-fields block above this form's effectiveReference
+                      // input for the same branch on the direct-submit path.
+                      if (startElement) formData.set("startElementId", startElement.id);
+                      if (endElement) formData.set("endElementId", endElement.id);
+                      formData.set("sound", effectiveSoundOn ? "1" : "0");
+                    } else {
+                      // Same marker/box pair the direct-submit form carries for
+                      // Generate — see the hidden fields above this form's
+                      // effectiveReference input for why the marker is unconditional
+                      // and what its absence means to actions/ugc.ts.
+                      formData.set("referencesBox", "1");
+                      for (const tag of boxTags) formData.append("referenceTag", tag);
+                    }
+                    return regenerateClip(formData);
+                  }}
+                />
+                {geminiSourceVideoUnavailable ? (
+                  <p
+                    className={cn(
+                      "text-center text-xs text-muted-foreground",
+                      // Capped to the room the bar's prompt box reserves (pr-32),
+                      // or the hint spreads left over the text being typed.
+                      bar && "w-28 text-right text-[10px] leading-snug",
+                    )}
                   >
-                    {geminiSourceVideoUnavailable
-                      ? "Gemini source-video regeneration unavailable"
-                      : `Regenerate scene ${selectedScene.idx} · $${regenerateUsd.toFixed(2)}`}
-                  </Button>
-                }
-                // Not rerenderScene directly: the prompt in the field may have
-                // been edited since the scene was saved, and regenerateClip
-                // writes it first so nobody pays for the words that WERE there.
-                confirmAction={async (versionMode) => {
-                  const formData = new FormData();
-                  formData.set("sceneId", selectedScene.id);
-                  formData.set("prompt", prompt);
-                  formData.set("versionMode", versionMode);
-                  // The pickers reach the render through here. Without these three
-                  // the column showed a model and a length that Regenerate then
-                  // ignored, quoting a price for a clip it was not about to make.
-                  if (option) {
-                    formData.set("modelId", option.modelId);
-                    formData.set("resolution", option.resolution);
-                  }
-                  formData.set("durationS", String(activeDuration));
-                  if (option?.modelId === "gemini-omni-video" && geminiVoice) {
-                    formData.set("geminiVoice", geminiVoice);
-                  }
-                  if (activeAspectRatio) formData.set("aspectRatio", activeAspectRatio);
-                  if (isKling) {
-                    // KLING'S OWN PAIR, not the box's marker/tags — see the
-                    // hidden-fields block above this form's effectiveReference
-                    // input for the same branch on the direct-submit path.
-                    if (startElement) formData.set("startElementId", startElement.id);
-                    if (endElement) formData.set("endElementId", endElement.id);
-                    formData.set("sound", effectiveSoundOn ? "1" : "0");
-                  } else {
-                    // Same marker/box pair the direct-submit form carries for
-                    // Generate — see the hidden fields above this form's
-                    // effectiveReference input for why the marker is unconditional
-                    // and what its absence means to actions/ugc.ts.
-                    formData.set("referencesBox", "1");
-                    for (const tag of boxTags) formData.append("referenceTag", tag);
-                  }
-                  return regenerateClip(formData);
-                }}
-              />
-              {geminiSourceVideoUnavailable ? (
-                <p
-                  className={cn(
-                    "text-center text-xs text-muted-foreground",
-                    // Capped to the room the bar's prompt box reserves (pr-32),
-                    // or the hint spreads left over the text being typed.
-                    bar && "w-28 text-right text-[10px] leading-snug",
-                  )}
-                >
-                  A paid Gemini video-input receipt is required for this resolution before this
-                  scene can be regenerated with its saved source video.
-                </p>
-              ) : geminiAudioReference ? (
-                <p
-                  className={cn(
-                    "text-center text-xs text-muted-foreground",
-                    // Capped to the room the bar's prompt box reserves (pr-32),
-                    // or the hint spreads left over the text being typed.
-                    bar && "w-28 text-right text-[10px] leading-snug",
-                  )}
-                >
-                  {option.label} can&apos;t use audio references. Remove the audio reference, or
-                  switch to Seedance to use your audio.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <>
-              {/* CONFIRMED, not one-click. Generate was the last control on
+                    A paid Gemini video-input receipt is required for this resolution before this
+                    scene can be regenerated with its saved source video.
+                  </p>
+                ) : geminiAudioReference ? (
+                  <p
+                    className={cn(
+                      "text-center text-xs text-muted-foreground",
+                      // Capped to the room the bar's prompt box reserves (pr-32),
+                      // or the hint spreads left over the text being typed.
+                      bar && "w-28 text-right text-[10px] leading-snug",
+                    )}
+                  >
+                    {option.label} can&apos;t use audio references. Remove the audio reference, or
+                    switch to Seedance to use your audio.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {/* CONFIRMED, not one-click. Generate was the last control on
                 this route that spent on a single press: it submitted the
                 form directly, so a mis-aimed click bought a clip at
                 whatever the pickers happened to say.
@@ -2269,151 +2340,152 @@ export function UgcColumn({
                 reached through the file input’s own .form — it is mounted
                 unconditionally inside this <form>, so no second ref is
                 needed to find it. */}
-              <SceneRerenderDialog
-                kind="generate"
-                sceneLabel="this clip"
-                // Non-null here: the trigger below is disabled whenever the
-                // price is unknown, so the dialog cannot be opened without one.
-                costUsd={usd ?? 0}
-                settingsLabel={settingsLabel}
-                notice={unknownTagsNotice}
-                unpaidRate={option.unpaid}
-                rateSource={rateSource}
-                vendor={vendor}
-                budget={budget}
-                trigger={
-                  <Button
-                    type="button"
-                    className={cn(
-                      "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
-                      bar &&
-                        "h-auto min-h-12 w-auto shrink-0 flex-col gap-0.5 whitespace-nowrap rounded-lg bg-primary px-4 py-1 text-xs font-bold uppercase leading-tight text-primary-foreground hover:bg-primary/90",
-                    )}
-                    disabled={
-                      generateLocked ||
-                      !prompt.trim() ||
-                      readOnly ||
-                      promptOverBy > 0 ||
-                      (isKling
-                        ? missingRequiredReference ||
-                          promptTags.length > 0 ||
-                          klingBadFrames.length > 0
-                        : missingRequiredReference ||
-                          videoPriceUnknown ||
-                          geminiAudioReference ||
-                          tooManyReferences)
-                    }
-                  >
-                    {credits === null ? (
-                      "Generate"
-                    ) : bar ? (
-                      <>
-                        <span>Generate</span>
-                        <span className="text-[10px] font-semibold normal-case opacity-90">
-                          ${usd?.toFixed(2)}
-                        </span>
-                      </>
-                    ) : (
-                      `Generate · $${usd?.toFixed(2)}`
-                    )}
-                  </Button>
-                }
-                confirmAction={async () => {
-                  // Reads the settings AT CONFIRM TIME, from the same hidden
-                  // fields the button was priced from. The dialog is modal, so
-                  // nothing in the column can move between the quote and this
-                  // line; changing the model or the length afterwards means
-                  // pressing Generate again, and being asked again.
-                  if (ensureProject) {
-                    const created = await ensureProject();
-                    if ("error" in created) return { error: created.error };
-                    // Committed before the submit reads the hidden field.
-                    flushSync(() => setTargetProjectId(created.projectId));
+                <SceneRerenderDialog
+                  kind="generate"
+                  sceneLabel="this clip"
+                  // Non-null here: the trigger below is disabled whenever the
+                  // price is unknown, so the dialog cannot be opened without one.
+                  costUsd={usd ?? 0}
+                  settingsLabel={settingsLabel}
+                  notice={unknownTagsNotice}
+                  unpaidRate={option.unpaid}
+                  rateSource={rateSource}
+                  vendor={vendor}
+                  budget={budget}
+                  trigger={
+                    <Button
+                      type="button"
+                      className={cn(
+                        "w-full motion-safe:transition-transform motion-safe:active:scale-[0.99]",
+                        bar &&
+                          "h-auto min-h-12 w-auto shrink-0 flex-col gap-0.5 whitespace-nowrap rounded-lg bg-primary px-4 py-1 text-xs font-bold uppercase leading-tight text-primary-foreground hover:bg-primary/90",
+                      )}
+                      disabled={
+                        generateLocked ||
+                        !prompt.trim() ||
+                        readOnly ||
+                        promptOverBy > 0 ||
+                        (isKling
+                          ? missingRequiredReference ||
+                            promptTags.length > 0 ||
+                            klingBadFrames.length > 0
+                          : missingRequiredReference ||
+                            videoPriceUnknown ||
+                            geminiAudioReference ||
+                            tooManyReferences)
+                      }
+                    >
+                      {credits === null ? (
+                        "Generate"
+                      ) : bar ? (
+                        <>
+                          <span>Generate</span>
+                          <span className="text-[10px] font-semibold normal-case opacity-90">
+                            ${usd?.toFixed(2)}
+                          </span>
+                        </>
+                      ) : (
+                        `Generate · $${usd?.toFixed(2)}`
+                      )}
+                    </Button>
                   }
-                  fileRef.current?.form?.requestSubmit();
-                }}
-              />
+                  confirmAction={async () => {
+                    // Reads the settings AT CONFIRM TIME, from the same hidden
+                    // fields the button was priced from. The dialog is modal, so
+                    // nothing in the column can move between the quote and this
+                    // line; changing the model or the length afterwards means
+                    // pressing Generate again, and being asked again.
+                    if (ensureProject) {
+                      const created = await ensureProject();
+                      if ("error" in created) return { error: created.error };
+                      // Committed before the submit reads the hidden field.
+                      flushSync(() => setTargetProjectId(created.projectId));
+                    }
+                    fileRef.current?.form?.requestSubmit();
+                  }}
+                />
 
-              {/* Why the button is off, named.
+                {/* Why the button is off, named.
                 A greyed control with no explanation makes the operator guess
                 which of two things is missing, and the guess is silent — there
                 is nothing on screen that distinguishes "no prompt" from "no
                 reference". Both are one line away from being said out loud, so
                 they are. The prompt is checked first because it is the field
                 directly above; a missing reference is further from the eye. */}
-              {(!bar &&
-                ((isKling && (!prompt.trim() || missingRequiredReference || promptOverBy > 0)) ||
-                  (!isKling &&
-                    (!prompt.trim() ||
-                      missingRequiredReference ||
-                      videoPriceUnknown ||
-                      geminiAudioReference ||
-                      promptOverBy > 0)))) ||
-              (bar &&
-                !!prompt.trim() &&
-                ((isKling && (missingRequiredReference || promptOverBy > 0)) ||
-                  (!isKling &&
-                    (missingRequiredReference ||
-                      videoPriceUnknown ||
-                      geminiAudioReference ||
-                      promptOverBy > 0)))) ? (
-                <p
-                  className={cn(
-                    "text-center text-xs text-muted-foreground",
-                    // Capped to the room the bar's prompt box reserves (pr-32),
-                    // or the hint spreads left over the text being typed.
-                    bar && "w-28 text-right text-[10px] leading-snug",
-                  )}
-                >
-                  {!prompt.trim()
-                    ? "Write a prompt to generate."
-                    : promptOverBy > 0
-                      ? isKling
-                        ? // KLING NEVER SUBSTITUTES, so the typed prompt IS the
-                          // submitted one — no "every @tag is replaced" caveat,
-                          // which would be false for this model and would send
-                          // the operator looking for a tag to remove that has
-                          // nothing to do with the overrun.
-                          `This prompt reaches ${option.label} ${promptOverBy.toLocaleString()} characters over its ${option.maxPromptChars?.toLocaleString()} limit. Shorten it to generate.`
-                        : /* THE THIRD SENTENCE EXISTS SO A VIDEO TAG IS NOT A SILENT
+                {(!bar &&
+                  ((isKling && (!prompt.trim() || missingRequiredReference || promptOverBy > 0)) ||
+                    (!isKling &&
+                      (!prompt.trim() ||
+                        missingRequiredReference ||
+                        videoPriceUnknown ||
+                        geminiAudioReference ||
+                        promptOverBy > 0)))) ||
+                (bar &&
+                  !!prompt.trim() &&
+                  ((isKling && (missingRequiredReference || promptOverBy > 0)) ||
+                    (!isKling &&
+                      (missingRequiredReference ||
+                        videoPriceUnknown ||
+                        geminiAudioReference ||
+                        promptOverBy > 0)))) ? (
+                  <p
+                    className={cn(
+                      "text-center text-xs text-muted-foreground",
+                      // Capped to the room the bar's prompt box reserves (pr-32),
+                      // or the hint spreads left over the text being typed.
+                      bar && "w-28 text-right text-[10px] leading-snug",
+                    )}
+                  >
+                    {!prompt.trim()
+                      ? "Write a prompt to generate."
+                      : promptOverBy > 0
+                        ? isKling
+                          ? // KLING NEVER SUBSTITUTES, so the typed prompt IS the
+                            // submitted one — no "every @tag is replaced" caveat,
+                            // which would be false for this model and would send
+                            // the operator looking for a tag to remove that has
+                            // nothing to do with the overrun.
+                            `This prompt reaches ${option.label} ${promptOverBy.toLocaleString()} characters over its ${option.maxPromptChars?.toLocaleString()} limit. Shorten it to generate.`
+                          : /* THE THIRD SENTENCE EXISTS SO A VIDEO TAG IS NOT A SILENT
                            NO. Once a prompt can tag a voice or a video, "attach a
                            reference image" is true and useless: the operator HAS
                            attached a reference, sees its card in the panel, and is
                            being told to attach one. Naming which kind is missing
                            is the difference between a hint and a riddle. */
-                          `This prompt reaches ${option.label} ${promptOverBy.toLocaleString()} characters over its ${option.maxPromptChars?.toLocaleString()} limit. Every @tag is replaced by its full description before it is sent, so shortening the prompt or removing a tag both help.`
-                      : isKling
-                        ? "Pick a start frame to generate."
-                        : geminiAudioReference
-                          ? `${option.label} can't use audio references. Remove the @audio tag, or switch to Seedance to use your audio.`
-                          : modelTakesNoVideo
-                            ? `${option.label} cannot take a video reference — no render carrying one has ever been billed at this tier. Remove the tag, or switch to a model that can.`
-                            : videoLengthUnmeasured
-                              ? "That video's length was never measured, so this render cannot be priced. Re-upload it, or remove the tag."
-                              : hasNonImageTagOnly
-                                ? "A voice tag can’t carry a clip on its own. Tag a picture or a video too — the voice still reaches the render."
-                                : "Attach a reference image to generate — the prompt’s @tag points at it."}
-                </p>
-              ) : !bar && promptOnlyAllowed ? (
-                <p className="text-center text-xs text-muted-foreground">
-                  References are optional. Leave them empty to generate from your prompt.
-                </p>
-              ) : null}
-            </>
-          )}
+                            `This prompt reaches ${option.label} ${promptOverBy.toLocaleString()} characters over its ${option.maxPromptChars?.toLocaleString()} limit. Every @tag is replaced by its full description before it is sent, so shortening the prompt or removing a tag both help.`
+                        : isKling
+                          ? "Pick a start frame to generate."
+                          : geminiAudioReference
+                            ? `${option.label} can't use audio references. Remove the @audio tag, or switch to Seedance to use your audio.`
+                            : modelTakesNoVideo
+                              ? `${option.label} cannot take a video reference — no render carrying one has ever been billed at this tier. Remove the tag, or switch to a model that can.`
+                              : videoLengthUnmeasured
+                                ? "That video's length was never measured, so this render cannot be priced. Re-upload it, or remove the tag."
+                                : hasNonImageTagOnly
+                                  ? "A voice tag can’t carry a clip on its own. Tag a picture or a video too — the voice still reaches the render."
+                                  : "Attach a reference image to generate — the prompt’s @tag points at it."}
+                  </p>
+                ) : !bar && promptOnlyAllowed ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    References are optional. Leave them empty to generate from your prompt.
+                  </p>
+                ) : null}
+              </>
+            )}
 
-          {option.fixedVideoCredits !== undefined &&
-          option.fixedVideoCredits !== null &&
-          taggedVideoDurationsS.length > 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Gemini source-video renders cost a fixed $
-              {(option.fixedVideoCredits / 200).toFixed(2)}; Kie ignores the selected output
-              duration when a source video is attached.
-            </p>
-          ) : null}
-        </div>
-      </PendingFieldset>
-    </ActionForm>
+            {option.fixedVideoCredits !== undefined &&
+            option.fixedVideoCredits !== null &&
+            taggedVideoDurationsS.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Gemini source-video renders cost a fixed $
+                {(option.fixedVideoCredits / 200).toFixed(2)}; Kie ignores the selected output
+                duration when a source video is attached.
+              </p>
+            ) : null}
+          </div>
+        </PendingFieldset>
+      </ActionForm>
+    </div>
   );
 }
 
