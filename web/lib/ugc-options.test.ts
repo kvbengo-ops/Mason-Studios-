@@ -27,6 +27,7 @@ describe("ugcOptions(true) — the sound picker", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}`)).toEqual([
       "seedance-2.5/480p",
       "seedance-2.5-byteplus/480p",
+      "seedance-2.5-flash/480p",
       "seedance-2.5-flash-byteplus/480p",
       "kling-4.0/720p",
       "kling-4.0-reference/720p",
@@ -48,6 +49,7 @@ describe("ugcOptions(true) — the sound picker", () => {
     expect(bySecond).toEqual({
       "seedance-2.5": 17,
       "seedance-2.5-byteplus": 12.2976,
+      "seedance-2.5-flash": 11.5,
       "seedance-2.5-flash-byteplus": 8.26245,
       "kling-4.0": null,
       "kling-4.0-reference": null,
@@ -68,6 +70,9 @@ describe("ugcOptions(true) — the sound picker", () => {
 
   it("labels Kie Seedance as Kie, and offers BytePlus Seedance at 480p only", () => {
     expect(options[0]?.label).toBe("Seedance 2.5 · Kie");
+    expect(options.find((o) => o.modelId === "seedance-2.5-flash")?.label).toBe(
+      "Seedance 2.5 Flash · Kie",
+    );
     for (const id of ["seedance-2.5-byteplus", "seedance-2.5-flash-byteplus"]) {
       expect(options.filter((o) => o.modelId === id).map((o) => o.resolution)).toEqual(["480p"]);
     }
@@ -130,6 +135,7 @@ describe("ugcOptions — role access and the prompt cap", () => {
       expect(ids(role), role).not.toContain("seedance-2.5-byteplus");
       expect(ids(role), role).not.toContain("seedance-2.5-flash-byteplus");
       expect(ids(role), role).toContain("seedance-2.5");
+      expect(ids(role), role).toContain("seedance-2.5-flash");
     }
   });
 
@@ -148,6 +154,7 @@ describe("ugcOptions(false) — the silent picker", () => {
     expect(options.map((o) => `${o.modelId}/${o.resolution}/${o.creditsPerSecond}`)).toEqual([
       "seedance-2.5/480p/28",
       "seedance-2.5-byteplus/480p/20.56005",
+      "seedance-2.5-flash/480p/18.5",
       "seedance-2.5-flash-byteplus/480p/13.4505",
       "kling-4.0/720p/28.5",
       "kling-4.0-reference/720p/28.5",
@@ -177,6 +184,7 @@ function cheapestResolutionFor(modelId: string, _withSound: boolean): string {
   switch (modelId) {
     case "seedance-2.5":
     case "seedance-2.5-byteplus":
+    case "seedance-2.5-flash":
     case "seedance-2.5-flash-byteplus":
     case "seedance-2":
     case "seedance-2-fast":

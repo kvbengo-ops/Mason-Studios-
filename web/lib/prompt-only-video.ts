@@ -3,6 +3,7 @@ export function supportsPromptOnlyVideo(modelId: string): boolean {
   return [
     "seedance-2.5",
     "seedance-2.5-byteplus",
+    "seedance-2.5-flash",
     "seedance-2.5-flash-byteplus",
     "seedance-2",
     "seedance-2-fast",

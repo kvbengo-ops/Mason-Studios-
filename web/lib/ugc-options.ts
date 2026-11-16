@@ -52,6 +52,7 @@ import type { UgcOption } from "@/components/ugc-column";
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "seedance-2.5",
   "seedance-2.5-byteplus",
+  "seedance-2.5-flash",
   "seedance-2.5-flash-byteplus",
   "kling-4.0",
   "kling-4.0-reference",
@@ -59,6 +60,9 @@ const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "gemini-omni-video",
   "gemini-omni-1.2",
 ]);
+
+// Kie picks that share a name with a BytePlus pick, so the label says which.
+const KIE_SUFFIXED: ReadonlySet<string> = new Set(["seedance-2.5", "seedance-2.5-flash"]);
 
 export function ugcOptions(withSound: boolean, role: ProfileRole | null = null): UgcOption[] {
   const shown = offerable(withSound).filter(
@@ -72,7 +76,7 @@ export function ugcOptions(withSound: boolean, role: ProfileRole | null = null):
     const rate = offerRateFor(offer.model.id, offer.resolution, withSound)!;
     return {
       modelId: offer.model.id,
-      label: offer.model.id === "seedance-2.5" ? `${offer.model.label} · Kie` : offer.model.label,
+      label: KIE_SUFFIXED.has(offer.model.id) ? `${offer.model.label} · Kie` : offer.model.label,
       resolution: offer.resolution,
       durationsS: offer.model.durationsS,
       creditsPerSecond: rate.creditsPerSecond,

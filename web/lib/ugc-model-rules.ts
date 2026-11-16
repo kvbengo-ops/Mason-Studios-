@@ -20,6 +20,7 @@ export function isBytePlusSeedance(modelId: string): boolean {
 const PICKER_RESOLUTIONS: Readonly<Record<string, readonly string[]>> = {
   "seedance-2.5": ["480p"],
   "seedance-2.5-byteplus": ["480p"],
+  "seedance-2.5-flash": ["480p"],
   "seedance-2.5-flash-byteplus": ["480p"],
   "kling-4.0": ["720p"],
   "kling-4.0-reference": ["720p"],

@@ -92,9 +92,11 @@ Captions are gone. Subtitles are added in CapCut after export.
   default) and model access via `canUseVideoModel` (`lib/model-access.ts`): a Hybrid Editor
   cannot use `wan-3.0`; an AI Animator can use every model. **Seedance 2.5 BytePlus
   is trusted editors and admins only** (owner, 2026-11-10); Seedance 2.5 · Kie stays open.
-  **Seedance 2.5 Flash is BytePlus only** (`seedance-2.5-flash-byteplus` →
+  **Seedance 2.5 Flash is two picks, like 2.5**: BytePlus (`seedance-2.5-flash-byteplus` →
   `dreamina-seedance-2-5-flash-261115`, owner 2026-11-15): same role gate, 480p only,
-  `isBytePlusSeedance`/`kie.IsBytePlusModel` cover both BytePlus picks. **No allowance approval and no
+  `isBytePlusSeedance`/`kie.IsBytePlusModel` cover both BytePlus picks; and Kie
+  (`seedance-2.5-flash` → `bytedance/seedance-2-5-flash`, 2026-11-16): open to every role,
+  480p in `/ugc`, 10 reference images. Both write the same `runs.model`. **No allowance approval and no
   API tokens/MCP** — those stay with `trusted_editor` and `admin`. Set by an admin in
   Accounts Control (`setAccountRole`); no client can write `role`. SQL functions that list
   the editor tiers (`pass_allowance`, `transfer_recipients`, the weekly-reset and

@@ -194,6 +194,9 @@ const NEW_MODELS_PUBLISHED = "2026-10-25";
 const SEEDANCE_2_5_PAGE_READ = "2026-10-30";
 const SEEDANCE_2_5_PAGE =
   "Read from kie.ai/seedance-2-5 on 2026-10-30 (owner's decision to trust kie's docs): 480P 28 / 720P 63 / 1080P 158 cr/s with no video input, 17 / 38 / 95 with one. Audio is on by default there and carries no separate price; the 480p receipts and the 720p receipt match this table exactly.";
+const SEEDANCE_2_5_FLASH_PAGE_READ = "2026-11-16";
+const SEEDANCE_2_5_FLASH_PAGE =
+  "Read from kie.ai/seedance-2-5-flash on 2026-11-16 (beta prices): 480p 18.5 / 720p 41 cr/s with no video input, 11.5 / 25.5 with one. No separate audio price is listed.";
 const NEW_MODELS_30S_MEASURED = "2026-10-28";
 const KLING_4_REF_PUBLISHED = "2026-10-30";
 const KLING_4_REF_MEASURED = "2026-10-30";
@@ -341,6 +344,52 @@ export const KIE_RATES: Readonly<Record<string, KieRates>> = {
         provenance: "published",
         pricedAt: "2026-11-06",
         note: "BytePlus ModelArk Seedance 2.5: $7.00/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens.",
+      },
+    },
+  },
+  // kie's published Flash prices; no receipt yet. Audio has no separate price,
+  // so silent equals sound.
+  "seedance-2.5-flash": {
+    sound: {
+      "480p": {
+        creditsPerSecond: 18.5,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
+      },
+      "720p": {
+        creditsPerSecond: 41,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
+      },
+    },
+    silent: {
+      "480p": {
+        creditsPerSecond: 18.5,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
+      },
+      "720p": {
+        creditsPerSecond: 41,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
+      },
+    },
+    video: {
+      "480p": {
+        creditsPerSecond: 11.5,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
+      },
+      "720p": {
+        creditsPerSecond: 25.5,
+        provenance: "published",
+        pricedAt: SEEDANCE_2_5_FLASH_PAGE_READ,
+        note: SEEDANCE_2_5_FLASH_PAGE,
       },
     },
   },

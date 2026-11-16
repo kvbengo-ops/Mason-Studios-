@@ -23,12 +23,18 @@ const SEEDANCE_25_LIMITS = {
 const SEEDANCE_25_IDS: ReadonlySet<string> = new Set([
   "seedance-2.5",
   "seedance-2.5-byteplus",
+  "seedance-2.5-flash",
   "seedance-2.5-flash-byteplus",
 ]);
 
 export function referenceLimitsFor(modelId: string) {
   if (modelId === "gemini-omni-1.2") {
     return { image: 6, video: 0, audio: 0, total: 6, videoSeconds: 0, audioSeconds: 0 };
+  }
+  if (modelId === "seedance-2.5-flash") {
+    // kie caps Flash at 10 images, 5 videos, 5 audio, 2-30 s each and 30 s combined
+    // (docs.kie.ai/market/bytedance/seedance-2-5-flash, read 2026-11-16).
+    return { ...SEEDANCE_25_LIMITS, image: 10, total: 10 };
   }
   if (SEEDANCE_25_IDS.has(modelId)) {
     return SEEDANCE_25_LIMITS;

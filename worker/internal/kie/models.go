@@ -118,6 +118,9 @@ const (
 	measuredDate = "2026-08-31"
 	// BytePlus ModelArk published token prices, read 2026-11-06.
 	bytePlusPublished = "2026-11-06"
+	// kie.ai/seedance-2-5-flash, read 2026-11-16 (beta prices).
+	seedance25FlashPageRead = "2026-11-16"
+	seedance25FlashPage     = "Read from kie.ai/seedance-2-5-flash on 2026-11-16 (beta prices): 480p 18.5 / 720p 41 cr/s with no video input, 11.5 / 25.5 with one. No separate audio price is listed."
 	// bytePlusFlashPublished is when Seedance 2.5 Flash's price was read.
 	bytePlusFlashPublished = "2026-11-15"
 	// The first /ugc clip that actually rendered and billed.
@@ -200,6 +203,12 @@ var Rates = map[string]ModelRates{
 			"720p":  {CreditsPerSecond: 27.648, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $6.40/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
 			"1080p": {CreditsPerSecond: 68.04, Provenance: ProvenancePublished, PricedAt: bytePlusPublished, Note: "BytePlus ModelArk Seedance 2.5: $7.00/M tokens with video input. Estimate excludes BytePlus's minimum-token floor; actual billing uses completion_tokens."},
 		},
+	},
+	// kie's published Flash prices; audio has no separate price, so Silent = Sound.
+	"seedance-2.5-flash": {
+		Sound:  map[string]RatePoint{"480p": {CreditsPerSecond: 18.5, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}, "720p": {CreditsPerSecond: 41, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}},
+		Silent: map[string]RatePoint{"480p": {CreditsPerSecond: 18.5, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}, "720p": {CreditsPerSecond: 41, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}},
+		Video:  map[string]RatePoint{"480p": {CreditsPerSecond: 11.5, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}, "720p": {CreditsPerSecond: 25.5, Provenance: ProvenancePublished, PricedAt: seedance25FlashPageRead, Note: seedance25FlashPage}},
 	},
 	// Flash's published prices (read 2026-11-15): $7.0/M without video, $4.3/M with.
 	"seedance-2.5-flash-byteplus": {
@@ -804,9 +813,21 @@ var seedance25BytePlus = func() Descriptor {
 	return d
 }()
 
+// seedance25Flash is Seedance 2.5 Flash on kie (released 2026-11-12), a
+// separate pick from the BytePlus one below.
+var seedance25Flash = func() Descriptor {
+	d := seedance25
+	d.ID = "seedance-2.5-flash"
+	d.Label = "Seedance 2.5 Flash (native audio)"
+	d.KieModelID = "bytedance/seedance-2-5-flash"
+	d.AllowedResolutions = []string{"480p", "720p"}
+	return d
+}()
+
 // BytePlusSeedance25FlashID is Seedance 2.5 Flash, BytePlus ModelArk only
-// (live 2026-11-15). kie does not sell it: KieModelID is only the id written
-// to runs.model (spend_category_totals lists it), never sent to kie.
+// (live 2026-11-15). KieModelID is only the id written to runs.model
+// (spend_category_totals lists it), never sent to kie; kie's own Flash is
+// seedance25Flash below.
 const BytePlusSeedance25FlashID = "seedance-2.5-flash-byteplus"
 
 var seedance25FlashBytePlus = func() Descriptor {
@@ -1008,7 +1029,7 @@ var wan3 = Descriptor{
 // (docs read 2026-10-27); media.Normalize crops to the matching frame.
 var VideoAspectRatios = []string{"9:16", "16:9", "1:1"}
 
-var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance25FlashBytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo, geminiOmni12}
+var Descriptors = []Descriptor{seedance25, seedance25BytePlus, seedance25Flash, seedance25FlashBytePlus, seedance2, seedance2Fast, seedance2Mini, kling3Pro, kling4, kling4Ref, hailuo2_3Pro, wan3, geminiOmniVideo, geminiOmni12}
 
 // DefaultModelID is the model a project gets when render_settings says
 // nothing: the general-purpose, non-native-audio default, same role

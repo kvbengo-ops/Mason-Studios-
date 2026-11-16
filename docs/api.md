@@ -76,15 +76,16 @@ Seedance 2.5, on both Kie and BytePlus, accepts up to **12 images, 1 video and 3
 
 ### Models
 
-| `model_id`              | Name                    | Resolutions           | `duration_s` | Prompt limit                            |
-| ----------------------- | ----------------------- | --------------------- | ------------ | --------------------------------------- |
-| `seedance-2.5`          | Seedance 2.5 · Kie      | 480p, 720p, 1080p     | 4–30         | 20,000 site cap; vendor cap unpublished |
-| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus | 480p only             | 4–30         | 20,000 site cap; vendor cap unpublished |
-| `kling-4.0`             | Kling 4.0               | 720p, 1080p           | 3–30         | 8,000                                   |
-| `kling-4.0-reference`   | Kling 4.0 Reference     | 720p, 1080p           | 3–30         | 8,000                                   |
-| `wan-3.0`               | Wan 3.0                 | 480p, 720p, 1080p     | 4–30         | Vendor cap unpublished                  |
-| `gemini-omni-video`     | Gemini Omni Video       | 720p, 1080p, 4k       | 4, 6, 8, 10  | Vendor cap unpublished                  |
-| `gemini-omni-1.2`       | Gemini Omni 1.2 Flash   | 360p, 720p, 1080p, 4k | 3–15         | 20,000                                  |
+| `model_id`              | Name                     | Resolutions           | `duration_s` | Prompt limit                            |
+| ----------------------- | ------------------------ | --------------------- | ------------ | --------------------------------------- |
+| `seedance-2.5`          | Seedance 2.5 · Kie       | 480p, 720p, 1080p     | 4–30         | 20,000 site cap; vendor cap unpublished |
+| `seedance-2.5-byteplus` | Seedance 2.5 · BytePlus  | 480p only             | 4–30         | 20,000 site cap; vendor cap unpublished |
+| `seedance-2.5-flash`    | Seedance 2.5 Flash · Kie | 480p, 720p            | 4–30         | 20,000 site cap                         |
+| `kling-4.0`             | Kling 4.0                | 720p, 1080p           | 3–30         | 8,000                                   |
+| `kling-4.0-reference`   | Kling 4.0 Reference      | 720p, 1080p           | 3–30         | 8,000                                   |
+| `wan-3.0`               | Wan 3.0                  | 480p, 720p, 1080p     | 4–30         | Vendor cap unpublished                  |
+| `gemini-omni-video`     | Gemini Omni Video        | 720p, 1080p, 4k       | 4, 6, 8, 10  | Vendor cap unpublished                  |
+| `gemini-omni-1.2`       | Gemini Omni 1.2 Flash    | 360p, 720p, 1080p, 4k | 3–15         | 20,000                                  |
 
 A refused resolution or duration gets `422`, and the error lists what the model accepts. `/quote` is the final word on whether a combination can be sold right now (`422 unavailable_rate` if not).
 

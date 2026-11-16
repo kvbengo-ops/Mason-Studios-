@@ -21,6 +21,12 @@ describe("reference limits", () => {
     }
   });
 
+  it("caps Seedance 2.5 Flash on Kie at kie's 10 images, and checks its clip lengths", () => {
+    expect(referenceLimitsFor("seedance-2.5-flash")).toMatchObject({ image: 10, total: 10 });
+    expect(maxReferencesFor("seedance-2.5-flash")).toBe(10);
+    expect(referenceDurationRefusal("seedance-2.5-flash", "video", [1])).not.toBeNull();
+  });
+
   it("gives Wan 3.0 kie's 10 images, 5 videos, 5 audio at 15 s", () => {
     expect(referenceLimitsFor("wan-3.0")).toEqual({
       image: 10,
