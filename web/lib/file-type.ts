@@ -191,3 +191,23 @@ export const MAX_REFERENCE_VIDEO_BYTES = 15 * 1024 * 1024;
 export function isAcceptedReferenceVideoSize(file: { size: number }): boolean {
   return file.size <= MAX_REFERENCE_VIDEO_BYTES;
 }
+
+const DROP_IMAGE_MIME_TYPES: readonly string[] = ["image/jpeg", "image/png", "image/webp"];
+
+/**
+ * Which dropped files the reference dialog can take: pictures (by MIME, as the
+ * dialog's own drop zone has always checked), plus voice clips and videos
+ * unless `imagesOnly`. Shared by that drop zone and the prompt bars' drops, so
+ * a file refused in one place is refused in the other.
+ */
+export function usableReferenceDrop<T extends { type: string; name: string }>(
+  files: readonly T[],
+  imagesOnly: boolean,
+): T[] {
+  return files.filter(
+    (f) =>
+      DROP_IMAGE_MIME_TYPES.includes(f.type) ||
+      (!imagesOnly && isAcceptedReferenceAudio(f)) ||
+      (!imagesOnly && isAcceptedReferenceVideo(f)),
+  );
+}

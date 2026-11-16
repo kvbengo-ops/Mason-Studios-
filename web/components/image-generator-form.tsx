@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { removeTagFromPrompt } from "@/lib/rename-tag";
 import { MAX_REFERENCES } from "@/lib/ugc-references";
+import { usableReferenceDrop } from "@/lib/file-type";
 import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
 import {
   GENERATED_IMAGE_DRAG_TYPE,
@@ -375,7 +376,29 @@ export function ImageGeneratorForm({
    * drop of the same picture saved it, so the tag is simply added again.
    */
   const [dropTarget, setDropTarget] = useState(false);
+  // Local files dropped on the bar, staged on the picker's Uploads tab — the
+  // same place the "+" leads, so they upload exactly as a picked file would.
+  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
   function handleDrop(event: DragEvent<HTMLFormElement>): void {
+    if (event.dataTransfer.types.includes("Files")) {
+      event.preventDefault();
+      setDropTarget(false);
+      const dropped = Array.from(event.dataTransfer.files);
+      const usable = usableReferenceDrop(dropped, true);
+      if (usable.length === 0) {
+        setErrorMessage("Only JPG, PNG or WebP pictures can be dropped here.");
+        return;
+      }
+      setErrorMessage(
+        usable.length < dropped.length
+          ? `Skipped ${dropped.length - usable.length} of ${dropped.length} files — only JPG, PNG or WebP pictures can be dropped here.`
+          : null,
+      );
+      setDroppedFiles(usable);
+      setReferencePickerTab("uploads");
+      setReferencePickerOpen(true);
+      return;
+    }
     const assetId = event.dataTransfer.getData(GENERATED_IMAGE_DRAG_TYPE);
     if (!assetId) return;
     event.preventDefault();
@@ -562,7 +585,8 @@ export function ImageGeneratorForm({
               aria-busy={pending}
               onSubmit={handleSubmit}
               onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes(GENERATED_IMAGE_DRAG_TYPE)) return;
+                const types = event.dataTransfer.types;
+                if (!types.includes(GENERATED_IMAGE_DRAG_TYPE) && !types.includes("Files")) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "copy";
                 setDropTarget(true);
@@ -579,7 +603,7 @@ export function ImageGeneratorForm({
                 "transition-transform duration-150",
               )}
             >
-              {tileDragging ? (
+              {tileDragging || dropTarget ? (
                 <div
                   aria-hidden="true"
                   className={cn(
@@ -587,7 +611,11 @@ export function ImageGeneratorForm({
                     dropTarget ? "bg-primary/25" : "bg-background/70 motion-safe:animate-pulse",
                   )}
                 >
-                  {dropTarget ? "Release to reference this image" : "Drop here to reference"}
+                  {!tileDragging
+                    ? "Release to upload"
+                    : dropTarget
+                      ? "Release to reference this image"
+                      : "Drop here to reference"}
                 </div>
               ) : null}
               <div className="flex min-w-0 flex-col gap-2">
@@ -936,6 +964,7 @@ export function ImageGeneratorForm({
         open={referencePickerOpen}
         onOpenChange={setReferencePickerOpen}
         initialTab={referencePickerTab}
+        droppedFiles={droppedFiles}
         elements={elements}
         current={null}
         onPick={(reference) => {
