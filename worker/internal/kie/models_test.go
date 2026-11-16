@@ -84,7 +84,8 @@ func TestDescriptorByKieModelID_RoundTrips(t *testing.T) {
 	for _, d := range Descriptors {
 		// BytePlus's Seedance 2.5 shares kie's wire id on purpose: kie is its
 		// fallback, and the lookup only feeds kie's request builder.
-		if d.ID == BytePlusSeedance25ID {
+		// So does BytePlus's Flash, with kie's own seedance-2.5-flash.
+		if IsBytePlusModel(d.ID) {
 			continue
 		}
 		got, ok := DescriptorByKieModelID(d.KieModelID)
