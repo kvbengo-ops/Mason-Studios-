@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
 import { MAX_PROMPT_CHARS } from "@/lib/prompt-limits";
-import { UgcReferencePicker } from "@/components/ugc-reference-picker";
+import { UgcReferencePicker, uploadDroppedReference } from "@/components/ugc-reference-picker";
 import type { PickedReference } from "@/components/ugc-reference-picker";
 import { findElementByTag, type ElementTag } from "@/lib/elements";
 import { tagsInOrder } from "@/lib/element-tags";
@@ -376,27 +376,59 @@ export function ImageGeneratorForm({
    * drop of the same picture saved it, so the tag is simply added again.
    */
   const [dropTarget, setDropTarget] = useState(false);
-  // Local files dropped on the bar, staged on the picker's Uploads tab — the
-  // same place the "+" leads, so they upload exactly as a picked file would.
-  const [droppedFiles, setDroppedFiles] = useState<File[] | null>(null);
+  const [uploadingDrop, setUploadingDrop] = useState(false);
+  /**
+   * Local pictures dropped on the bar: each is saved to the user's elements
+   * (uploadDroppedReference, the Uploads tab's own path) under a tag from its
+   * file name and tagged into the prompt — no dialog.
+   */
+  async function uploadDroppedFiles(files: readonly File[]): Promise<void> {
+    setUploadingDrop(true);
+    const errors: string[] = [];
+    let added = 0;
+    for (const file of files) {
+      try {
+        const result = await uploadDroppedReference(file, projectId);
+        if ("error" in result) {
+          errors.push(result.error);
+          continue;
+        }
+        insertTag({ kind: "element", elementId: "", name: result.name, previewUrl: "" });
+        added += 1;
+      } catch {
+        errors.push(`${file.name} could not be uploaded. Try again.`);
+      }
+    }
+    setUploadingDrop(false);
+    if (errors.length > 0) setErrorMessage(errors.join(" "));
+    if (added > 0) startRefresh(() => router.refresh());
+  }
   function handleDrop(event: DragEvent<HTMLFormElement>): void {
     if (event.dataTransfer.types.includes("Files")) {
       event.preventDefault();
       setDropTarget(false);
       const dropped = Array.from(event.dataTransfer.files);
       const usable = usableReferenceDrop(dropped, true);
+      // Image models take pictures only — a video or a voice has nowhere to go.
+      const notPictures =
+        "Image models take JPG, PNG or WebP pictures only — drop video and audio on the /ugc video bar.";
       if (usable.length === 0) {
-        setErrorMessage("Only JPG, PNG or WebP pictures can be dropped here.");
+        setErrorMessage(notPictures);
+        return;
+      }
+      const room = MAX_REFERENCES - taggedPictures.length;
+      if (room <= 0) {
+        setErrorMessage(`A prompt can reference up to ${MAX_REFERENCES} pictures.`);
         return;
       }
       setErrorMessage(
         usable.length < dropped.length
-          ? `Skipped ${dropped.length - usable.length} of ${dropped.length} files — only JPG, PNG or WebP pictures can be dropped here.`
-          : null,
+          ? `Skipped ${dropped.length - usable.length} of ${dropped.length} files. ${notPictures}`
+          : usable.length > room
+            ? `A prompt can reference up to ${MAX_REFERENCES} pictures; adding the first ${room}.`
+            : null,
       );
-      setDroppedFiles(usable);
-      setReferencePickerTab("uploads");
-      setReferencePickerOpen(true);
+      void uploadDroppedFiles(usable.slice(0, room));
       return;
     }
     const assetId = event.dataTransfer.getData(GENERATED_IMAGE_DRAG_TYPE);
@@ -603,7 +635,7 @@ export function ImageGeneratorForm({
                 "transition-transform duration-150",
               )}
             >
-              {tileDragging || dropTarget ? (
+              {tileDragging || dropTarget || uploadingDrop ? (
                 <div
                   aria-hidden="true"
                   className={cn(
@@ -611,11 +643,13 @@ export function ImageGeneratorForm({
                     dropTarget ? "bg-primary/25" : "bg-background/70 motion-safe:animate-pulse",
                   )}
                 >
-                  {!tileDragging
-                    ? "Release to upload"
-                    : dropTarget
-                      ? "Release to reference this image"
-                      : "Drop here to reference"}
+                  {uploadingDrop
+                    ? "Uploading…"
+                    : !tileDragging
+                      ? "Release to add to the prompt"
+                      : dropTarget
+                        ? "Release to reference this image"
+                        : "Drop here to reference"}
                 </div>
               ) : null}
               <div className="flex min-w-0 flex-col gap-2">
@@ -964,7 +998,6 @@ export function ImageGeneratorForm({
         open={referencePickerOpen}
         onOpenChange={setReferencePickerOpen}
         initialTab={referencePickerTab}
-        droppedFiles={droppedFiles}
         elements={elements}
         current={null}
         onPick={(reference) => {
