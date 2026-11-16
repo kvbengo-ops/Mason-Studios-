@@ -530,81 +530,84 @@ export function RenderProgress({
 
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel(`scenes:${projectId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "scenes",
-          filter: `project_id=eq.${projectId}`,
-        },
-        (payload: RealtimePostgresChangesPayload<SceneRow>) => {
-          const updated = payload.new as SceneRow;
-          if (!updated.id) {
-            return;
-          }
-          // See this file's header: a transition INTO 'failed' is exactly
-          // when this payload is missing something an editor needs (the
-          // reason) and the fix is a one-shot fetch, not a second poller.
-          const previous = scenesRef.current.find((scene) => scene.id === updated.id);
-          const enteringFailed = updated.status === "failed" && previous?.status !== "failed";
-          setScenes((prev) =>
-            prev.map((scene) =>
-              scene.id === updated.id
-                ? {
-                    id: updated.id,
-                    idx: updated.idx,
-                    is_talking_head: updated.is_talking_head,
-                    status: updated.status,
-                    duration_s: updated.duration_s,
-                    submitted_at: updated.submitted_at,
-                    // Refreshed from the payload rather than carried over:
-                    // a retry-with-a-different-model writes this column in
-                    // the same UPDATE that re-queues the scene (0045,
-                    // actions/enqueue.ts), so the very event that moves
-                    // this tile back to 'queued' is also the one carrying
-                    // its new model.
-                    render_settings_override: updated.render_settings_override,
-                    // Cleared, not carried over, on a fresh transition into
-                    // 'failed' (a stale reason from a PREVIOUS failure of
-                    // this same scene must not flash before the refetch
-                    // below lands); left untouched for every other update
-                    // (e.g. submitted_at moving on a retry).
-                    error: enteringFailed ? null : scene.error,
-                  }
-                : scene,
-            ),
-          );
-          if (enteringFailed) {
-            void getSceneStatuses(projectId)
-              .then((polled) => {
-                const byId = new Map(polled.map((scene) => [scene.id, scene]));
-                setScenes((prev) =>
-                  prev.map((scene) => {
-                    const fresh = byId.get(scene.id);
-                    return fresh
-                      ? {
-                          ...scene,
-                          status: fresh.status,
-                          submitted_at: fresh.submitted_at,
-                          error: fresh.error,
-                        }
-                      : scene;
-                  }),
-                );
-              })
-              .catch((err: unknown) => {
-                // Same reasoning as the polling fallback's catch below: not
-                // operator-actionable, and the next poll tick (or another
-                // Realtime event) will get another chance.
-                console.error("Failed to fetch failure reason:", err);
-              });
-          }
-        },
-      )
-      .subscribe((status, err) => {
+    const channel = supabase.channel(`scenes:${projectId}`).on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "scenes",
+        filter: `project_id=eq.${projectId}`,
+      },
+      (payload: RealtimePostgresChangesPayload<SceneRow>) => {
+        const updated = payload.new as SceneRow;
+        if (!updated.id) {
+          return;
+        }
+        // See this file's header: a transition INTO 'failed' is exactly
+        // when this payload is missing something an editor needs (the
+        // reason) and the fix is a one-shot fetch, not a second poller.
+        const previous = scenesRef.current.find((scene) => scene.id === updated.id);
+        const enteringFailed = updated.status === "failed" && previous?.status !== "failed";
+        setScenes((prev) =>
+          prev.map((scene) =>
+            scene.id === updated.id
+              ? {
+                  id: updated.id,
+                  idx: updated.idx,
+                  is_talking_head: updated.is_talking_head,
+                  status: updated.status,
+                  duration_s: updated.duration_s,
+                  submitted_at: updated.submitted_at,
+                  // Refreshed from the payload rather than carried over:
+                  // a retry-with-a-different-model writes this column in
+                  // the same UPDATE that re-queues the scene (0045,
+                  // actions/enqueue.ts), so the very event that moves
+                  // this tile back to 'queued' is also the one carrying
+                  // its new model.
+                  render_settings_override: updated.render_settings_override,
+                  // Cleared, not carried over, on a fresh transition into
+                  // 'failed' (a stale reason from a PREVIOUS failure of
+                  // this same scene must not flash before the refetch
+                  // below lands); left untouched for every other update
+                  // (e.g. submitted_at moving on a retry).
+                  error: enteringFailed ? null : scene.error,
+                }
+              : scene,
+          ),
+        );
+        if (enteringFailed) {
+          void getSceneStatuses(projectId)
+            .then((polled) => {
+              const byId = new Map(polled.map((scene) => [scene.id, scene]));
+              setScenes((prev) =>
+                prev.map((scene) => {
+                  const fresh = byId.get(scene.id);
+                  return fresh
+                    ? {
+                        ...scene,
+                        status: fresh.status,
+                        submitted_at: fresh.submitted_at,
+                        error: fresh.error,
+                      }
+                    : scene;
+                }),
+              );
+            })
+            .catch((err: unknown) => {
+              // Same reasoning as the polling fallback's catch below: not
+              // operator-actionable, and the next poll tick (or another
+              // Realtime event) will get another chance.
+              console.error("Failed to fetch failure reason:", err);
+            });
+        }
+      },
+    );
+    // Join only once the session token is loaded: an earlier join runs as
+    // `anon`, which cannot read this table, and Realtime rejects the filter.
+    let cancelled = false;
+    const join = (): void => {
+      if (cancelled) return;
+      channel.subscribe((status, err) => {
         setConnectionStatus(status);
         if (
           status === REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR ||
@@ -617,8 +620,11 @@ export function RenderProgress({
           console.error(`Realtime subscribe ${status} for scenes:${projectId}`, err);
         }
       });
+    };
+    void supabase.realtime.setAuth().then(join, join);
 
     return (): void => {
+      cancelled = true;
       void supabase.removeChannel(channel);
     };
   }, [projectId]);

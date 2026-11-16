@@ -17,6 +17,7 @@ vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     channel: () => channel,
     removeChannel,
+    realtime: { setAuth: async () => undefined },
   }),
 }));
 vi.mock("@/actions/auth", () => ({ signOut: vi.fn(async () => undefined) }));

@@ -105,10 +105,17 @@ export function TopBar({
             current.map((item) => (item.id === notification.id ? notification : item)),
           );
         },
-      )
-      .subscribe();
+      );
+    // Join only once the session token is loaded: an earlier join runs as
+    // `anon`, which cannot read this table, and Realtime rejects the filter.
+    let cancelled = false;
+    const join = (): void => {
+      if (!cancelled) channel.subscribe();
+    };
+    void supabase.realtime.setAuth().then(join, join);
 
     return (): void => {
+      cancelled = true;
       void supabase.removeChannel(channel);
     };
   }, [currentUserId]);

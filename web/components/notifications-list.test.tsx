@@ -23,6 +23,7 @@ const fakeChannel: FakeChannel = {
 const fakeClient = {
   channel: vi.fn((): FakeChannel => fakeChannel),
   removeChannel: vi.fn(async (): Promise<void> => undefined),
+  realtime: { setAuth: async (): Promise<void> => undefined },
 };
 vi.mock("@/lib/supabase/client", () => ({
   createClient: (): typeof fakeClient => fakeClient,

@@ -31,6 +31,7 @@ vi.mock("@/lib/supabase/client", () => ({
       }),
     }),
     removeChannel: () => undefined,
+    realtime: { setAuth: async () => undefined },
   }),
 }));
 
