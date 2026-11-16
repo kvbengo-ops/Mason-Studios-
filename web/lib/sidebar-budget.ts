@@ -219,7 +219,7 @@ export async function getSidebarBudget(
         })(),
         spend.getGlobalSpendSnapshot(),
         profile.hourly_cap_override_usd == null ? Promise.resolve(0) : spend.getHourlySpend(userId),
-        spend.getInFlightSpendSafe(),
+        spend.getInFlightSpendForDisplay(),
       ]);
 
     // The same derivation spend.getAccountBudgetSnapshot performs over its

@@ -55,15 +55,18 @@ const getSessionUser = cache(async (): Promise<User | null> => {
  * Server Actions — Next marks an action POST with a `next-action` header — so
  * they are never counted.
  */
-const withinActionLimit = cache(async (userId: string): Promise<boolean> => {
-  let isAction = false;
+const isActionRequest = cache(async (): Promise<boolean> => {
   try {
-    isAction = (await headers()).has("next-action");
+    return (await headers()).has("next-action");
   } catch {
     // Outside a request (tests, scripts): nothing to limit.
+    return false;
   }
-  return !isAction || takeActionSlot(userId);
 });
+
+const withinActionLimit = cache(
+  async (userId: string): Promise<boolean> => !(await isActionRequest()) || takeActionSlot(userId),
+);
 
 /**
  * Every one of these guards MUST run — and pass — before any
@@ -225,11 +228,25 @@ async function fetchProjectForCaller(
   return { project, reached, ownerId: projectRow.user_id };
 }
 
+const fetchProjectOncePerRender = cache(fetchProjectForCaller);
+
+// A page render passes through these guards from the layout, the page and
+// nested components, and each used to read the same project row again. Shared
+// on page renders only: a Server Action re-renders its page in the same
+// request, and a shared row there would be the pre-mutation one.
+async function fetchProject(
+  projectId: string,
+): Promise<{ project: Project; reached: ReachedSteps; ownerId: string }> {
+  return (await isActionRequest())
+    ? fetchProjectForCaller(projectId)
+    : fetchProjectOncePerRender(projectId);
+}
+
 export async function requireProject(
   projectId: string,
 ): Promise<{ user: User; profile: Profile; project: Project; reached: ReachedSteps }> {
   const { user, profile } = await requireUser();
-  const { project, reached, ownerId } = await fetchProjectForCaller(projectId);
+  const { project, reached, ownerId } = await fetchProject(projectId);
 
   // Reachable only for an admin: RLS already filtered out a stranger's
   // project inside fetchProjectForCaller (they never get a row back at
@@ -282,7 +299,7 @@ export async function requireProjectReadable(projectId: string): Promise<{
   isOwner: boolean;
 }> {
   const { user, profile } = await requireUser();
-  const { project, reached, ownerId } = await fetchProjectForCaller(projectId);
+  const { project, reached, ownerId } = await fetchProject(projectId);
 
   const isOwner = ownerId === user.id;
 

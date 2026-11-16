@@ -1252,6 +1252,14 @@ export async function getInFlightSpendSafe(): Promise<InFlightSpend> {
   }
 }
 
+/**
+ * getInFlightSpendSafe, read once per request, for the figures an operator is
+ * SHOWN: the sidebar and the budget snapshot render in the same request and
+ * each used to page through every in-flight scene. Never use this to enforce
+ * a cap: assertWithinSpendCaps must read fresh every time it is called.
+ */
+export const getInFlightSpendForDisplay = cache(getInFlightSpendSafe);
+
 // CONCURRENCY HOLE — narrowed, not closed. getInFlightSpend above now folds
 // committed-but-unrecorded renders into all spend checks, which removes the
 // minutes-long window this note was originally written about. What is left
@@ -1587,7 +1595,7 @@ export async function getAccountBudgetSnapshot(
     getGlobalSpendSnapshot(),
     profile.hourly_cap_override_usd == null ? Promise.resolve(0) : getHourlySpend(userId),
     getActiveGrantsSummary(userId),
-    getInFlightSpendSafe(),
+    getInFlightSpendForDisplay(),
   ]);
 
   // The same subtraction assertWithinSpendCaps makes — see heldUsd's doc
