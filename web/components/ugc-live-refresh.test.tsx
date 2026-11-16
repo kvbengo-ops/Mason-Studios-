@@ -16,11 +16,27 @@ import { cleanup, render } from "@testing-library/react";
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
+type SceneHandler = () => void;
+const channel = {
+  on: vi.fn((_type: string, _filter: { filter: string }, _handler: SceneHandler) => channel),
+  subscribe: vi.fn(),
+};
+const removeChannel = vi.fn(async () => undefined);
+vi.mock("@/lib/supabase/client", () => ({
+  createClient: () => ({
+    channel: () => channel,
+    removeChannel,
+    realtime: { setAuth: async () => undefined },
+  }),
+}));
+
 import { UgcLiveRefresh } from "./ugc-live-refresh";
 
 beforeEach(() => {
   vi.useFakeTimers();
   refresh.mockClear();
+  channel.on.mockClear();
+  removeChannel.mockClear();
 });
 
 afterEach(() => {
@@ -30,18 +46,35 @@ afterEach(() => {
 
 describe("UgcLiveRefresh", () => {
   it("refreshes while a clip is rendering", () => {
-    render(<UgcLiveRefresh inFlight />);
+    render(<UgcLiveRefresh projectIds={["p1"]} />);
 
     expect(refresh, "refreshed before the first interval elapsed").not.toHaveBeenCalled();
-    vi.advanceTimersByTime(15_000);
+    vi.advanceTimersByTime(60_000);
     expect(refresh).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(30_000);
+    vi.advanceTimersByTime(120_000);
     expect(refresh).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshes when one of its projects' scenes changes", () => {
+    render(<UgcLiveRefresh projectIds={["p1", "p2"]} />);
+
+    expect(channel.on.mock.calls[0]![1].filter).toBe("project_id=in.(p1,p2)");
+    channel.on.mock.calls[0]![2]();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens no channel when nothing is in flight, and closes it on unmount", () => {
+    render(<UgcLiveRefresh projectIds={[]} />);
+    expect(channel.on).not.toHaveBeenCalled();
+
+    const { unmount } = render(<UgcLiveRefresh projectIds={["p1"]} />);
+    unmount();
+    expect(removeChannel).toHaveBeenCalledTimes(1);
   });
 
   it("skips ticks while the tab is hidden and catches up on return", () => {
     const state = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
-    render(<UgcLiveRefresh inFlight />);
+    render(<UgcLiveRefresh projectIds={["p1"]} />);
     vi.advanceTimersByTime(60_000);
     expect(refresh, "a hidden tab kept re-rendering the page").not.toHaveBeenCalled();
 
@@ -55,18 +88,18 @@ describe("UgcLiveRefresh", () => {
     // The half worth guarding. A console showing only finished clips is a page
     // nobody is waiting on, and a permanent 10s heartbeat against Supabase for
     // it is a cost with no reader.
-    render(<UgcLiveRefresh inFlight={false} />);
+    render(<UgcLiveRefresh projectIds={[]} />);
 
     vi.advanceTimersByTime(60_000);
     expect(refresh, "polled a screen where nothing can change on its own").not.toHaveBeenCalled();
   });
 
   it("stops when the last render finishes", () => {
-    const { rerender } = render(<UgcLiveRefresh inFlight />);
-    vi.advanceTimersByTime(15_000);
+    const { rerender } = render(<UgcLiveRefresh projectIds={["p1"]} />);
+    vi.advanceTimersByTime(60_000);
     expect(refresh).toHaveBeenCalledTimes(1);
 
-    rerender(<UgcLiveRefresh inFlight={false} />);
+    rerender(<UgcLiveRefresh projectIds={[]} />);
     vi.advanceTimersByTime(60_000);
 
     expect(
@@ -76,7 +109,7 @@ describe("UgcLiveRefresh", () => {
   });
 
   it("stops when the operator leaves the page", () => {
-    const { unmount } = render(<UgcLiveRefresh inFlight />);
+    const { unmount } = render(<UgcLiveRefresh projectIds={["p1"]} />);
     unmount();
 
     vi.advanceTimersByTime(60_000);
@@ -84,7 +117,7 @@ describe("UgcLiveRefresh", () => {
   });
 
   it("renders nothing", () => {
-    const { container } = render(<UgcLiveRefresh inFlight />);
+    const { container } = render(<UgcLiveRefresh projectIds={["p1"]} />);
     expect(container.firstChild).toBeNull();
   });
 });

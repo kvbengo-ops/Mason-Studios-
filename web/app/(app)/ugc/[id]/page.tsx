@@ -77,7 +77,7 @@ function ugcClipFilename(idx: number, storageKey: string, title?: string | null)
  * generic `scene-NN`. Drops what Windows refuses in a filename.
  */
 function downloadBaseName(title: string | null | undefined): string | null {
-  // eslint-disable-next-line no-control-regex
+   
   const name = (title ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim();
   return name.replace(/\.+$/, "") || null;
 }
@@ -890,7 +890,7 @@ export default async function UgcPage({
       // Scrolls now: the prompt bar floats over the bottom as a sticky dock.
       className="flex min-h-[calc(100svh-4rem)] flex-col gap-4 px-6 pt-6"
     >
-      <UgcLiveRefresh inFlight={inFlight} />
+      <UgcLiveRefresh projectIds={inFlight ? [project.id] : []} />
 
       {/* NO BACK LINK. There was one — "← Studio", above the title — and it
           is gone because the sidebar already carries Projects as an icon on

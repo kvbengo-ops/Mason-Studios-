@@ -323,10 +323,10 @@ export async function CreateVideoConsole({
   // Newest first: what is drawing right now leads the wall, then the takes.
   const clipSceneIds = new Set(clipItems.map((i) => (i.kind === "clip" ? i.sceneId : "")));
   const liveItems: WallItem[] = [];
-  let inFlight = false;
+  const inFlightProjectIds = new Set<string>();
   for (const scene of scenes) {
     if (scene.status === "queued" || scene.status === "rendering") {
-      inFlight = true;
+      inFlightProjectIds.add(scene.project_id);
       liveItems.push({
         kind: "rendering",
         key: `live-${scene.id}`,
@@ -362,7 +362,7 @@ export async function CreateVideoConsole({
 
   return (
     <>
-      <UgcLiveRefresh inFlight={inFlight} />
+      <UgcLiveRefresh projectIds={[...inFlightProjectIds]} />
       {expiringCount ? (
         <p
           role="status"
