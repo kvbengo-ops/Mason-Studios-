@@ -844,6 +844,7 @@ export type Database = {
           decision_note: string | null;
           id: string;
           reason: string | null;
+          attachment_keys: string[];
           requested_usd: number;
           status: AllowanceRequestStatus;
           user_id: string;
@@ -855,6 +856,7 @@ export type Database = {
           decision_note?: string | null;
           id?: string;
           reason?: string | null;
+          attachment_keys?: string[];
           requested_usd: number;
           status?: AllowanceRequestStatus;
           user_id: string;
@@ -866,6 +868,7 @@ export type Database = {
           decision_note?: string | null;
           id?: string;
           reason?: string | null;
+          attachment_keys?: string[];
           requested_usd?: number;
           status?: AllowanceRequestStatus;
           user_id?: string;

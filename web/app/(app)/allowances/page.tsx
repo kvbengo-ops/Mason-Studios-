@@ -38,6 +38,8 @@ import {
 import type { AllowanceRequestStatus } from "@/types/db";
 import type { AccountCapProfile, AccountCaps } from "@/lib/spend";
 import { dateTimeFormatter } from "@/lib/datetime";
+import { signedUrl } from "@/lib/storage";
+import { RequestAttachments } from "@/components/request-attachments";
 
 // Type-only import, same reasoning as /users' own ResolveAccountCapsFn: this
 // is erased at compile time (no module-load risk from lib/spend.ts's
@@ -178,6 +180,25 @@ async function readPassHistory(userId: string): Promise<JSX.Element> {
   }
 }
 
+/** Signed URLs for each request's attached images; a file that cannot be signed is skipped. */
+async function attachmentUrlsById(
+  rows: readonly { id: string; attachment_keys: string[] | null }[],
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  await Promise.all(
+    rows.map(async (row) => {
+      const keys = row.attachment_keys ?? [];
+      if (keys.length === 0) return;
+      const urls = await Promise.all(keys.map((key) => signedUrl(key).catch(() => null)));
+      out.set(
+        row.id,
+        urls.filter((url): url is string => url !== null),
+      );
+    }),
+  );
+  return out;
+}
+
 /**
  * The viewer's own allowance requests with both sides of the conversation in full: what they
  * wrote when asking and what the approver replied. Notifications link here (#request-<id>), so
@@ -188,11 +209,14 @@ async function readOwnAllowanceMessages(userId: string): Promise<JSX.Element> {
     const supabase = await createClient();
     const { data, error } = await supabase
       .from("allowance_requests")
-      .select("id, requested_usd, reason, status, decision_note, decided_at, created_at")
+      .select(
+        "id, requested_usd, reason, status, decision_note, decided_at, created_at, attachment_keys",
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw error;
+    const urlsById = await attachmentUrlsById(data ?? []);
     return (
       <Card>
         <CardHeader>
@@ -219,6 +243,7 @@ async function readOwnAllowanceMessages(userId: string): Promise<JSX.Element> {
                 <p className="mt-1 whitespace-pre-wrap break-words text-sm">
                   {request.reason?.trim() || "No message."}
                 </p>
+                <RequestAttachments urls={urlsById.get(request.id) ?? []} />
                 {request.status !== "pending" && request.status !== "cancelled" ? (
                   <>
                     <p className="mt-3 text-xs font-medium text-muted-foreground">
@@ -322,6 +347,17 @@ export default async function AllowancesPage({
   }
 
   const requests = (data ?? []) as AllowanceRequestDirectoryRow[];
+  // The directory view has no attachment column; read it from the table, same RLS (0074).
+  const { data: attachmentRows } = requests.length
+    ? await supabase
+        .from("allowance_requests")
+        .select("id, attachment_keys")
+        .in(
+          "id",
+          requests.map((request) => request.id),
+        )
+    : { data: [] };
+  const attachmentsByRequestId = await attachmentUrlsById(attachmentRows ?? []);
 
   // The default grant expiry is the SAME for every pending row on this page
   // (the next 05:00 Manila reset — lib/spend.ts's endOfManilaDayIso)
@@ -594,6 +630,7 @@ export default async function AllowancesPage({
                     decidedByEmail={request.decided_by_email}
                     decidedAt={request.decided_at}
                     decisionNote={request.decision_note}
+                    attachmentUrls={attachmentsByRequestId.get(request.id) ?? []}
                   >
                     <TableCell className="font-medium text-foreground">
                       {request.user_email}

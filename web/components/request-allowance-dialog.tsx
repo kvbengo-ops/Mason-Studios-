@@ -106,6 +106,8 @@ export function RequestAllowanceDialog({
 }): JSX.Element {
   const [amount, setAmount] = useState("10");
   const [reason, setReason] = useState("");
+  // Up to two images (a screenshot or receipt) sent with the request; requestAllowance re-checks.
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -120,13 +122,16 @@ export function RequestAllowanceDialog({
 
     startTransition(async () => {
       try {
-        const result = await requestAllowance(amountUsd, reason.trim() || null);
+        const formData = new FormData();
+        for (const file of attachments) formData.append("attachments", file);
+        const result = await requestAllowance(amountUsd, reason.trim() || null, formData);
         if (result?.error) {
           setErrorMessage(result.error);
           return;
         }
         onOpenChange(false);
         setReason("");
+        setAttachments([]);
       } catch (error) {
         // requestAllowance never redirects today, but unstable_rethrow stays
         // here so a future change that adds one doesn't get silently eaten
@@ -170,6 +175,43 @@ export function RequestAllowanceDialog({
               placeholder="What's this for?"
               disabled={isPending}
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="allowance-attachments">Images (optional, up to 2)</Label>
+            <Input
+              id="allowance-attachments"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              disabled={isPending || attachments.length >= 2}
+              onChange={(event) => {
+                const picked = Array.from(event.target.files ?? []);
+                setAttachments((current) => [...current, ...picked].slice(0, 2));
+                event.target.value = "";
+              }}
+            />
+            {attachments.length > 0 ? (
+              <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {attachments.map((file, index) => (
+                  <li
+                    key={`${file.name}-${index}`}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 underline-offset-2 hover:text-foreground hover:underline"
+                      disabled={isPending}
+                      onClick={() =>
+                        setAttachments((current) => current.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         </div>
 

@@ -124,6 +124,43 @@ describe("requestAllowance", () => {
       user_id: USER.id,
       requested_usd: 10,
       reason: "need it for a campaign",
+      attachment_keys: [],
+    });
+  });
+
+  it("uploads attached images and stores their keys on the request", async () => {
+    vi.mocked(requireUser).mockResolvedValue({ user: USER, profile: {} as never });
+    const insertBuilder = fakeBuilder({ data: null, error: null });
+    const upload = vi.fn(async () => ({ error: null }));
+    vi.mocked(createAdminClient).mockReturnValue({
+      ...fakeClient({ allowance_requests: insertBuilder }),
+      storage: { from: () => ({ upload }) },
+    } as never);
+    const formData = new FormData();
+    formData.append("attachments", new File(["png"], "proof.png", { type: "image/png" }));
+
+    const result = await requestAllowance(10, null, formData);
+
+    expect(result).toBeUndefined();
+    expect(upload).toHaveBeenCalledTimes(1);
+    const keys = (insertBuilder.insert.mock.calls[0]?.[0] as { attachment_keys: string[] })
+      .attachment_keys;
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).toMatch(new RegExp(`^users/${USER.id}/allowance/.+\.png$`));
+  });
+
+  it("refuses more than two images, or a non-image file, before uploading anything", async () => {
+    vi.mocked(requireUser).mockResolvedValue({ user: USER, profile: {} as never });
+    const three = new FormData();
+    for (let i = 0; i < 3; i++)
+      three.append("attachments", new File(["x"], `${i}.png`, { type: "image/png" }));
+    expect(await requestAllowance(10, null, three)).toEqual({
+      error: expect.stringMatching(/at most 2/),
+    });
+    const pdf = new FormData();
+    pdf.append("attachments", new File(["x"], "a.pdf", { type: "application/pdf" }));
+    expect(await requestAllowance(10, null, pdf)).toEqual({
+      error: expect.stringMatching(/PNG, JPG or WebP/),
     });
   });
 

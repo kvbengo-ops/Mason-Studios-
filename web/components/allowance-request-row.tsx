@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { JSX, KeyboardEvent, ReactNode } from "react";
 import { AllowanceStatusBadge } from "@/components/allowance-status-badge";
+import { RequestAttachments } from "@/components/request-attachments";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TableRow } from "@/components/ui/table";
 import { dateTimeFormatter } from "@/lib/datetime";
@@ -21,6 +22,7 @@ export function AllowanceRequestRow({
   decidedByEmail,
   decidedAt,
   decisionNote,
+  attachmentUrls = [],
   children,
 }: {
   requestId: string;
@@ -34,6 +36,8 @@ export function AllowanceRequestRow({
   decidedByEmail: string | null;
   decidedAt: string | null;
   decisionNote: string | null;
+  /** Signed URLs of the images the requester attached (0146). */
+  attachmentUrls?: readonly string[];
   children: ReactNode;
 }): JSX.Element {
   const [open, setOpen] = useState(false);
@@ -79,6 +83,7 @@ export function AllowanceRequestRow({
             <div>
               <dt className="text-muted-foreground">Reason</dt>
               <dd className="whitespace-pre-wrap break-words">{reason || "—"}</dd>
+              <RequestAttachments urls={attachmentUrls} />
             </div>
             <div>
               <dt className="text-muted-foreground">Status</dt>

@@ -35,6 +35,6 @@ describe("RequestAllowanceDialog credit display", () => {
     await user.type(amount, "30");
     await user.click(screen.getByRole("button", { name: "Submit request" }));
 
-    expect(requestAllowance).toHaveBeenCalledWith(30, null);
+    expect(requestAllowance).toHaveBeenCalledWith(30, null, expect.any(FormData));
   });
 });

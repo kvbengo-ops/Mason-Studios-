@@ -12,6 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser, requireApprover, requireAdmin } from "@/actions/guard";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { MEDIA_BUCKET, removeStorageObjects } from "@/lib/storage";
 import {
   endOfManilaDayIso,
   getWeeklySpend,
@@ -51,9 +52,19 @@ const USERS_PATH = "/users";
  * action-result.ts exists is that an editor who double-clicked needs to
  * read this, not just see error #441.
  */
+const MAX_REQUEST_ATTACHMENTS = 2;
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const ATTACHMENT_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+
+/** `attachments` carries up to two images under the key "attachments". */
 export async function requestAllowance(
   amountUsd: number,
   reason: string | null,
+  attachments?: FormData,
 ): Promise<ActionResult> {
   const { user } = await requireUser();
 
@@ -61,16 +72,43 @@ export async function requestAllowance(
     return { error: "Enter a positive allowance amount to request." };
   }
 
+  const files = (attachments?.getAll("attachments") ?? []).filter(
+    (f): f is File => f instanceof File && f.size > 0,
+  );
+  if (files.length > MAX_REQUEST_ATTACHMENTS) {
+    return { error: `Attach at most ${MAX_REQUEST_ATTACHMENTS} images.` };
+  }
+  for (const file of files) {
+    if (!ATTACHMENT_TYPES[file.type]) return { error: "Attach PNG, JPG or WebP images only." };
+    if (file.size > MAX_ATTACHMENT_BYTES) return { error: "Each image must be 10 MB or smaller." };
+  }
+
   const trimmedReason = typeof reason === "string" ? reason.trim() : "";
 
   const admin = createAdminClient();
+  const attachmentKeys: string[] = [];
+  for (const file of files) {
+    const key = `users/${user.id}/allowance/${crypto.randomUUID()}.${ATTACHMENT_TYPES[file.type]}`;
+    const { error: uploadError } = await admin.storage
+      .from(MEDIA_BUCKET)
+      .upload(key, file, { contentType: file.type, upsert: false });
+    if (uploadError) {
+      await removeStorageObjects(attachmentKeys).catch(() => undefined);
+      return { error: "Could not upload the image. Try again." };
+    }
+    attachmentKeys.push(key);
+  }
+
   const { error } = await admin.from("allowance_requests").insert({
     user_id: user.id,
     requested_usd: amountUsd,
     reason: trimmedReason.length > 0 ? trimmedReason : null,
+    attachment_keys: attachmentKeys,
   });
 
   if (error) {
+    // The row was not written, so the images belong to nothing.
+    await removeStorageObjects(attachmentKeys).catch(() => undefined);
     if (error.code === "23505") {
       return {
         error:
