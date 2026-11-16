@@ -211,9 +211,24 @@ describe("passAllowance", () => {
 
     const result = await passAllowance("recipient-1", 5);
 
-    expect(result).toEqual({ error: expect.stringMatching(/active editor or trusted editor/i) });
+    expect(result).toEqual({ error: expect.stringMatching(/active editor account/i) });
     expect(admin.rpc).not.toHaveBeenCalled();
   });
+
+  it.each(["hybrid_editor", "ai_animator"] as const)(
+    "allows %s callers to pass allowance",
+    async (role) => {
+      vi.mocked(requireUser).mockResolvedValue({ user: SENDER, profile: { role } as never });
+      vi.mocked(getAccountBudgetSnapshot).mockResolvedValue(snapshot());
+      const { session, admin } = bothClients();
+
+      const result = await passAllowance("recipient-1", 5);
+
+      expect(result).toBeUndefined();
+      expect(session.rpc).toHaveBeenCalledWith("transfer_recipients");
+      expect(admin.rpc).toHaveBeenCalledWith("pass_allowance", expect.anything());
+    },
+  );
 
   // A message, not a gate. The database re-derives this under its lock and is
   // the thing that actually refuses; this only saves a round trip and says

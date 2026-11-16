@@ -283,6 +283,32 @@ describe("getSidebarBudget matches getAccountBudgetSnapshot (old six-read path) 
     });
     expect(createClient).toHaveBeenCalled();
   });
+
+  it.each(["hybrid_editor", "ai_animator"] as const)(
+    "loads transferRecipients for %s profiles",
+    async (role) => {
+      await mockAdminClientWith({
+        dailySpentUsd: 0,
+        weeklySpentUsd: 0,
+        globalSpentTodayUsd: 0,
+        activeGrantsUsd: 0,
+        grantRows: [],
+        pendingRequestId: null,
+        pendingRequestUsd: null,
+      });
+      const { getSidebarBudget } = await import("./sidebar-budget");
+      const budget = await getSidebarBudget("sender", {
+        role,
+        daily_cap_override_usd: null,
+        weekly_cap_override_usd: null,
+      });
+      expect(budget?.role).toBe(role);
+      expect(budget?.transferRecipients).toEqual([
+        { id: "peer", username: "Ana", email: "ana@example.com", role: "trusted_editor" },
+      ]);
+      expect(createClient).toHaveBeenCalled();
+    },
+  );
   // `toFake: ["Date"]` only — faking timers wholesale would stall the awaits
   // in these tests. The code under test calls startOfManilaDayIso()/
   // startOfManilaWeekIso() with no argument, so it has to see the same

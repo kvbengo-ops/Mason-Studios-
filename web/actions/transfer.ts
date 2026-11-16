@@ -95,8 +95,8 @@ export async function passAllowance(
   if (!recipient) {
     return {
       error:
-        "That account can't receive credits right now — it has to be an active editor or " +
-        "trusted editor. Reload the page and pick again.",
+        "That account can't receive credits right now — it has to be an active editor " +
+        "account. Reload the page and pick again.",
     };
   }
 

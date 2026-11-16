@@ -41,6 +41,24 @@ describe("passBlockReason", () => {
     ).toBeNull();
   });
 
+  it("allows hybrid_editor and ai_animator on both ends", () => {
+    for (const senderRole of [
+      "hybrid_editor",
+      "ai_animator",
+      "editor",
+      "trusted_editor",
+    ] as const) {
+      for (const recipientRole of [
+        "hybrid_editor",
+        "ai_animator",
+        "editor",
+        "trusted_editor",
+      ] as const) {
+        expect(passBlockReason(eligibility({ senderRole, recipientRole }))).toBeNull();
+      }
+    }
+  });
+
   it("allows a pass of exactly the whole headroom", () => {
     expect(passBlockReason(eligibility({ amountUsd: 20, headroomUsd: 20 }))).toBeNull();
   });

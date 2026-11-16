@@ -119,6 +119,28 @@ describe("AccountMenu — passing", () => {
     await openMenu(user, "admin@example.com");
     expect(screen.queryByRole("menuitem", { name: "Pass allowance" })).toBeNull();
   });
+
+  it.each([
+    ["hybrid_editor", "Hybrid Editor"],
+    ["ai_animator", "AI Animator"],
+  ] as const)("offers passing to %s accounts", async (role, roleLabel) => {
+    const user = userEvent.setup();
+    render(
+      <AccountMenu
+        email="creator@example.com"
+        roleLabel={roleLabel}
+        avatarUrl={null}
+        isAdmin={false}
+        budget={{ ...BASE_BUDGET, role }}
+      />,
+    );
+    await openMenu(user, "creator@example.com");
+    expect(screen.getByRole("menuitem", { name: "Passes this week" }).getAttribute("href")).toBe(
+      "/allowances",
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Pass allowance" }));
+    expect(await screen.findByRole("dialog", { name: "Pass allowance" })).toBeTruthy();
+  });
 });
 
 describe("AccountMenu — account funds", () => {

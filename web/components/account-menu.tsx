@@ -53,6 +53,7 @@ import { cn } from "@/lib/utils";
 import { remainingForDisplayUsd, formatUsd } from "@/lib/format-usd";
 import { budgetTier } from "@/lib/budget-tier";
 import type { BudgetTier } from "@/lib/budget-tier";
+import { PASS_ROLES } from "@/lib/transfer";
 
 const usdFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -262,7 +263,7 @@ export function AccountMenu({
   // pattern for "dialog opened from a menu item," not an improvised fix.
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [passDialogOpen, setPassDialogOpen] = useState(false);
-  const canPass = budget?.role === "editor" || budget?.role === "trusted_editor";
+  const canPass = Boolean(budget && PASS_ROLES.includes(budget.role));
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   let binding: MeterWindow | null = null;

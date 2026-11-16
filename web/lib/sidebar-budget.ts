@@ -40,6 +40,7 @@ import { getSidebarBudgetSnapshot } from "@/lib/db-aggregates";
 import { getKieAccountBalanceUsd } from "@/lib/kie-balance";
 import type { AccountCapProfile, AllowanceDialogState } from "@/lib/spend";
 import { decisionBlockReason } from "@/lib/allowance";
+import { PASS_ROLES } from "@/lib/transfer";
 
 // getSidebarBudgetSnapshot (lib/db-aggregates.ts) is imported statically,
 // unlike lib/spend.ts below — it has no module-load side effect that can
@@ -206,7 +207,7 @@ export async function getSidebarBudget(
         ),
         spend.getActiveGrantsSummary(userId, nowIso),
         (async (): Promise<TransferRecipient[] | null> => {
-          if (profile.role !== "editor" && profile.role !== "trusted_editor") return [];
+          if (!PASS_ROLES.includes(profile.role)) return [];
           try {
             const session = await createClient();
             const { data, error } = await session.rpc("transfer_recipients");

@@ -1,7 +1,7 @@
-// Pure helpers for CREDIT PASSING (0087_pass_allowance.sql,
-// web/actions/transfer.ts, docs/credit_passing_plan.md): an editor or
-// trusted editor hands part of their own weekly headroom to another editor
-// or trusted editor, with nobody's approval.
+// Pure helpers for CREDIT PASSING (0087_pass_allowance.sql, 0131_hybrid_ai_roles.sql,
+// web/actions/transfer.ts, docs/credit_passing_plan.md): any active editor
+// tier hands part of their own weekly headroom to another, with nobody's
+// approval.
 //
 // Its own file rather than a section of lib/allowance.ts, and the line
 // between them is the same one that file's own header draws with
@@ -22,6 +22,7 @@
 
 import type { ProfileRole } from "@/types/db";
 import { formatUsd, remainingForDisplayUsd } from "@/lib/format-usd";
+import { ASSIGNABLE_ROLES } from "@/lib/model-access";
 
 /**
  * The `profiles.role` values that may be either end of a pass.
@@ -30,10 +31,11 @@ import { formatUsd, remainingForDisplayUsd } from "@/lib/format-usd";
  * not a sender list plus a recipient list. An admin has no weekly allowance
  * worth passing (they can raise anyone's cap outright on /users), and an
  * admin RECEIVING a pass would move an editor's headroom somewhere no editor
- * can get it back from. 0087_pass_allowance.sql raises on both directions
- * independently — this list is what turns each into a sentence.
+ * can get it back from. 0087_pass_allowance.sql and 0131_hybrid_ai_roles.sql
+ * raise on both directions independently — this list is what turns each into
+ * a sentence.
  */
-export const PASS_ROLES: readonly ProfileRole[] = ["editor", "trusted_editor"];
+export const PASS_ROLES: readonly ProfileRole[] = ASSIGNABLE_ROLES;
 
 /**
  * Why the CALLER may not pass credits at all, regardless of who they picked.
@@ -44,8 +46,7 @@ export const PASS_ROLES: readonly ProfileRole[] = ["editor", "trusted_editor"];
  * returns nothing for such a caller, so there would be no recipient role to
  * build a PassEligibility from. One string, two callers, no copy.
  */
-export const NOT_A_PASSER =
-  "Only an editor or a trusted editor can pass allowance — admins raise an allowance instead.";
+export const NOT_A_PASSER = "Only editors can pass allowance — admins raise an allowance instead.";
 
 export interface PassEligibility {
   /** The would-be sender's role. */
@@ -126,7 +127,7 @@ export function passBlockReason({
   }
 
   if (!PASS_ROLES.includes(recipientRole)) {
-    return "You can only pass allowance to another editor or trusted editor.";
+    return "You can only pass allowance to another editor account.";
   }
 
   // NOTHING TO PASS is its own refusal, ahead of the comparison below.
