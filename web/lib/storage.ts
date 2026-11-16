@@ -140,6 +140,10 @@ interface SignedUrlCacheEntry {
 
 const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
 
+// One pending createSignedUrl per cache key: callers that arrive while a
+// sign is in flight share its result instead of each minting a new token.
+const signedUrlInFlight = new Map<string, Promise<SignedUrlWithExpiry>>();
+
 // Fraction of the caller's requested expiresIn that a cached URL is served
 // for before this file asks Supabase for a fresh one. Kept well under 1.0
 // so a URL handed out by a page render is never close to the moment
@@ -151,6 +155,13 @@ const signedUrlCache = new Map<string, SignedUrlCacheEntry>();
 // cache keeps serving a URL that's already burned down more of its own
 // remaining lifetime.
 const SIGNED_URL_CACHE_FRESH_FRACTION = 0.5;
+
+// A URL signed for an hour or less is reused until this long before it
+// expires, when that is later than the fraction above (3600s: 3000s, not
+// 1800s). Longer-lived URLs (the 7-day share link) keep the fraction: a
+// share link must never be handed out with ten minutes left.
+const SIGNED_URL_REFRESH_MARGIN_SECONDS = 600;
+const SIGNED_URL_MARGIN_MAX_TTL_SECONDS = 3600;
 
 // Hard cap on distinct (storageKey, expiresIn) entries held at once, so a
 // long-lived instance that keeps getting asked to sign URLs for new keys
@@ -183,8 +194,13 @@ function signedUrlCacheKey(
 }
 
 function isSignedUrlCacheEntryFresh(entry: SignedUrlCacheEntry, nowMs: number): boolean {
-  const freshForMs = entry.expiresInSeconds * 1000 * SIGNED_URL_CACHE_FRESH_FRACTION;
-  return nowMs - entry.cachedAtMs < freshForMs;
+  const ttl = entry.expiresInSeconds;
+  const byFraction = ttl * SIGNED_URL_CACHE_FRESH_FRACTION;
+  const freshForSeconds =
+    ttl <= SIGNED_URL_MARGIN_MAX_TTL_SECONDS
+      ? Math.max(byFraction, ttl - SIGNED_URL_REFRESH_MARGIN_SECONDS)
+      : byFraction;
+  return nowMs - entry.cachedAtMs < freshForSeconds * 1000;
 }
 
 // Called only when the cache is about to grow past MAX_SIGNED_URL_CACHE_ENTRIES.
@@ -617,7 +633,7 @@ export interface SignedUrlWithExpiry {
 
 /**
  * Same as `signedUrl`, but also returns the accurate remaining lifetime in seconds
- * (`1800..3600s` on a cache hit or `expiresInSeconds` on a fresh sign) so
+ * (`600..3600s` on a cache hit or `expiresInSeconds` on a fresh sign) so
  * `GET /api/v1/jobs/[id]` never advertises a stale `3600` TTL on a cached URL.
  */
 export async function signedUrlWithExpiry(
@@ -637,24 +653,35 @@ export async function signedUrlWithExpiry(
     return { url: cached.url, expiresInSeconds: remainingSeconds };
   }
 
-  const admin = createAdminClient();
-  const options = download !== undefined ? { download } : undefined;
-  const { data, error } = await admin.storage
-    .from(MEDIA_BUCKET)
-    .createSignedUrl(storageKey, expiresInSeconds, options);
-
-  if (error || !data) {
-    throw new Error(
-      `signedUrl: failed to sign ${storageKey}: ${error?.message ?? "unknown error"}`,
-    );
+  const inFlight = signedUrlInFlight.get(cacheKey);
+  if (inFlight) {
+    return inFlight;
   }
 
-  if (signedUrlCache.size >= MAX_SIGNED_URL_CACHE_ENTRIES) {
-    evictFromSignedUrlCache(now);
-  }
-  signedUrlCache.set(cacheKey, { url: data.signedUrl, cachedAtMs: now, expiresInSeconds });
+  const signing = (async (): Promise<SignedUrlWithExpiry> => {
+    const admin = createAdminClient();
+    const options = download !== undefined ? { download } : undefined;
+    const { data, error } = await admin.storage
+      .from(MEDIA_BUCKET)
+      .createSignedUrl(storageKey, expiresInSeconds, options);
 
-  return { url: data.signedUrl, expiresInSeconds };
+    if (error || !data) {
+      throw new Error(
+        `signedUrl: failed to sign ${storageKey}: ${error?.message ?? "unknown error"}`,
+      );
+    }
+
+    if (signedUrlCache.size >= MAX_SIGNED_URL_CACHE_ENTRIES) {
+      evictFromSignedUrlCache(now);
+    }
+    signedUrlCache.set(cacheKey, { url: data.signedUrl, cachedAtMs: now, expiresInSeconds });
+
+    return { url: data.signedUrl, expiresInSeconds };
+  })().finally(() => {
+    signedUrlInFlight.delete(cacheKey);
+  });
+  signedUrlInFlight.set(cacheKey, signing);
+  return signing;
 }
 
 export async function signedUrl(

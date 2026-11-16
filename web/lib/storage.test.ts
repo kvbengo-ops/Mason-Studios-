@@ -213,4 +213,41 @@ describe("signedUrl", () => {
     expect(second.expiresInSeconds).toBe(3000);
     expect(admin.createSignedUrl).toHaveBeenCalledTimes(1);
   });
+
+  it("signs once for concurrent calls on the same key", async () => {
+    const admin = fakeAdmin();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
+    const [a, b, c] = await Promise.all([signedUrl(key), signedUrl(key), signedUrl(key)]);
+
+    expect(b).toBe(a);
+    expect(c).toBe(a);
+    expect(admin.createSignedUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses a one-hour URL until 600s before it expires, then signs again", async () => {
+    vi.useFakeTimers();
+    const admin = fakeAdmin();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
+    const first = await signedUrl(key, 3600);
+    vi.advanceTimersByTime(2999_000);
+    expect(await signedUrl(key, 3600)).toBe(first);
+    vi.advanceTimersByTime(2_000);
+    expect(await signedUrl(key, 3600)).not.toBe(first);
+  });
+
+  it("keeps a 7-day share link on the half-life rule", async () => {
+    vi.useFakeTimers();
+    const admin = fakeAdmin();
+    vi.mocked(createAdminClient).mockReturnValue(admin as never);
+
+    const week = 7 * 24 * 60 * 60;
+    const key = `projects/p1/clip/${crypto.randomUUID()}.mp4`;
+    const first = await signedUrl(key, week);
+    vi.advanceTimersByTime((week / 2 + 1) * 1000);
+    expect(await signedUrl(key, week)).not.toBe(first);
+  });
 });
