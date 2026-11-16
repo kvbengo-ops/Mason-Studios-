@@ -636,8 +636,9 @@ export function ImageGeneratorForm({
               )}
             >
               {tileDragging || dropTarget || uploadingDrop ? (
+                // A status line, not a control: it reports the drop's upload.
                 <div
-                  aria-hidden="true"
+                  role="status"
                   className={cn(
                     "pointer-events-none absolute inset-0 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary text-sm font-semibold text-primary backdrop-blur-sm transition-colors",
                     dropTarget ? "bg-primary/25" : "bg-background/70 motion-safe:animate-pulse",
