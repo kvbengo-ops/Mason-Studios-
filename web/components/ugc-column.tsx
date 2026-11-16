@@ -47,6 +47,7 @@ import { stageFiles } from "@/lib/stage-files";
 import { SceneRerenderDialog } from "@/components/scene-rerender-dialog";
 import {
   takeReferenceDrop,
+  uploadDroppedReference,
   UgcReferencePicker,
   type PickedReference,
 } from "@/components/ugc-reference-picker";
@@ -481,10 +482,6 @@ export function UgcColumn({
   const [boxPickerOpen, setBoxPickerOpen] = useState(false);
   // The bar's "+" opens this same dialog on Uploads, its "@" on Elements.
   const [boxPickerTab, setBoxPickerTab] = useState<"uploads" | "elements">("elements");
-  // Local files dropped on the bar, handed to the box's dialog to stage on
-  // Uploads — the same place the "+" leads. A drop only uploads; like the
-  // "+", it never adds to the References box (only "Use element" does).
-  const [barDroppedFiles, setBarDroppedFiles] = useState<File[] | null>(null);
   // What is over the bar right now: local files, or a clip tile from the strip.
   const [barDrag, setBarDrag] = useState<"files" | "clip" | null>(null);
   const [boxExpanded, setBoxExpanded] = useState(false);
@@ -860,9 +857,42 @@ export function UgcColumn({
     }
     const usable = takeReferenceDrop(Array.from(event.dataTransfer.files), boxImagesOnly);
     if (usable.length === 0) return;
-    setBarDroppedFiles(usable);
-    setBoxPickerTab("uploads");
-    setBoxPickerOpen(true);
+    const room = maxReferences - boxTags.length;
+    if (room <= 0) {
+      toast.error(`References are full (${maxReferences}).`);
+      return;
+    }
+    if (usable.length > room)
+      toast.error(
+        `References hold ${maxReferences}; adding the first ${room} of ${usable.length}.`,
+      );
+    void uploadDroppedFiles(usable.slice(0, room));
+  }
+  /**
+   * Local files dropped on the bar go straight into the References box: each
+   * is saved to the user's elements (uploadDroppedReference, the Uploads tab's
+   * own path) under a tag from its file name, then tagged — no dialog.
+   */
+  async function uploadDroppedFiles(files: readonly File[]): Promise<void> {
+    const progress = toast.loading(
+      `Uploading ${files.length === 1 ? files[0]!.name : `${files.length} files`}…`,
+    );
+    let added = 0;
+    for (const file of files) {
+      try {
+        const result = await uploadDroppedReference(file, projectId);
+        if ("error" in result) {
+          toast.error(result.error);
+          continue;
+        }
+        addTagsToBox([result.name]);
+        added += 1;
+      } catch {
+        toast.error(`${file.name} could not be uploaded. Try again.`);
+      }
+    }
+    toast.dismiss(progress);
+    if (added > 0) router.refresh();
   }
   /**
    * A finished clip dropped on the bar: save it to the user's own elements as a
@@ -1256,7 +1286,7 @@ export function UgcColumn({
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-primary/25 text-sm font-semibold text-primary backdrop-blur-sm"
           >
-            {barDrag === "clip" ? "Release to reference this clip" : "Release to upload"}
+            {barDrag === "clip" ? "Release to reference this clip" : "Release to add to References"}
           </div>
         ) : null}
         <PendingFieldset className={bar ? "!flex items-stretch gap-3" : undefined}>
@@ -1614,7 +1644,6 @@ export function UgcColumn({
                     imagesOnly={boxImagesOnly}
                     boxTags={boxTags}
                     boxLimit={maxReferences}
-                    droppedFiles={barDroppedFiles}
                   />
                 </section>
               </>

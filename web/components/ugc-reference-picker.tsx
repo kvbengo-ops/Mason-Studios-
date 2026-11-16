@@ -99,6 +99,7 @@ import {
   isAcceptedReferenceImageSize,
   isAcceptedReferenceVideo,
   isAcceptedReferenceVideoSize,
+  tagFromFilename,
   usableReferenceDrop,
   MAX_REFERENCE_AUDIO_BYTES,
   MAX_REFERENCE_AUDIO_SECONDS,
@@ -399,6 +400,59 @@ export function takeReferenceDrop(dropped: readonly File[], imagesOnly: boolean)
 }
 
 /**
+ * Uploads one file dropped on a prompt bar straight to the user's elements —
+ * the Uploads tab's own checks and calls (size and voice-length limits,
+ * attachVideoDuration, stageFiles, registerElement, which applies toJpeg),
+ * without the dialog. The tag comes from the file name, with "-2", "-3", …
+ * when that one is taken. Returns the saved tag, or why it was refused.
+ */
+export async function uploadDroppedReference(
+  file: File,
+  projectId: string | null,
+): Promise<{ name: string } | { error: string }> {
+  const audio = isAcceptedReferenceAudio(file);
+  const video = !audio && isAcceptedReferenceVideo(file);
+  const sizeOk = audio
+    ? isAcceptedReferenceAudioSize(file)
+    : video
+      ? isAcceptedReferenceVideoSize(file)
+      : isAcceptedReferenceImageSize(file);
+  if (!sizeOk) {
+    const limit = audio
+      ? MAX_REFERENCE_AUDIO_BYTES
+      : video
+        ? MAX_REFERENCE_VIDEO_BYTES
+        : MAX_REFERENCE_IMAGE_BYTES;
+    return {
+      error: `${file.name} is ${formatFileSizeMB(file.size)}; the limit is ${formatFileSizeMB(limit)}.`,
+    };
+  }
+  if (audio) {
+    const seconds = await audioDurationSeconds(file);
+    if (seconds !== null && !isAcceptedReferenceAudioDuration(seconds))
+      return {
+        error: `${file.name} is ${seconds.toFixed(1)} seconds; a voice clip has to be ${MIN_REFERENCE_AUDIO_SECONDS}-${MAX_REFERENCE_AUDIO_SECONDS} seconds.`,
+      };
+  }
+  const base = tagFromFilename(file.name);
+  let name = base;
+  // ponytail: one name check per taken suffix; 20 tries is plenty for one person's library.
+  for (let n = 2; (await checkElementUploadName(name)) !== null; n++) {
+    if (n > 20) return { error: `Could not find a free tag for ${file.name}.` };
+    name = `${base}-${n}`;
+  }
+  const fd = new FormData();
+  if (projectId) fd.set("projectId", projectId);
+  fd.set("image", file);
+  fd.set("name", name);
+  await attachVideoDuration(fd, file);
+  await stageFiles(fd);
+  const result = await registerElement(fd);
+  if (result && "error" in result && result.error) return { error: result.error };
+  return { name };
+}
+
+/**
  * The end-of-batch toast — fired once a save loop (saveElement/retryOne)
  * finishes, regardless of whether the dialog that started it is still open.
  *
@@ -465,7 +519,6 @@ export function UgcReferencePicker({
   onUseElement,
   boxTags,
   boxLimit,
-  droppedFiles,
 }: {
   projectId: string | null;
   /** The operator's own saved references — resolved server-side, signed thumbnail URLs included. */
@@ -542,12 +595,6 @@ export function UgcReferencePicker({
   boxTags?: readonly string[];
   /** The box's cap, for "References are full (N)" below. */
   boxLimit?: number;
-  /**
-   * Files dropped on the caller's prompt bar, already type-filtered
-   * (usableReferenceDrop). A new array stages them on the Uploads tab exactly as
-   * a drop on this dialog's own zone would; the caller opens the dialog.
-   */
-  droppedFiles?: readonly File[] | null;
 }): JSX.Element {
   const [internalOpen, setInternalOpen] = useState(false);
   // CONTROLLED WHEN `openProp` IS GIVEN, uncontrolled otherwise — the same
@@ -970,21 +1017,6 @@ export function UgcReferencePicker({
 
     acceptFiles(takeReferenceDrop(Array.from(e.dataTransfer.files), imagesOnly));
   }
-
-  useEffect(() => {
-    if (!droppedFiles || droppedFiles.length === 0) return;
-    // A batch still saving would overwrite the batch list when it finishes,
-    // taking these with it — the same reason handleDrop refuses mid-save.
-    if (isSavingRef.current) {
-      toast.error("Still uploading", {
-        description: "Drop them again once the current upload has finished.",
-      });
-      return;
-    }
-    acceptFiles([...droppedFiles]);
-    // Keyed on the array alone: each bar drop is a new one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [droppedFiles]);
 
   /**
    * Asks for a fresh description of an element that is already saved.
