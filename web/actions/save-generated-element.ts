@@ -10,6 +10,7 @@ import {
   extFromFilename,
   removeStorageObjects,
 } from "@/lib/storage";
+import { formatFileSizeMB, MAX_REFERENCE_VIDEO_BYTES } from "@/lib/file-type";
 import type { ActionResult, ActionNotice } from "@/lib/action-result";
 
 export async function saveGeneratedElement(
@@ -25,11 +26,24 @@ export async function saveGeneratedElement(
   const session = await createClient();
   const { data: source, error: sourceError } = await session
     .from("assets")
-    .select("id, user_id, project_id, storage_key, bytes")
+    .select("id, user_id, project_id, storage_key, bytes, kind, duration_s")
     .eq("id", assetId)
-    .eq("kind", "generated_image").is("deleted_at", null)
+    // A finished /ugc clip dragged onto the video bar becomes a video element,
+    // the same as an uploaded MP4 (registerElement's video_ref path).
+    .in("kind", ["generated_image", "clip"])
+    .is("deleted_at", null)
     .maybeSingle();
-  if (sourceError || !source) return { error: "That generated image is no longer available." };
+  if (sourceError || !source)
+    return { error: "That generated image or clip is no longer available." };
+  const isClip = source.kind === "clip";
+  if (isClip) {
+    // Priced by its length, like an uploaded video; ingest records both.
+    if (source.duration_s === null) return { error: "That clip's length was never measured." };
+    if (typeof source.bytes !== "number" || source.bytes > MAX_REFERENCE_VIDEO_BYTES)
+      return {
+        error: `That clip is over the ${formatFileSizeMB(MAX_REFERENCE_VIDEO_BYTES)} video reference limit.`,
+      };
+  }
   if (source.project_id) {
     const { data: project } = await session
       .from("projects")
@@ -37,18 +51,20 @@ export async function saveGeneratedElement(
       .eq("id", source.project_id)
       .eq("user_id", user.id)
       .maybeSingle();
-    if (!project) return { error: "You can only save your own generated images." };
+    if (!project) return { error: "You can only save your own generated images and clips." };
   } else if (source.user_id !== user.id) {
-    return { error: "You can only save your own generated images." };
+    return { error: "You can only save your own generated images and clips." };
   }
   const admin = createAdminClient();
   const nameError = await elementUploadNameError(admin, user.id, name, shared);
   if (nameError) return { error: nameError };
-  // A separate reference survives deletion of the generated image from history.
+  // A separate reference survives deletion of the generated image from history
+  // (and a clip's 14-day expiry).
+  const assetKind = isClip ? "video_ref" : "ref_frame";
   const storageKey = buildUserStorageKey({
     userId: user.id,
-    kind: "ref_frame",
-    ext: extFromFilename(source.storage_key, "png"),
+    kind: assetKind,
+    ext: extFromFilename(source.storage_key, isClip ? "mp4" : "png"),
   });
   await copyStorageObject(source.storage_key, storageKey);
   let copiedAssetId: string | undefined;
@@ -58,9 +74,10 @@ export async function saveGeneratedElement(
       .insert({
         user_id: user.id,
         project_id: null,
-        kind: "ref_frame",
+        kind: assetKind,
         storage_key: storageKey,
         bytes: source.bytes,
+        duration_s: isClip ? source.duration_s : null,
       })
       .select("id")
       .single();
@@ -70,7 +87,7 @@ export async function saveGeneratedElement(
       user_id: user.id,
       asset_id: asset.id,
       name,
-      category: "image",
+      category: isClip ? "video" : "image",
       is_shared: shared,
     });
     if (error)

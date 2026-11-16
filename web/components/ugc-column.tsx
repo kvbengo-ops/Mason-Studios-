@@ -51,6 +51,9 @@ import {
   type PickedReference,
 } from "@/components/ugc-reference-picker";
 import { UgcPromptEditor } from "@/components/ugc-prompt-editor";
+import { saveGeneratedElement } from "@/actions/save-generated-element";
+import { dragReferenceName, UGC_CLIP_DRAG_TYPE } from "@/lib/image-reuse";
+import { toast } from "sonner";
 import { findElementByTag, KLING_FRAME_EXTS, TAG_PATTERN, type ElementTag } from "@/lib/elements";
 import { tagLeadIsWordish, tagsInOrder } from "@/lib/element-tags";
 import { unknownPromptTags, unknownTagsWarning } from "@/lib/unknown-tags";
@@ -482,7 +485,8 @@ export function UgcColumn({
   // Uploads — the same place the "+" leads. A drop only uploads; like the
   // "+", it never adds to the References box (only "Use element" does).
   const [barDroppedFiles, setBarDroppedFiles] = useState<File[] | null>(null);
-  const [barFileDragOver, setBarFileDragOver] = useState(false);
+  // What is over the bar right now: local files, or a clip tile from the strip.
+  const [barDrag, setBarDrag] = useState<"files" | "clip" | null>(null);
   const [boxExpanded, setBoxExpanded] = useState(false);
 
   /**
@@ -838,18 +842,60 @@ export function UgcColumn({
   // Same reach as the bar's "+": not on Kling (frames come from Elements
   // only) and not read-only.
   const acceptsFileDrop = bar && !isKling && !readOnly;
-  function isFileDrag(event: DragEvent): boolean {
-    return acceptsFileDrop && event.dataTransfer.types.includes("Files");
+  function barDragKind(event: DragEvent): "files" | "clip" | null {
+    if (!acceptsFileDrop) return null;
+    const types = event.dataTransfer.types;
+    // A clip is a video reference, which image-only models cannot take.
+    if (types.includes(UGC_CLIP_DRAG_TYPE)) return boxImagesOnly ? null : "clip";
+    return types.includes("Files") ? "files" : null;
   }
   function handleBarFileDrop(event: DragEvent): void {
-    if (!isFileDrag(event)) return;
+    const kind = barDragKind(event);
+    if (!kind) return;
     event.preventDefault();
-    setBarFileDragOver(false);
+    setBarDrag(null);
+    if (kind === "clip") {
+      dropClip(event.dataTransfer.getData(UGC_CLIP_DRAG_TYPE));
+      return;
+    }
     const usable = takeReferenceDrop(Array.from(event.dataTransfer.files), boxImagesOnly);
     if (usable.length === 0) return;
     setBarDroppedFiles(usable);
     setBoxPickerTab("uploads");
     setBoxPickerOpen(true);
+  }
+  /**
+   * A finished clip dropped on the bar: save it to the user's own elements as a
+   * video under its fixed tag, then add that tag to the References box — the
+   * image bar's wall-tile drop, for video. "Already used" means an earlier drop
+   * of the same clip saved it, so the tag is simply added again.
+   */
+  function dropClip(assetId: string): void {
+    if (!assetId) return;
+    const name = dragReferenceName(assetId, "clip");
+    if (
+      !boxTags.some((tag) => tag.toLowerCase() === name.toLowerCase()) &&
+      boxTags.length >= maxReferences
+    ) {
+      toast.error(`References are full (${maxReferences}).`);
+      return;
+    }
+    const formData = new FormData();
+    formData.set("assetId", assetId);
+    formData.set("name", name);
+    formData.set("destination", "mine");
+    void saveGeneratedElement(formData).then(
+      (result) => {
+        const error = result && "error" in result ? result.error : undefined;
+        if (error && !error.includes("already used")) {
+          toast.error(error);
+          return;
+        }
+        addTagsToBox([name]);
+        router.refresh();
+      },
+      () => toast.error("Could not reference that clip. Try again."),
+    );
   }
   // Only for models that take a ratio; the rest render 9:16 and send none.
   const aspectRatios = kieModel(option.modelId)?.aspectRatios ?? [];
@@ -1174,20 +1220,20 @@ export function UgcColumn({
   }
 
   return (
-    // display:contents — only here to catch a local file dragged onto the
-    // bar; drag events bubble through it without it taking up layout.
+    // display:contents — only here to catch a local file or a strip clip
+    // dragged onto the bar; drag events bubble through it without it taking up layout.
     <div
       className="contents"
       onDragOver={(event) => {
-        if (!isFileDrag(event)) return;
+        const kind = barDragKind(event);
+        if (!kind) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
-        setBarFileDragOver(true);
+        setBarDrag(kind);
       }}
       onDragLeave={(event) => {
         // Crossing onto a child fires dragleave too; only leaving the bar counts.
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-          setBarFileDragOver(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setBarDrag(null);
       }}
       onDrop={handleBarFileDrop}
     >
@@ -1205,12 +1251,12 @@ export function UgcColumn({
             : "flex min-h-0 w-full max-w-md flex-1 flex-col gap-3 overflow-y-auto"
         }
       >
-        {barFileDragOver ? (
+        {barDrag ? (
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 z-30 grid place-items-center rounded-2xl border-2 border-dashed border-primary bg-primary/25 text-sm font-semibold text-primary backdrop-blur-sm"
           >
-            Release to upload
+            {barDrag === "clip" ? "Release to reference this clip" : "Release to upload"}
           </div>
         ) : null}
         <PendingFieldset className={bar ? "!flex items-stretch gap-3" : undefined}>

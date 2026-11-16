@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { formatUsd } from "@/lib/format-usd";
 import { MessageSquare } from "lucide-react";
 import { SceneSortList, type SceneSortGroup } from "@/components/scene-sort-list";
+import { UgcClipDragTile } from "@/components/ugc-clip-drag-tile";
 import { SceneTitle } from "@/components/scene-title";
 import { compareSceneOrder } from "@/lib/scene-position";
 
@@ -69,6 +70,8 @@ export interface UgcScene {
   filename: string | null;
   /** Signed URL for this scene's active poster frame, or null when it has none. */
   posterUrl: string | null;
+  /** The tile's clip asset, dragged onto the prompt bar as a video reference; null without a clip. */
+  clipAssetId?: string | null;
   /**
    * What this scene has actually been BILLED, summed across every attempt's
    * `runs.cost_usd` and converted to kie credits — never a live re-price at
@@ -205,8 +208,10 @@ export function UgcSceneStrip({
                     // make one of the two clicks unreliable, so the selecting link
                     // wraps only the content and the download link sits beside it
                     // as a sibling, not a descendant.
-                    <div
+                    <UgcClipDragTile
                       key={scene.versionId ?? scene.id}
+                      // Drag onto the prompt bar to reference this clip (ugc-column).
+                      clipAssetId={readOnly ? null : (scene.clipAssetId ?? null)}
                       className={cn(
                         "relative flex shrink-0 flex-col gap-1 rounded-md border p-1.5",
                         // The sortable group is the strip's direct child now, so
@@ -377,7 +382,7 @@ export function UgcSceneStrip({
                               : `Delete scene ${scene.idx}? Every version of this clip goes with it. You can restore it from Recently deleted.`
                         }
                       />
-                    </div>
+                    </UgcClipDragTile>
                   );
                 }),
               )}

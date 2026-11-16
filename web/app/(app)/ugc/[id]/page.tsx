@@ -77,7 +77,6 @@ function ugcClipFilename(idx: number, storageKey: string, title?: string | null)
  * generic `scene-NN`. Drops what Windows refuses in a filename.
  */
 function downloadBaseName(title: string | null | undefined): string | null {
-   
   const name = (title ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim();
   return name.replace(/\.+$/, "") || null;
 }
@@ -456,6 +455,7 @@ export default async function UgcPage({
             return key ? await signedUrl(key, RESULT_SIGNED_URL_TTL_SECONDS) : null;
           })(),
           usdBilled: usdBilled ?? null,
+          clipAssetId: clipAsset ? clipAssetId : null,
         };
       }),
     );
@@ -497,10 +497,17 @@ export default async function UgcPage({
             : null,
           // The poster is the scene's newest, so only its current take shows it.
           posterUrl: v.id === activeId ? scene.posterUrl : null,
+          clipAssetId: asset ? v.clip_asset_id : null,
         });
       }
       if (scene.status === "queued" || scene.status === "rendering") {
-        stripScenes.push({ ...scene, downloadUrl: null, filename: null, posterUrl: null });
+        stripScenes.push({
+          ...scene,
+          downloadUrl: null,
+          filename: null,
+          posterUrl: null,
+          clipAssetId: null,
+        });
       }
     }
 
