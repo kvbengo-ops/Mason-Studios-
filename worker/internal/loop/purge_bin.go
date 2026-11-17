@@ -56,7 +56,8 @@ type clipExpirer interface {
 	ExpireClips(ctx context.Context, cutoff time.Time, limit int) (int, error)
 }
 
-// ExpireClips moves finished, unkept scenes past ClipRetention to the bin.
+// ExpireClips moves finished, unkept scenes of a personal Create project past
+// ClipRetention to the bin; a clip in a real project never expires.
 // They stay restorable there for BinRetention, then PurgeBin deletes them.
 // It deletes rows and never writes scenes.status.
 func ExpireClips(ctx context.Context, e clipExpirer, logger *slog.Logger) error {

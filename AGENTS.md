@@ -141,7 +141,10 @@ refuses any model missing from `spend_category_totals`'s render list.
   whose newest take is older than `ClipRetention`, which bins them (0088's trigger); the
   3-day bin purge then removes them. `scenes.keep` (0144, `setSceneKeep`) exempts a scene,
   and a restore sets it. `CLIP_RETENTION_DAYS` (`web/lib/clip-retention.ts`) must equal
-  the worker's `ClipRetention`.
+  the worker's `ClipRetention`. **Only clips in the personal Create project expire**
+  (owner, 2026-11-17): one in a real project (made there, or moved by Add to project)
+  never does. From 7 days (`STALE_CLIP_DAYS`), /create's Video tab lists them in
+  `StaleClipsPrompt` — clean up all, or tick the ones to Keep; it warns, the worker still expires.
 - **Retry is gone** — `regenerateClip` refuses queued/rendering, calls `rerenderScene`
   for `done`, `retryScene(…, versionMode)` for `failed`.
 - **Generate is optimistic** — an external store (not `useTransition`, which can starve

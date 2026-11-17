@@ -13,6 +13,10 @@ import (
 // exactly as the web's deleteClipScene does, so the owner can still restore it
 // until the bin purge (PurgeExpiredBin) removes it for good.
 //
+// Only scenes in the owner's personal Create project (projects.is_personal,
+// 0117): a clip moved into a real project with Add to project, or made in
+// one, is never expired (owner, 2026-11-17).
+//
 // Only status 'done' — a queued or rendering scene is the worker's own work in
 // flight, and a failed or draft scene holds no clip worth reclaiming. Filtered
 // by dev like every claim, so a development worker never expires production's.
@@ -32,6 +36,7 @@ FROM scenes s
 WHERE s.dev = $1
   AND s.status = 'done'
   AND NOT s.keep
+  AND EXISTS (SELECT 1 FROM projects p WHERE p.id = s.project_id AND p.is_personal)
   AND s.created_at < $2
   AND NOT EXISTS (
     SELECT 1 FROM scene_versions v WHERE v.scene_id = s.id AND v.created_at >= $2
