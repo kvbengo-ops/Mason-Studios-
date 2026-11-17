@@ -225,22 +225,32 @@ export async function resolvePromptReferences(
   prompt: string,
 ): Promise<ResolvedPrompt> {
   // Most prompts name nothing. Costs two round trips only when one does.
-  if (!prompt.includes("@")) return { prompt, refImageUrls: [], unresolved: [] };
+  const tags = tagsInOrder(prompt);
+  if (tags.length === 0) return { prompt, refImageUrls: [], unresolved: [] };
 
+  // ONLY THE TAGGED ELEMENTS, never the whole library. Reading every element
+  // and then every one of their assets with `.in("id", …)` put one UUID per
+  // element into a GET URL; at ~700 elements (one API account, 2026-11-16
+  // 11:56 UTC) that URL passed the gateway's limit, the read failed, the
+  // failure was swallowed below, and every @tag silently sent no picture:
+  // Seedream fell back to text-to-image and billed for it. A full-library
+  // read also stops at PostgREST's 1,000-row cap. Tag names are
+  // [A-Za-z0-9_-] (ELEMENT_TAG), so they need no quoting inside or(); ilike
+  // is the case-insensitive match the editor uses, and the `_` wildcard can
+  // only over-match a row that byName then never looks up.
   const { data: elements, error } = await admin
     .from("elements")
     .select("name, description, ai_description, asset_id")
     .eq("user_id", userId)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .or(tags.map((t) => `name.ilike.${t}`).join(","));
   if (error || !elements) return { prompt, refImageUrls: [], unresolved: [] };
 
   const byName = new Map(elements.map((e) => [e.name.toLowerCase(), e]));
-  const tags = tagsInOrder(prompt);
   const unresolved = tags.filter((t) => !byName.has(t.toLowerCase()));
 
-  // ONE assets LOOKUP, covering every element this user owns, not just the
-  // ones tagged in this prompt -- reordered ahead of the descriptions loop
-  // below rather than added as a second query, because descriptions now
+  // ONE assets LOOKUP, covering every tagged element -- reordered ahead of
+  // the descriptions loop below rather than added as a second query, because descriptions now
   // needs `kind` for the SAME reason refImageUrls already did (see the
   // comment on that filter): elements.ai_description used to be an
   // image-only concern, so building `descriptions` from every element with
