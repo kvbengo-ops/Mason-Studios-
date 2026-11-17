@@ -36,6 +36,7 @@ function fakeBuilder(result: FakeResult) {
     eq: vi.fn(() => builder),
     is: vi.fn(() => builder),
     in: vi.fn(() => builder),
+    or: vi.fn(() => builder),
     then: (onFulfilled: (r: FakeResult) => unknown, onRejected?: (e: unknown) => unknown) =>
       Promise.resolve(result).then(onFulfilled, onRejected),
   };
@@ -119,6 +120,48 @@ describe("resolvePromptReferences — an audio element's description never reach
     // its description still substitutes. Matches the pre-existing behaviour
     // for a dangling asset_id, which this change must not disturb.
     expect(result.prompt).toContain("an old description");
+  });
+});
+
+// 2026-11-16 11:56 UTC: one API account passed ~700 elements, and the assets
+// read (`.in("id", <every element's asset>)`) became a GET URL the gateway
+// refused. The error was swallowed, so every @tag sent no picture and
+// Seedream ran (and billed) as text-to-image. The reads must scale with the
+// tags in the prompt, not with the size of the library.
+describe("resolvePromptReferences reads only the tagged elements", () => {
+  it("asks for the tagged names and looks up only their assets, whatever the library size", async () => {
+    const elements = fakeBuilder({
+      data: [{ name: "O645Kitchen", description: null, ai_description: null, asset_id: "a-kitchen" }],
+      error: null,
+    });
+    const assets = fakeBuilder({
+      data: [{ id: "a-kitchen", storage_key: "u/kitchen.png", kind: "upload" }],
+      error: null,
+    });
+    const admin = {
+      from: vi.fn((table: string) => (table === "elements" ? elements : assets)),
+    } as never;
+
+    const result = await resolvePromptReferences(
+      admin,
+      "user-1",
+      "Image 1 is @O645Kitchen, the same room at night",
+    );
+
+    expect(elements.or).toHaveBeenCalledWith("name.ilike.o645kitchen");
+    expect(assets.in).toHaveBeenCalledWith("id", ["a-kitchen"]);
+    expect(result.refImageUrls).toEqual(["https://signed.example/u/kitchen.png"]);
+  });
+
+  it("makes no read at all for a prompt whose only @ is an email address", async () => {
+    const admin = {
+      from: vi.fn(() => {
+        throw new Error("read the database for a prompt with no tags");
+      }),
+    } as never;
+
+    const result = await resolvePromptReferences(admin, "user-1", "mail jose@example.com");
+    expect(result).toEqual({ prompt: "mail jose@example.com", refImageUrls: [], unresolved: [] });
   });
 });
 
