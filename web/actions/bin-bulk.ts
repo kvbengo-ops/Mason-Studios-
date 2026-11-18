@@ -3,9 +3,9 @@
 import { requireAdmin } from "@/actions/guard";
 import { purgeDeletedScene, purgeDeletedVersion } from "@/actions/ugc";
 import type { ActionNotice, ActionResult } from "@/lib/action-result";
-
-/** At most this many entries per press, so one request stays well inside the platform's time limit. */
-const MAX_BULK_PURGE = 200;
+// At most this many entries per call, so one request stays well inside the
+// platform's time limit; the bar batches a bigger selection.
+import { MAX_BULK_PURGE } from "@/lib/bin-bulk-limit";
 
 /**
  * Permanently deletes the Bin entries an admin ticked on /bin: `scene` and
