@@ -114,8 +114,9 @@ Captions are gone. Subtitles are added in CapCut after export.
   only where the vendor documents it: Nano Banana 2.1, Seedream 5.0 Pro, GPT 2.6 Sunburst —
   not Seedream 5.5 or GPT 2.6 Economy. Nano Banana 2 is gone from the picker
   (`nano-banana-2-1` stays).
-- **Gemini Omni 1.2 is hidden from the `/ugc` picker** (owner, 2026-11-18) after kie's
-  "generate task timeout." on most renders; `offerable()` still prices it for old scenes.
+- **Gemini Omni 1.2 and Gemini Omni Video are hidden from the `/ugc` picker** (owner,
+  2026-11-18/19; 1.2 after kie's "generate task timeout." on most renders); `offerable()`
+  still prices both for old scenes.
 
 `PINNED_MODEL_ID`/`PINNED_RESOLUTION`/`PINNED_DURATION_S` (`ugc-column.tsx`) are the
 **default for a new scene**, not a fixed value — the picker offers every `offerable()`
