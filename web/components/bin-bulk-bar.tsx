@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { purgeBinEntries } from "@/actions/bin-bulk";
 import { Button } from "@/components/ui/button";
 import { PendingButton } from "@/components/pending-button";
+import { MAX_BULK_PURGE } from "@/lib/bin-bulk-limit";
 
 /** The id the per-card checkboxes point their `form` attribute at. */
 export const BIN_BULK_FORM_ID = "bin-bulk";
@@ -54,12 +55,23 @@ export function BinBulkBar({ shown }: { shown: number }): JSX.Element | null {
       return;
     }
     const data = new FormData(form);
+    // Versions first, the order purgeBinEntries itself uses, then scenes —
+    // cut into calls of at most MAX_BULK_PURGE so any selection goes through.
+    const entries = [
+      ...data.getAll("version").map((id) => ["version", String(id)] as const),
+      ...data.getAll("scene").map((id) => ["scene", String(id)] as const),
+    ];
     start(async () => {
       try {
-        const result = await purgeBinEntries(data);
-        if (result && "error" in result && result.error) toast.error(result.error);
-        else if (result && "notice" in result && result.notice)
-          toast(result.notice, { duration: 8000 });
+        const notices: string[] = [];
+        for (let i = 0; i < entries.length; i += MAX_BULK_PURGE) {
+          const batch = new FormData();
+          for (const [field, id] of entries.slice(i, i + MAX_BULK_PURGE)) batch.append(field, id);
+          const result = await purgeBinEntries(batch);
+          if (result && "error" in result && result.error) toast.error(result.error);
+          else if (result && "notice" in result && result.notice) notices.push(result.notice);
+        }
+        if (notices.length > 0) toast(notices.join(" "), { duration: 8000 });
         setAll(false);
         router.refresh();
       } catch (error) {
