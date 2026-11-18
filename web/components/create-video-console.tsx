@@ -7,11 +7,8 @@ import { ResizablePromptBar } from "@/components/resizable-prompt-bar";
 import { UgcColumn } from "@/components/ugc-column";
 import { UgcLiveRefresh } from "@/components/ugc-live-refresh";
 import { VideoRunsPanel, type VideoRun } from "@/components/video-runs-panel";
-import {
-  CLIP_EXPIRY_WARN_DAYS,
-  CLIP_RETENTION_DAYS,
-  clipExpiryWarnCutoff,
-} from "@/lib/clip-retention";
+import { StaleClipsPrompt, type StaleClip } from "@/components/stale-clips-prompt";
+import { staleClipCutoff } from "@/lib/clip-retention";
 import { KIE_MODELS } from "@/lib/kie/models";
 import type { AccountBudgetSnapshot } from "@/lib/spend";
 import { loadElementTags } from "@/lib/element-library";
@@ -31,6 +28,10 @@ const MAX_WALL_TAKES = 240;
 const SCENES_PER_TAKE = 2;
 /** Attempts listed in the Runs pill. */
 const RECENT_RUNS = 30;
+// ponytail: oldest first and capped, so the scene-id .in() reads stay small;
+// a longer backlog shows the rest after the first batch is cleaned up.
+/** Stale clips listed in the clean-up prompt. */
+const MAX_STALE_CLIPS = 100;
 
 /** The capped estimate for one scene, or null when it cannot be priced. */
 function returnedEstimate(
@@ -343,36 +344,66 @@ export async function CreateVideoConsole({
     }
   }
 
-  // How many of this account's clips are inside the expiry warning window.
-  // Counted, not read off the wall: the wall loads newest first, and the
-  // clips about to go are the oldest.
-  const { count: expiringCount } =
-    projects.length > 0
-      ? await supabase
-          .from("scenes")
-          .select("id", { count: "exact", head: true })
-          .in(
-            "project_id",
-            projects.map((p) => p.id),
-          )
-          .eq("status", "done")
-          .eq("keep", false)
-          .lt("created_at", clipExpiryWarnCutoff())
-      : { count: 0 };
+  // Stale clips (owner, 2026-11-17): finished, unkept clips of the personal
+  // Create project whose newest take is past STALE_CLIP_DAYS — the worker's
+  // ExpireClips rule, a week early. Read apart from the wall: the wall loads
+  // newest first, and these are the oldest. A clip in a real project is never
+  // listed (nor expired).
+  const personalProject = projects.find((p) => p.is_personal);
+  const staleCutoff = staleClipCutoff();
+  const { data: staleRows } = personalProject
+    ? await supabase
+        .from("scenes")
+        .select("id, video_prompt, created_at")
+        .eq("project_id", personalProject.id)
+        .eq("status", "done")
+        .eq("keep", false)
+        .lt("created_at", staleCutoff)
+        .order("created_at", { ascending: true })
+        .limit(MAX_STALE_CLIPS)
+    : { data: [] };
+  const staleIds = (staleRows ?? []).map((scene) => scene.id);
+  const [{ data: staleTakes }, { data: stalePosters }] =
+    staleIds.length > 0
+      ? await Promise.all([
+          supabase.from("scene_versions").select("scene_id, created_at").in("scene_id", staleIds),
+          supabase
+            .from("assets")
+            .select("scene_id, storage_key")
+            .eq("kind", "poster")
+            .in("scene_id", staleIds)
+            .order("created_at", { ascending: false }),
+        ])
+      : [{ data: [] }, { data: [] }];
+  const newestTakeAt = new Map<string, string>();
+  for (const take of staleTakes ?? []) {
+    const seen = newestTakeAt.get(take.scene_id);
+    if (!seen || take.created_at > seen) newestTakeAt.set(take.scene_id, take.created_at);
+  }
+  const posterKeyOf = new Map<string, string>();
+  for (const poster of stalePosters ?? []) {
+    if (poster.scene_id && !posterKeyOf.has(poster.scene_id)) {
+      posterKeyOf.set(poster.scene_id, poster.storage_key);
+    }
+  }
+  const staleClips: StaleClip[] = [];
+  for (const scene of staleRows ?? []) {
+    const madeAt = newestTakeAt.get(scene.id) ?? scene.created_at;
+    // A newer take restarts the clock, as it does for the worker.
+    if (Date.parse(madeAt) >= Date.parse(staleCutoff)) continue;
+    const posterKey = posterKeyOf.get(scene.id);
+    staleClips.push({
+      sceneId: scene.id,
+      prompt: scene.video_prompt ?? "",
+      madeAt,
+      posterUrl: posterKey ? await signedUrl(posterKey).catch(() => null) : null,
+    });
+  }
 
   return (
     <>
       <UgcLiveRefresh projectIds={[...inFlightProjectIds]} />
-      {expiringCount ? (
-        <p
-          role="status"
-          className="mx-3 mt-3 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm"
-        >
-          {expiringCount === 1 ? "1 clip moves" : `${expiringCount} clips move`} to the bin within{" "}
-          {CLIP_EXPIRY_WARN_DAYS} days. Clips are kept for {CLIP_RETENTION_DAYS} days: download
-          them, or open a clip and press Keep.
-        </p>
-      ) : null}
+      <StaleClipsPrompt clips={staleClips} />
       <VideoRunsPanel runs={[...pendingRuns, ...runs]} />
       <CreateClipWall
         key={initialVersionId ?? "wall"}

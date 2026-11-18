@@ -667,7 +667,11 @@ function ClipViewer({
     ["Size", size ? `${size.width}x${size.height}` : null],
     ["Avg. bitrate", bitrate],
     ["Created", dateTimeFormatter.format(new Date(item.createdAt))],
-    ["Auto-delete", clipExpiryLabel(item.keep, item.createdAt)],
+    // Only a Create clip expires; one in a real project never does.
+    [
+      "Auto-delete",
+      item.personal ? clipExpiryLabel(item.keep, item.createdAt) : "Never (in a project)",
+    ],
   ];
 
   function handleKeep(): void {
