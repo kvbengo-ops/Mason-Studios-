@@ -10,9 +10,10 @@ import type { ImageAspectRatio } from "./image-aspect-ratios";
  */
 export const SEEDREAM_PRO_ID = "byteplus/seedream-5.0-pro";
 
-/** The three ratios the app offers (see lib/image-aspect-ratios.ts). */
+/** Every ratio the app offers (see lib/image-aspect-ratios.ts): BytePlus takes any `WxH`. */
 export const SEEDREAM_PRO_ASPECT_RATIOS: readonly ImageAspectRatio[] = [
   "9:16",
+  "4:5",
   "1:1",
   "16:9",
 ];

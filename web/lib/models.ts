@@ -31,7 +31,11 @@
 // adapter in the worker.
 
 import { z } from "zod";
-import { IMAGE_ASPECT_RATIOS, type ImageAspectRatio } from "./image-aspect-ratios";
+import {
+  COMMON_IMAGE_ASPECT_RATIOS,
+  IMAGE_ASPECT_RATIOS,
+  type ImageAspectRatio,
+} from "./image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, type ImageResolutionId } from "./image-resolutions";
 import { SEEDREAM_PRO_ID, SEEDREAM_PRO_ASPECT_RATIOS } from "./seedream";
 import {
@@ -1560,7 +1564,8 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     inputImageCostUsd: 0.0072,
     maxPromptChars: 5_000,
     observedSeconds: null,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
+    // No 4:5: kie's Seedream 5.5 docs list 1:1, 4:3, 3:4, 16:9, 9:16, 2:3, 3:2, 21:9.
+    aspectRatios: COMMON_IMAGE_ASPECT_RATIOS,
     resolutions: ["1K", "1.5K", "2K"],
     resolutionCostsUsd: { "1.5K": 0.018, "2K": 0.0315 },
   },
@@ -1624,7 +1629,8 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     // Kie's published flat 1K price, 2026-11-10; no paid timing receipt yet.
     costUsd: 0.025,
     observedSeconds: null,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
+    // No 4:5: kie's Economy docs list auto, 1:1, 16:9, 9:16, 3:2, 2:3, 21:9, 4:3 only.
+    aspectRatios: COMMON_IMAGE_ASPECT_RATIOS,
     resolutions: ["1K"],
   },
 ];

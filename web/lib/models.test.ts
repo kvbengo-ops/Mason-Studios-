@@ -942,10 +942,18 @@ describe("IMAGE_MODELS reference rules", () => {
     }
   });
 
-  it("offers 9:16, 1:1 and 16:9 on every image model, and nothing else", () => {
-    for (const model of IMAGE_MODELS) {
-      expect([...model.aspectRatios], model.id).toEqual(["9:16", "1:1", "16:9"]);
-    }
+  it("offers 4:5 only where the vendor documents it, and 9:16, 1:1, 16:9 everywhere", () => {
+    const withFourFive = ["9:16", "4:5", "1:1", "16:9"];
+    const common = ["9:16", "1:1", "16:9"];
+    expect(
+      Object.fromEntries(IMAGE_MODELS.map((model) => [model.id, [...model.aspectRatios]])),
+    ).toEqual({
+      "seedream-5.5": common,
+      "seedream-5.0-pro": withFourFive,
+      "nano-banana-2-1": withFourFive,
+      "gpt-image-2.6-sunburst": withFourFive,
+      "gpt-image-2.6-economy": common,
+    });
   });
 });
 

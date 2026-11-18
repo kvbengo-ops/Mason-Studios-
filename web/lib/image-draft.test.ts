@@ -74,10 +74,13 @@ describe("parseImageDraft", () => {
     expect(parseImageDraft(stored, isSelectable).modelId).toBeUndefined();
   });
 
-  it.each(["7:3", "4:5", "21:9"])("drops an aspect ratio the picker does not offer: %s", (aspectRatio) => {
-    const stored = JSON.stringify({ aspectRatio });
-    expect(parseImageDraft(stored, isSelectable).aspectRatio).toBeUndefined();
-  });
+  it.each(["7:3", "3:4", "21:9"])(
+    "drops an aspect ratio the picker does not offer: %s",
+    (aspectRatio) => {
+      const stored = JSON.stringify({ aspectRatio });
+      expect(parseImageDraft(stored, isSelectable).aspectRatio).toBeUndefined();
+    },
+  );
 
   it.each([0, 5, 1.5, "2"])("drops an invalid batch size: %s", (imageCount) => {
     const stored = JSON.stringify({ imageCount });

@@ -35,8 +35,6 @@ describe("ugcOptions(true) — the sound picker", () => {
       "wan-3.0/720P",
       "gemini-omni-video/360p",
       "gemini-omni-video/720p",
-      "gemini-omni-1.2/360p",
-      "gemini-omni-1.2/720p",
     ]);
   });
 
@@ -55,12 +53,11 @@ describe("ugcOptions(true) — the sound picker", () => {
       "kling-4.0-reference": null,
       "wan-3.0": null,
       "gemini-omni-video": null,
-      "gemini-omni-1.2": null,
     });
   });
 
   it("never shows a hidden model, even one offerable() still prices", () => {
-    for (const id of ["seedance-2", "kling-3.0-pro", "hailuo-2.3-pro"]) {
+    for (const id of ["seedance-2", "kling-3.0-pro", "hailuo-2.3-pro", "gemini-omni-1.2"]) {
       expect(
         options.some((o) => o.modelId === id),
         id,
@@ -160,8 +157,6 @@ describe("ugcOptions(false) — the silent picker", () => {
       "kling-4.0-reference/720p/28.5",
       "gemini-omni-video/360p/15.75",
       "gemini-omni-video/720p/15.75",
-      "gemini-omni-1.2/360p/4",
-      "gemini-omni-1.2/720p/9",
     ]);
   });
 

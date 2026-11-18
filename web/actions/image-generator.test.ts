@@ -131,7 +131,9 @@ describe("resolvePromptReferences — an audio element's description never reach
 describe("resolvePromptReferences reads only the tagged elements", () => {
   it("asks for the tagged names and looks up only their assets, whatever the library size", async () => {
     const elements = fakeBuilder({
-      data: [{ name: "O645Kitchen", description: null, ai_description: null, asset_id: "a-kitchen" }],
+      data: [
+        { name: "O645Kitchen", description: null, ai_description: null, asset_id: "a-kitchen" },
+      ],
       error: null,
     });
     const assets = fakeBuilder({
@@ -214,12 +216,10 @@ describe("generatePersonalImage refuses an aspect ratio the chosen model cannot 
   it("refuses a real ratio that the app no longer offers", async () => {
     const { generatePersonalImage } = await import("./image-generator");
 
-    // Every model offers the same three ratios now (9:16, 1:1, 16:9), so 4:5 is
-    // refused on all of them, Nano Banana included.
+    // kie's Seedream 5.5 docs do not list 4:5, so it is refused there even though
+    // Nano Banana 2.1, Sunburst and Seedream 5.0 Pro offer it.
     expect(
-      await generatePersonalImage(
-        generateForm({ imageModel: "seedream-5.0-pro", aspectRatio: "4:5" }),
-      ),
+      await generatePersonalImage(generateForm({ imageModel: "seedream-5.5", aspectRatio: "4:5" })),
     ).toEqual({ error: RATIO_REFUSAL });
   });
 

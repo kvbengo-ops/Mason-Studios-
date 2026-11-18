@@ -48,7 +48,8 @@ import type { UgcOption } from "@/components/ugc-column";
 // offerable() still prices and validates the rest, so old scenes stay readable.
 // kling-4.0-reference is Kling 4.0's References mode, not a separate model.
 // Seedance 2.5 on Kie is its own choice (never a BytePlus fallback). Seedance 2.5 on
-// BytePlus is offered at 480p only.
+// BytePlus is offered at 480p only. Gemini Omni 1.2 is hidden (owner, 2026-11-18): kie
+// returns "generate task timeout." on most of its renders since 2026-11-17.
 const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "seedance-2.5",
   "seedance-2.5-byteplus",
@@ -58,7 +59,6 @@ const SHOWN_MODEL_IDS: ReadonlySet<string> = new Set([
   "kling-4.0-reference",
   "wan-3.0",
   "gemini-omni-video",
-  "gemini-omni-1.2",
 ]);
 
 // Kie picks that share a name with a BytePlus pick, so the label says which.
