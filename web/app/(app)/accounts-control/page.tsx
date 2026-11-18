@@ -63,6 +63,7 @@ import {
   parseSpendGranularity,
   type SpendGranularity,
   loadAccountsRunLog,
+  formatRunDuration,
   parseWindowDays,
   type AccountControlDeletedData,
   type AccountsControlWindowDays,
@@ -1630,44 +1631,17 @@ export default async function AccountsControlPage({
                       <Table className="min-w-[760px]">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
-                            <TableHead className="w-14">Preview</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead>Account</TableHead>
                             <TableHead>Model</TableHead>
                             <TableHead numeric>Cost</TableHead>
+                            <TableHead>Duration</TableHead>
                             <TableHead>Error</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {runLog.rows.map((run) => (
                             <TableRow key={run.id}>
-                              <TableCell className="py-2">
-                                {/* Small and silent; a click opens the full output. */}
-                                {run.thumbnail.kind === "placeholder" ? (
-                                  <div className="size-10 overflow-hidden rounded-md bg-muted">
-                                    <BinThumbnail
-                                      thumbnail={run.thumbnail}
-                                      itemLabel={`Output of ${run.model}`}
-                                      badge=""
-                                      controls={false}
-                                    />
-                                  </div>
-                                ) : (
-                                  <a
-                                    href={run.thumbnail.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="block size-10 overflow-hidden rounded-md bg-muted ring-offset-background transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  >
-                                    <BinThumbnail
-                                      thumbnail={run.thumbnail}
-                                      itemLabel={`Output of ${run.model}`}
-                                      badge=""
-                                      controls={false}
-                                    />
-                                  </a>
-                                )}
-                              </TableCell>
                               <TableCell className="whitespace-nowrap py-2 text-xs tabular-nums text-muted-foreground">
                                 <time dateTime={run.createdAt}>
                                   {dateTimeFormatter.format(new Date(run.createdAt))}
@@ -1692,6 +1666,9 @@ export default async function AccountsControlPage({
                                 ) : (
                                   <span className="text-xs text-muted-foreground">Not billed</span>
                                 )}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap py-2 text-xs tabular-nums text-muted-foreground">
+                                {formatRunDuration(run.clipSeconds, run.renderMs)}
                               </TableCell>
                               <TableCell className="py-2 text-xs">
                                 {run.error ? (

@@ -595,7 +595,26 @@ export interface AccountsRunLogRow {
   provider: string;
   costUsd: number | null;
   error: string | null;
-  thumbnail: BinCardThumbnail;
+  /** The clip's length in seconds, for a video run; null for an image run. */
+  clipSeconds: number | null;
+  /** How long the run took, in ms; null when it never finished or was not recorded. */
+  renderMs: number | null;
+}
+
+/**
+ * The Duration cell: a video shows its clip length and its render time
+ * ("30s · 4m15s"), an image its render time alone ("12s").
+ */
+export function formatRunDuration(clipSeconds: number | null, renderMs: number | null): string {
+  const render =
+    renderMs === null
+      ? null
+      : (() => {
+          const s = Math.round(renderMs / 1000);
+          return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
+        })();
+  if (clipSeconds === null) return render ?? "—";
+  return `${clipSeconds}s · ${render ?? "—"}`;
 }
 
 export function providerLabel(vendor: string): string {
@@ -670,9 +689,8 @@ export function runOwnerFilter(
  * One page of every run in the same `windowDays` window as the overview — the
  * log that used to live on /spend behind its own date picker. `projects` is
  * embedded off runs.project_id (not through scenes) so a scene-less run still
- * resolves its owner. Each row carries its provider and a preview of what it
- * made; a preview that cannot be found or signed is a placeholder, never an
- * error, because the run log matters more than its pictures.
+ * resolves its owner. Each row carries its provider, and its clip length and
+ * render time for the Duration column (formatRunDuration).
  *
  * `filters.userId` keeps one account's runs, owned the way the rest of the
  * schema resolves it: coalesce(runs.user_id, projects.user_id). `failedOnly`
@@ -690,7 +708,7 @@ export async function loadAccountsRunLog(
   let query = supabase
     .from("runs")
     .select(
-      "id, model, vendor, cost_usd, error, created_at, scene_id, asset_id, user_id, projects ( user_id )",
+      "id, model, vendor, cost_usd, error, created_at, settled_at, latency_ms, scene_id, asset_id, user_id, projects ( user_id ), scenes ( duration_s )",
       { count: "exact" },
     )
     .gte("created_at", windowStart.toISOString())
@@ -709,64 +727,17 @@ export async function loadAccountsRunLog(
     cost_usd: number | null;
     error: string | null;
     created_at: string;
+    settled_at: string | null;
+    latency_ms: number | null;
     scene_id: string | null;
     asset_id: string | null;
     user_id: string | null;
     projects: { user_id: string } | null;
+    scenes: { duration_s: number } | null;
   }[];
 
-  const assetIds = [...new Set(rows.flatMap((run) => (run.asset_id ? [run.asset_id] : [])))];
-  const videoRuns = rows.filter((run) => !run.asset_id && run.scene_id && run.cost_usd !== null);
-  const sceneIds = [...new Set(videoRuns.map((run) => run.scene_id!))];
-  const times = videoRuns.map((run) => run.created_at).sort();
-
-  const [images, clips] = await Promise.all([
-    assetIds.length > 0
-      ? supabase.from("assets").select("id, storage_key").in("id", assetIds)
-      : null,
-    sceneIds.length > 0
-      ? supabase
-          .from("assets")
-          .select("scene_id, created_at, storage_key")
-          .eq("kind", "clip")
-          .in("scene_id", sceneIds)
-          .gte("created_at", times[0]!)
-          .lte("created_at", times[times.length - 1]!)
-      : null,
-  ]);
-  if (images?.error) console.error(`loadAccountsRunLog: image previews: ${images.error.message}`);
-  if (clips?.error) console.error(`loadAccountsRunLog: clip previews: ${clips.error.message}`);
-  const imageKeyByAssetId = new Map(
-    (images?.data ?? []).map((asset) => [asset.id, asset.storage_key] as const),
-  );
-  const clipKeyBySceneAndTime = new Map(
-    (clips?.data ?? []).flatMap((asset) =>
-      asset.scene_id
-        ? [[sceneTimeKey(asset.scene_id, asset.created_at), asset.storage_key] as const]
-        : [],
-    ),
-  );
-
-  const thumbnails = await Promise.all(
-    rows.map(async (run): Promise<BinCardThumbnail> => {
-      const source = runPreviewSource(run, imageKeyByAssetId, clipKeyBySceneAndTime);
-      if (!source) return { kind: "placeholder" };
-      try {
-        return source.kind === "image"
-          ? {
-              kind: "image",
-              url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS),
-            }
-          : { kind: "video", url: await signedUrl(source.storageKey, SIGNED_URL_TTL_SECONDS) };
-      } catch (err) {
-        console.error(`loadAccountsRunLog: could not sign preview for run ${run.id}`, err);
-        return { kind: "placeholder" };
-      }
-    }),
-  );
-
   return {
-    rows: rows.map((run, i) => ({
+    rows: rows.map((run) => ({
       id: run.id,
       userId: run.user_id ?? run.projects?.user_id ?? null,
       createdAt: run.created_at,
@@ -774,7 +745,16 @@ export async function loadAccountsRunLog(
       provider: providerLabel(run.vendor),
       costUsd: run.cost_usd,
       error: run.error,
-      thumbnail: thumbnails[i]!,
+      // A video run is a scene's; an image run names its picture instead.
+      // ponytail: the scene's CURRENT length — a later regenerate at another
+      // length relabels older runs; store it on runs if that matters.
+      clipSeconds: !run.asset_id && run.scenes ? run.scenes.duration_s : null,
+      // Video: the worker's submit-to-saved time. Image: reserved to settled.
+      renderMs:
+        run.latency_ms ??
+        (run.settled_at
+          ? new Date(run.settled_at).getTime() - new Date(run.created_at).getTime()
+          : null),
     })),
     total: count ?? 0,
   };

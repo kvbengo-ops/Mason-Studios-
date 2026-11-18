@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { providerLabel, runPreviewSource, sceneTimeKey } from "./accounts-control";
+import {
+  formatRunDuration,
+  providerLabel,
+  runPreviewSource,
+  sceneTimeKey,
+} from "./accounts-control";
 
 describe("runPreviewSource", () => {
   const images = new Map([["asset-1", "img/a.png"]]);
@@ -38,5 +43,14 @@ describe("providerLabel", () => {
   it("names BytePlus properly and leaves kie as is", () => {
     expect(providerLabel("byteplus")).toBe("BytePlus");
     expect(providerLabel("kie")).toBe("kie");
+  });
+});
+
+describe("formatRunDuration", () => {
+  it("shows a video's clip length and render time, an image's render time", () => {
+    expect(formatRunDuration(30, 255_400)).toBe("30s · 4m15s");
+    expect(formatRunDuration(null, 12_300)).toBe("12s");
+    expect(formatRunDuration(15, null)).toBe("15s · —");
+    expect(formatRunDuration(null, null)).toBe("—");
   });
 });
