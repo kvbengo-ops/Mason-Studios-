@@ -33,6 +33,7 @@ func (m memCache) SaveBytePlusAsset(_ context.Context, key string, a store.ByteP
 type fakeAssets struct {
 	created []map[string]string
 	status  map[string]string
+	gone    map[string]bool // GetAsset answers 404 (deleted in the console)
 }
 
 func (f *fakeAssets) library(t *testing.T, cache memCache) *AssetLibrary {
@@ -49,6 +50,11 @@ func (f *fakeAssets) library(t *testing.T, cache memCache) *AssetLibrary {
 			f.created = append(f.created, body)
 			_, _ = io.WriteString(w, `{"ResponseMetadata":{},"Result":{"Id":"asset-`+string(rune('0'+len(f.created)))+`"}}`)
 		case "GetAsset":
+			if f.gone[body["Id"]] {
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = io.WriteString(w, `{"ResponseMetadata":{"Error":{"Code":"ResourceNotFound","Message":"asset not found"}}}`)
+				return
+			}
 			s := f.status[body["Id"]]
 			if s == "" {
 				s = "Processing"
@@ -97,6 +103,21 @@ func TestResolveUploadsOnceThenWaitsForActive(t *testing.T) {
 	}
 }
 
+// An Active asset deleted in BytePlus is uploaded again, never sent as a dead id.
+func TestResolveReuploadsAnAssetDeletedInBytePlus(t *testing.T) {
+	f := &fakeAssets{status: map[string]string{}, gone: map[string]bool{"asset-old": true}}
+	cache := memCache{"src": {AssetID: "asset-old", Status: "Active"}}
+	lib := f.library(t, cache)
+
+	_, err := lib.resolve(context.Background(), "src", "https://store.test/a.png", "Image")
+	if !errors.Is(err, ErrAssetsNotReady) {
+		t.Fatalf("deleted asset: err = %v, want ErrAssetsNotReady while the new upload processes", err)
+	}
+	if len(f.created) != 1 || cache["src"].AssetID != "asset-1" || cache["src"].Status != "Processing" {
+		t.Fatalf("uploads %d, cache %+v; want one re-upload cached as asset-1 Processing", len(f.created), cache["src"])
+	}
+}
+
 func TestResolveFailedAssetFailsWithReason(t *testing.T) {
 	f := &fakeAssets{status: map[string]string{"asset-9": "Failed"}}
 	cache := memCache{"src": {AssetID: "asset-9", Status: "Processing"}}
@@ -115,7 +136,7 @@ func TestRewriteSendsAssetIDsInOrderOnlyWhenAllActive(t *testing.T) {
 		"img-2": {AssetID: "asset-b", Status: "Active"},
 		"vid-1": {AssetID: "asset-v", Status: "Processing"},
 	}
-	f := &fakeAssets{status: map[string]string{}}
+	f := &fakeAssets{status: map[string]string{"asset-a": "Active", "asset-b": "Active"}}
 	lib := f.library(t, cache)
 	req := kie.SubmitRequest{
 		ImageURLs: []string{"https://s/1?t", "https://s/2?t"},

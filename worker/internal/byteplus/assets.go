@@ -243,14 +243,26 @@ func rateLimited(err error) bool {
 		strings.Contains(apiErr.Code, "QuotaExceeded")
 }
 
+// assetGone reports a GetAsset refusal meaning the asset no longer exists
+// (deleted in the BytePlus console).
+// ponytail: BytePlus's docs did not render (2026-11-20), so the not-found code is
+// unread; 404 or a *NotFound* code is the guess. Pin the real code once one is logged.
+func assetGone(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) &&
+		(apiErr.Status == http.StatusNotFound || strings.Contains(apiErr.Code, "NotFound"))
+}
+
 // resolve returns "asset://<id>" once the source's asset is Active. It
 // uploads on first sight and reports ErrAssetsNotReady while BytePlus works.
+// A cached Active asset is re-checked every render: one deleted in BytePlus
+// is uploaded again rather than sent as a dead asset:// id.
 func (l *AssetLibrary) resolve(ctx context.Context, sourceKey, fileURL, assetType string) (string, error) {
 	cached, ok, err := l.Cache.BytePlusAsset(ctx, sourceKey)
 	if err != nil {
 		return "", err
 	}
-	if !ok {
+	upload := func() (string, error) {
 		id, err := l.Client.CreateAsset(ctx, l.GroupID, fileURL, assetType)
 		if err != nil {
 			if rateLimited(err) {
@@ -263,13 +275,25 @@ func (l *AssetLibrary) resolve(ctx context.Context, sourceKey, fileURL, assetTyp
 		}
 		return "", ErrAssetsNotReady
 	}
-	if cached.Status == "Processing" {
+	if !ok {
+		return upload()
+	}
+	if cached.Status == "Processing" || cached.Status == "Active" {
 		status, reason, err := l.Client.GetAsset(ctx, cached.AssetID)
 		if err != nil {
 			if rateLimited(err) {
 				return "", ErrAssetsNotReady
 			}
+			if assetGone(err) {
+				return upload()
+			}
 			return "", fmt.Errorf("check a BytePlus Asset Library upload: %w", err)
+		}
+		switch status {
+		case "Processing", "Active", "Failed", "Rejected":
+		default:
+			// Empty or unknown (e.g. a deleted asset reported by status): upload again.
+			return upload()
 		}
 		if status != cached.Status {
 			cached.Status = status
