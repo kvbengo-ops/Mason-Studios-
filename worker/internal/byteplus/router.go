@@ -85,7 +85,12 @@ type Router struct {
 	// claimed (store.BytePlusInflight) — so it already includes the scene
 	// being submitted, and a claim at exactly the cap reads as n == MaxInflight.
 	Inflight func(ctx context.Context) (int, error)
-	Log      *slog.Logger
+	// Assets, when set (BYTEPLUS_ACCESS_KEY_ID + BYTEPLUS_SECRET_ACCESS_KEY +
+	// BYTEPLUS_ASSET_GROUP_ID), sends references as asset:// ids from the
+	// BytePlus Asset Library instead of signed URLs (assets.go). nil = signed
+	// URLs, as before.
+	Assets *AssetLibrary
+	Log    *slog.Logger
 
 	mu         sync.Mutex
 	lastCreate time.Time
@@ -111,7 +116,16 @@ func (r *Router) Submit(ctx context.Context, req kie.SubmitRequest) (string, err
 	case !r.Route:
 		err = errors.New("BYTEPLUS_ROUTE=0 has paused new BytePlus renders; this model renders on BytePlus only")
 	default:
-		id, err = r.submitBytePlus(ctx, req)
+		// Outside submitBytePlus's lock: uploads and status checks are slow
+		// and need no create spacing. The marker below still reads the
+		// original request, so a video render keeps its video price.
+		sendReq := req
+		if r.Assets != nil {
+			sendReq, err = r.Assets.rewrite(ctx, req)
+		}
+		if err == nil {
+			id, err = r.submitBytePlus(ctx, sendReq)
+		}
 	}
 	if err != nil {
 		return "", &submissionError{model: req.KieModelID, err: err}

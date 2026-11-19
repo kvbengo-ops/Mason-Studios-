@@ -338,6 +338,9 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 	audioURLs := make([]string, 0, len(refs))
 	videoURLs := make([]string, 0, len(refs))
 	videoDurations := make([]*float64, 0, len(refs))
+	// signed URL -> the file it stands for; the BytePlus Asset Library keys
+	// its once-per-file uploads on it (kie.SubmitRequest.ReferenceSourceKeys).
+	sourceKeys := make(map[string]string, len(refs))
 	for _, r := range refs {
 		if r.Kind != "image" && r.Kind != "audio" && r.Kind != "video" {
 			// A kind this build does not know about. Skipped rather than
@@ -349,6 +352,9 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		if err != nil {
 			failScene(ctx, deps, logger, scene, fmt.Errorf("sign reference url (%s): %w", r.Kind, err))
 			return
+		}
+		if r.SourceKey != "" {
+			sourceKeys[signed] = r.SourceKey
 		}
 		if r.Kind == "audio" {
 			audioURLs = append(audioURLs, signed)
@@ -401,8 +407,9 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		KieModelID:      model.KieModelID,
 		Prompt:          promptForScene(scene, refs, withSpeech(scene, model), model),
 		// BytePlus only (see kie.SubmitRequest.ReferencePrompt); kie ignores it.
-		ReferencePrompt: referencePrompt(scene, refs, withSpeech(scene, model)),
-		ImageURL:        refURL,
+		ReferencePrompt:     referencePrompt(scene, refs, withSpeech(scene, model)),
+		ReferenceSourceKeys: sourceKeys,
+		ImageURL:            refURL,
 		// Every reference, in vendor order. ImageURL above stays the first
 		// of them: Hailuo, which takes exactly one, still reads that field
 		// directly. Kling reads this whole slice instead — up to its first
@@ -445,16 +452,28 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 		// before queuing it, so nothing was billed and the next tick retries.
 		// Reconcile's 45s line is why this is a requeue, not an in-process wait.
 		atCapacity := errors.Is(err, byteplus.ErrAtCapacity)
-		if atCapacity || errors.Is(err, kie.ErrRateLimited) {
+		// BytePlus's Asset Library is still processing a reference uploaded
+		// this tick or earlier (byteplus/assets.go). Same road: nothing was
+		// submitted or billed. A longer bound — video uploads are slow, and
+		// the Entry tier allows 3 uploads a minute.
+		assetsPending := errors.Is(err, byteplus.ErrAssetsNotReady)
+		if atCapacity || assetsPending || errors.Is(err, kie.ErrRateLimited) {
 			// Bounded: the claim's cap should keep this from firing at all, so a
 			// scene that keeps landing here means the in-flight count looks
 			// permanently full (stuck rows, a miscount). Requeuing it forever
 			// would hide that behind a silent 30s loop; failing it says so.
+			limit := maxCapacityRequeues
+			if assetsPending {
+				limit = maxAssetRequeues
+			}
 			n := deps.CapacityRequeues.note(scene.ID)
-			if n > maxCapacityRequeues {
-				reason := fmt.Sprintf("kie kept rate-limiting this submission through %d tries in a row", maxCapacityRequeues)
-				if atCapacity {
-					reason = fmt.Sprintf("BytePlus stayed at capacity through %d tries in a row, so its in-flight count may be stuck", maxCapacityRequeues)
+			if n > limit {
+				reason := fmt.Sprintf("kie kept rate-limiting this submission through %d tries in a row", limit)
+				switch {
+				case atCapacity:
+					reason = fmt.Sprintf("BytePlus stayed at capacity through %d tries in a row, so its in-flight count may be stuck", limit)
+				case assetsPending:
+					reason = fmt.Sprintf("BytePlus's Asset Library was still processing a reference after %d tries (about %d minutes)", limit, limit/2)
 				}
 				failScene(ctx, deps, logger, scene, fmt.Errorf("submit render: %s: %w", reason, err))
 				return
@@ -466,11 +485,14 @@ func dispatchScene(ctx context.Context, deps Deps, scene store.Scene, webhookBas
 				return
 			}
 			msg := "dispatch: kie rate-limited the submission, scene returned to the queue"
-			if atCapacity {
+			switch {
+			case atCapacity:
 				msg = "dispatch: BytePlus at capacity past the claim's cap, scene returned to the queue"
+			case assetsPending:
+				msg = "dispatch: BytePlus Asset Library still processing references, scene returned to the queue"
 			}
 			logger.Warn(msg,
-				slog.String("error", err.Error()), slog.Int("requeues", n), slog.Int("max_requeues", maxCapacityRequeues))
+				slog.String("error", err.Error()), slog.Int("requeues", n), slog.Int("max_requeues", limit))
 			return
 		}
 		// web/lib/spend.ts's pre-flight balance check (part 1b) is a

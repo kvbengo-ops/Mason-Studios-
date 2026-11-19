@@ -1583,6 +1583,12 @@ type SceneReference struct {
 	// EstimateCost returns ok=false for it rather than quoting the render as
 	// though it carried no video at all.
 	DurationS *float64
+	// SourceKey identifies the FILE behind this reference across scenes: the
+	// Element asset it was copied from (0147's source_asset_id), else this
+	// row's own asset id, else (pre-0071 fallback) its storage key. The
+	// BytePlus Asset Library cache (byteplus_assets) is keyed on it, so one
+	// Element is uploaded to BytePlus once, not once per scene.
+	SourceKey string
 }
 
 // ReferencesForScene returns everything a scene submits, ordered the way the
@@ -1595,7 +1601,8 @@ type SceneReference struct {
 // RefFrameURL's single-key read without changing what the older route sends.
 func (s *Store) ReferencesForScene(ctx context.Context, sceneID string) ([]SceneReference, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT a.storage_key, r.kind, r.ordinal, r.category, r.description, r.tag, a.duration_s
+SELECT a.storage_key, r.kind, r.ordinal, r.category, r.description, r.tag, a.duration_s,
+       COALESCE(r.source_asset_id::text, r.asset_id::text)
 FROM scene_references r
 JOIN assets a ON a.id = r.asset_id
 WHERE r.scene_id = $1
@@ -1608,7 +1615,7 @@ ORDER BY r.kind, r.ordinal`, sceneID)
 	var out []SceneReference
 	for rows.Next() {
 		var r SceneReference
-		if err := rows.Scan(&r.StorageKey, &r.Kind, &r.Ordinal, &r.Category, &r.Description, &r.Tag, &r.DurationS); err != nil {
+		if err := rows.Scan(&r.StorageKey, &r.Kind, &r.Ordinal, &r.Category, &r.Description, &r.Tag, &r.DurationS, &r.SourceKey); err != nil {
 			return nil, fmt.Errorf("store: scan reference for scene %s: %w", sceneID, err)
 		}
 		out = append(out, r)
@@ -1643,7 +1650,7 @@ ORDER BY r.kind, r.ordinal`, sceneID)
 	if err != nil {
 		return nil, err
 	}
-	return []SceneReference{{StorageKey: key, Kind: kind, Ordinal: 1, DurationS: durationS}}, nil
+	return []SceneReference{{StorageKey: key, Kind: kind, Ordinal: 1, DurationS: durationS, SourceKey: key}}, nil
 }
 
 // refFrameKeyAndKind is RefFrameURL plus the one fact the caller above cannot

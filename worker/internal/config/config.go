@@ -58,6 +58,15 @@ type Config struct {
 	// account's limit; Enterprise is 10) caps BytePlus tasks running at once.
 	// Over it, BytePlus scenes stay queued for a later tick — never kie.
 	BytePlusMaxInflight int
+	// BytePlusAccessKeyID / BytePlusSecretAccessKey / BytePlusAssetGroupID
+	// (BYTEPLUS_ACCESS_KEY_ID, BYTEPLUS_SECRET_ACCESS_KEY,
+	// BYTEPLUS_ASSET_GROUP_ID) send BytePlus references through its Asset
+	// Library as asset:// ids (byteplus/assets.go). All three or none: the
+	// Assets API signs with this AccessKey pair, NOT BYTEPLUS_API_KEY, and the
+	// group is created once in the BytePlus console. Unset = signed URLs.
+	BytePlusAccessKeyID     string
+	BytePlusSecretAccessKey string
+	BytePlusAssetGroupID    string
 	// AppBaseURL is this worker's own publicly-reachable base URL (e.g.
 	// https://worker.example.com), used to build the webhook callback
 	// URL ({AppBaseURL}/webhooks/kie) passed on every render submission.
@@ -301,6 +310,16 @@ func load(env map[string]string) (*Config, error) {
 		BytePlusAPIKey: strings.TrimSpace(env["BYTEPLUS_API_KEY"]),
 		BytePlusModel:  strings.TrimSpace(env["BYTEPLUS_MODEL"]),
 		BytePlusRoute:  strings.TrimSpace(env["BYTEPLUS_ROUTE"]) != "0",
+		// Optional; see BytePlusAccessKeyID's doc comment.
+		BytePlusAccessKeyID:     strings.TrimSpace(env["BYTEPLUS_ACCESS_KEY_ID"]),
+		BytePlusSecretAccessKey: strings.TrimSpace(env["BYTEPLUS_SECRET_ACCESS_KEY"]),
+		BytePlusAssetGroupID:    strings.TrimSpace(env["BYTEPLUS_ASSET_GROUP_ID"]),
+	}
+
+	// All three or none: a partial set would silently fall back to signed URLs
+	// while an operator believes the Asset Library is on.
+	if set := countNonEmpty(cfg.BytePlusAccessKeyID, cfg.BytePlusSecretAccessKey, cfg.BytePlusAssetGroupID); set != 0 && set != 3 {
+		errs = append(errs, fmt.Errorf("config: BYTEPLUS_ACCESS_KEY_ID, BYTEPLUS_SECRET_ACCESS_KEY and BYTEPLUS_ASSET_GROUP_ID must be set together (BytePlus Asset Library); %d of 3 are set", set))
 	}
 
 	if v, err := positiveIntVar(env, "BYTEPLUS_MAX_INFLIGHT", 3); err != nil {
@@ -386,6 +405,16 @@ func joinErrors(errs []error) error {
 		msg += "\n  - " + e.Error()
 	}
 	return fmt.Errorf("%s", msg)
+}
+
+func countNonEmpty(values ...string) int {
+	n := 0
+	for _, v := range values {
+		if v != "" {
+			n++
+		}
+	}
+	return n
 }
 
 func osEnv() map[string]string {

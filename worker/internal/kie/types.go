@@ -85,7 +85,12 @@ type SubmitRequest struct {
 	// kinds, where kie documents only @imageN, which is why Prompt keeps the
 	// descriptions. Empty when the scene has no video_prompt.
 	ReferencePrompt string
-	ImageURL        string // reference frame; the character-consistency mechanism.
+	// ReferenceSourceKeys maps each signed reference URL below to the file it
+	// stands for (store.SceneReference.SourceKey). Only the BytePlus Asset
+	// Library reads it (byteplus/assets.go), to upload each file once and
+	// reuse its asset:// id across scenes; kie ignores it.
+	ReferenceSourceKeys map[string]string
+	ImageURL            string // reference frame; the character-consistency mechanism.
 	// ImageURLs is EVERY reference image for this scene, in the order the
 	// vendor indexes them — element 0 is the "@image1" the prompt can name
 	// (0071's scene_references.ordinal).

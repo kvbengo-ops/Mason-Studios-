@@ -1584,6 +1584,7 @@ export type Database = {
           kind: string;
           ordinal: number;
           scene_id: string;
+          source_asset_id: string | null;
           tag: string | null;
         };
         Insert: {
@@ -1595,6 +1596,7 @@ export type Database = {
           kind: string;
           ordinal: number;
           scene_id: string;
+          source_asset_id?: string | null;
           tag?: string | null;
         };
         Update: {
@@ -1606,6 +1608,7 @@ export type Database = {
           kind?: string;
           ordinal?: number;
           scene_id?: string;
+          source_asset_id?: string | null;
           tag?: string | null;
         };
         Relationships: [];

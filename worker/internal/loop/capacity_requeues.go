@@ -7,6 +7,12 @@ import "sync"
 // about five minutes.
 const maxCapacityRequeues = 10
 
+// maxAssetRequeues bounds requeues while BytePlus's Asset Library processes a
+// scene's references (byteplus.ErrAssetsNotReady): sixty 30s ticks, about
+// half an hour — video uploads are slow, and the Entry tier allows 3 uploads
+// a minute.
+const maxAssetRequeues = 60
+
 // CapacityRequeues counts each scene's consecutive capacity requeues.
 //
 // ponytail: in-memory, so a worker restart resets every count; a column on

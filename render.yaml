@@ -352,6 +352,18 @@ services:
       # overflow with "try again" (never kie).
       - key: BYTEPLUS_MAX_INFLIGHT
         value: "10"
+      # BytePlus Asset Library (0147, internal/byteplus/assets.go): references
+      # go to BytePlus as asset:// ids, each file uploaded once. ALL THREE OR
+      # NONE (the worker refuses to start on a partial set). An AccessKey pair,
+      # NOT BYTEPLUS_API_KEY — the Assets API signs with AK/SK — and a group
+      # created once in the BytePlus console (after signing its authorization
+      # letter). Unset = references are sent as signed URLs.
+      - key: BYTEPLUS_ACCESS_KEY_ID
+        sync: false
+      - key: BYTEPLUS_SECRET_ACCESS_KEY
+        sync: false
+      - key: BYTEPLUS_ASSET_GROUP_ID
+        sync: false
       - key: APP_BASE_URL
         sync: false # this service's own public URL — kie's webhook callback target; worker.internal/config.Load fails startup without it
       - key: RENDER_CONCURRENCY

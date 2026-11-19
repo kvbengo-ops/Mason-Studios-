@@ -1122,6 +1122,8 @@ async function attachSceneReferences(args: {
     category: string | null;
     description: string | null;
     tag: string | null;
+    /** The Element asset this row was copied from (0147) — the worker's BytePlus upload key. */
+    source_asset_id?: string | null;
   }> = [];
 
   // DELETE and SELECT run together — different tables, and neither reads
@@ -1167,6 +1169,7 @@ async function attachSceneReferences(args: {
       // The tag the worker's bindUITags would match, when the primary came
       // from a saved element. A fresh upload has no name and carries null.
       tag: primary?.name ?? null,
+      source_asset_id: primary?.asset_id ?? null,
     });
   }
 
@@ -1372,6 +1375,7 @@ async function attachSceneReferences(args: {
             // generate one either.
             description: refKind === "audio" ? null : descriptionFor(element) || null,
             tag: element.name,
+            source_asset_id: element.asset_id,
           };
         } catch (err) {
           console.warn(`generateClip: could not attach reference @${name}`, err);

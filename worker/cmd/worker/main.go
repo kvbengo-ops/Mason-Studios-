@@ -139,6 +139,17 @@ func run() error {
 		router.Route = cfg.BytePlusRoute
 		router.MaxInflight = cfg.BytePlusMaxInflight
 		router.Inflight = st.BytePlusInflight
+		// References as asset:// ids from BytePlus's Asset Library, uploaded
+		// once per file (byteplus/assets.go). Unset = signed URLs, as before.
+		if cfg.BytePlusAccessKeyID != "" {
+			router.Assets = &byteplus.AssetLibrary{
+				Client:  byteplus.NewAssetClient(cfg.BytePlusAccessKeyID, cfg.BytePlusSecretAccessKey, nil),
+				GroupID: cfg.BytePlusAssetGroupID,
+				Cache:   st,
+			}
+			logger.Info("BytePlus Asset Library is on: references are uploaded once per file and sent as asset:// ids",
+				slog.String("asset_group_id", cfg.BytePlusAssetGroupID))
+		}
 		if router.Route {
 			logger.Info("BYTEPLUS_API_KEY is set: the BytePlus ModelArk model choice renders on BytePlus only (over the cap it waits queued; refusals fail, never kie); the kie model choice remains on kie",
 				slog.Int("byteplus_max_inflight", router.MaxInflight))
