@@ -8,7 +8,7 @@ describe("nearestImageAspectRatio", () => {
     [1920, 1080, "16:9"],
     [1344, 768, "16:9"], // a model's near-16:9 size
     [832, 1248, "9:16"], // a 2:3 picture from before the list was cut to three ratios
-    [2520, 1080, "16:9"], // and a 21:9 one
+    [2520, 1080, "2.44:1"], // a 21:9 one is nearest 2.44:1 since it joined the list
   ])("%ix%i is %s", (w, h, expected) => {
     expect(nearestImageAspectRatio(w, h)).toBe(expected);
   });
