@@ -42,12 +42,15 @@ export const BYTEPLUS_SEEDREAM_SIZES: Readonly<
     "4:5": "864x1080",
     "1:1": "1024x1024",
     "16:9": "1280x720",
+    // 1464x600 is under the 921,600-pixel floor, so 1K takes the owner's other size.
+    "2.44:1": "1958x803",
   },
   "2K": {
     "9:16": "1440x2560",
     "4:5": "1856x2320",
     "1:1": "2048x2048",
     "16:9": "2560x1440",
+    "2.44:1": "3358x1376",
   },
 };
 

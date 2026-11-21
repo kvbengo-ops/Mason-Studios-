@@ -16,4 +16,5 @@ export const SEEDREAM_PRO_ASPECT_RATIOS: readonly ImageAspectRatio[] = [
   "4:5",
   "1:1",
   "16:9",
+  "2.44:1",
 ];

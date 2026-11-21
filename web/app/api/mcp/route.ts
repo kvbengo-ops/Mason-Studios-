@@ -118,7 +118,7 @@ const TOOLS = [
         aspect_ratio: {
           type: "string",
           description:
-            'Optional, "9:16" (default), "1:1", "16:9"; "4:5" on nano-banana-2-1, seedream-5.0-pro and gpt-image-2.6-sunburst.',
+            'Optional, "9:16" (default), "1:1", "16:9"; "4:5" on nano-banana-2-1, seedream-5.0-pro and gpt-image-2.6-sunburst; "2.44:1" on seedream-5.0-pro.',
         },
         resolution: {
           type: "string",

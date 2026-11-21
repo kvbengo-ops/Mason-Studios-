@@ -33,7 +33,7 @@
 import { z } from "zod";
 import {
   COMMON_IMAGE_ASPECT_RATIOS,
-  IMAGE_ASPECT_RATIOS,
+  STANDARD_IMAGE_ASPECT_RATIOS,
   type ImageAspectRatio,
 } from "./image-aspect-ratios";
 import { BASE_IMAGE_RESOLUTION, type ImageResolutionId } from "./image-resolutions";
@@ -1599,7 +1599,7 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     costUsd: 0.02,
     observedSeconds: 24.3,
     editObservedSeconds: 38.4,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
+    aspectRatios: STANDARD_IMAGE_ASPECT_RATIOS,
     resolutions: ["1K", "2K", "4K"],
     // kie.ai/nano-banana-2-1: 6 credits at 2K, 9 at 4K.
     resolutionCostsUsd: { "2K": 0.03, "4K": 0.045 },
@@ -1618,7 +1618,7 @@ export const IMAGE_MODELS: readonly ImageModelDescriptor[] = [
     inputImageCostUsd: 0.01,
     observedSeconds: 18,
     editObservedSeconds: 31.1,
-    aspectRatios: IMAGE_ASPECT_RATIOS,
+    aspectRatios: STANDARD_IMAGE_ASPECT_RATIOS,
     resolutions: ["1K"],
   },
   {

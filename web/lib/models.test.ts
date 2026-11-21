@@ -949,7 +949,7 @@ describe("IMAGE_MODELS reference rules", () => {
       Object.fromEntries(IMAGE_MODELS.map((model) => [model.id, [...model.aspectRatios]])),
     ).toEqual({
       "seedream-5.5": common,
-      "seedream-5.0-pro": withFourFive,
+      "seedream-5.0-pro": [...withFourFive, "2.44:1"],
       "nano-banana-2-1": withFourFive,
       "gpt-image-2.6-sunburst": withFourFive,
       "gpt-image-2.6-economy": common,
