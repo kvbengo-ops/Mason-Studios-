@@ -14,6 +14,7 @@
 
 import { createContext, useContext, useCallback, useEffect, useRef, useState } from "react";
 import type { JSX, ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import type { ImageAttempt } from "@/actions/image-generator";
 import { isImageAttemptUnfinished, type ImageAttemptStatus } from "@/lib/image-attempt";
 import { PendingButton } from "@/components/pending-button";
@@ -141,6 +142,7 @@ export function ImageAttemptPanel({
   const unfinished = attempts.filter((attempt) => isImageAttemptUnfinished(attempt.status));
   const hasUnfinished = unfinished.length > 0;
 
+  const router = useRouter();
   const poll = useCallback(async () => {
     if (ticking.current) return;
     ticking.current = true;
@@ -153,6 +155,8 @@ export function ImageAttemptPanel({
           setAttempts((current) =>
             current.map((row) => (row.runId === updated.runId ? updated : row)),
           );
+          // The gallery is server-rendered: a finished image only shows after a refresh.
+          if (updated.status === "completed") router.refresh();
         } catch {
           // One attempt failing to reconcile must not stop the others, and must
           // not blank the panel. The row stays as it was and the next tick asks
@@ -163,7 +167,7 @@ export function ImageAttemptPanel({
     } finally {
       ticking.current = false;
     }
-  }, [reconcileAction]);
+  }, [reconcileAction, router]);
 
   useEffect(() => {
     if (!hasUnfinished) return;

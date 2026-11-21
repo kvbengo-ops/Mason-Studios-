@@ -7,6 +7,7 @@ import { ImageAttemptPanel } from "./image-attempt-panel";
 import { ImageGeneratorHistory } from "./image-generator-history";
 import { IMAGE_REUSE_EVENT, type ImageReuseDetail } from "@/lib/image-reuse";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/components/save-generated-element-button", () => ({
   SaveGeneratedElementButton: () => null,
 }));

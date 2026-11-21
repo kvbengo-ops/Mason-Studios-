@@ -19,13 +19,15 @@
 // operator leaves open between sessions, and a permanent heartbeat against
 // Supabase for a page nobody is waiting on is a cost with no reader.
 
-import { type JSX, useEffect } from "react";
+import { type JSX, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 // Only reached when the socket is dead; a live one refreshes on the change.
 const FALLBACK_POLL_MS = 60_000;
+// When Realtime reports the channel failed: the old 15s poll, until it recovers.
+const DOWN_POLL_MS = 15_000;
 // Realtime rejects an `in` filter with more than 100 values.
 const MAX_FILTER_IDS = 100;
 
@@ -34,6 +36,7 @@ export function UgcLiveRefresh({ projectIds }: { projectIds: string[] }): JSX.El
   const router = useRouter();
   // A string, so the effect below re-runs only when the set itself changes.
   const filterIds = projectIds.slice(0, MAX_FILTER_IDS).join(",");
+  const [socketDown, setSocketDown] = useState(false);
 
   useEffect(() => {
     if (!filterIds) return;
@@ -55,7 +58,11 @@ export function UgcLiveRefresh({ projectIds }: { projectIds: string[] }): JSX.El
     // `anon`, which cannot read this table, and Realtime rejects the filter.
     let cancelled = false;
     const join = (): void => {
-      if (!cancelled) channel.subscribe();
+      if (cancelled) return;
+      channel.subscribe((status) => {
+        // A refused or dropped join would leave only the 60s poll: fall back fast.
+        setSocketDown(status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED");
+      });
     };
     void supabase.realtime.setAuth().then(join, join);
 
@@ -70,7 +77,11 @@ export function UgcLiveRefresh({ projectIds }: { projectIds: string[] }): JSX.El
   // anything typed into the prompt box survive. A location.reload() would
   // take the operator's unsaved prompt with it, which on this screen is the
   // one thing they cannot get back.
-  useVisibleInterval(() => router.refresh(), FALLBACK_POLL_MS, filterIds !== "");
+  useVisibleInterval(
+    () => router.refresh(),
+    socketDown ? DOWN_POLL_MS : FALLBACK_POLL_MS,
+    filterIds !== "",
+  );
 
   return null;
 }
