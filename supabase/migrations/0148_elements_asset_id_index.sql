@@ -1,0 +1,11 @@
+-- Index elements.asset_id for the assets_select RLS policy.
+--
+-- assets_select checks EXISTS (elements e WHERE e.asset_id = assets.id ...)
+-- for every asset row a signed-in user reads. With no index on asset_id that
+-- check scanned the whole elements index once per asset: the shared Elements
+-- list (≈2,000 rows) took ~4 s as a user vs 14 ms with RLS off. Policies are
+-- unchanged; this only makes the existing check a direct lookup.
+--
+-- Not CONCURRENTLY: migrations run in a transaction, and elements is small
+-- enough (~10k rows) that the brief write lock is milliseconds.
+create index if not exists elements_asset_id_idx on public.elements (asset_id);
