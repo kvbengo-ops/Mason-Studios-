@@ -700,7 +700,7 @@ export async function loadAccountsRunLog(
   windowDays: AccountsControlWindowDays,
   range: { from: number; to: number },
   now: Date = new Date(),
-  filters: { userId?: string | null; failedOnly?: boolean } = {},
+  filters: { userId?: string | null; failedOnly?: boolean; after?: string | null } = {},
 ): Promise<{ rows: AccountsRunLogRow[]; total: number }> {
   const supabase = await createClient();
   const tomorrowStart = new Date(endOfManilaDayIso(now));
@@ -716,6 +716,7 @@ export async function loadAccountsRunLog(
   const owner = runOwnerFilter(filters.userId);
   if (owner) query = query.eq("projects.user_id", owner.userId).or(owner.or);
   if (filters.failedOnly) query = query.not("error", "is", null);
+  if (filters.after) query = query.gt("created_at", filters.after);
   const { data, error, count } = await query
     .order("created_at", { ascending: false })
     .range(range.from, range.to);

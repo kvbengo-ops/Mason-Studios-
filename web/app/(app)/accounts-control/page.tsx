@@ -17,7 +17,10 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { cookies } from "next/headers";
 import { requireAdmin } from "@/actions/guard";
+import { clearRunsView, restoreRunsView } from "@/actions/runs-view";
+import { RUNS_CLEARED_COOKIE, parseRunsClearedAt } from "@/lib/runs-view";
 import { purgeDeletedScene, purgeDeletedVersion } from "@/actions/ugc";
 import { AccountStatusBadge } from "@/components/account-status-badge";
 import { ActionForm } from "@/components/action-form";
@@ -603,6 +606,7 @@ export default async function AccountsControlPage({
   const chart = parseSpendGranularity(resolvedParams.chart);
   const runUser = parseUserParam(resolvedParams.runUser);
   const failedOnly = parseUserParam(resolvedParams.failed) === "1";
+  const runsClearedAt = parseRunsClearedAt((await cookies()).get(RUNS_CLEARED_COOKIE)?.value);
 
   // Only what the open view shows is loaded. The Needs attention reads are
   // fail-soft (null), and a null line is skipped rather than shown as zero.
@@ -625,6 +629,7 @@ export default async function AccountsControlPage({
       ? loadAccountsRunLog(windowDays, pageRange(requestedPage, RUNS_PAGE_SIZE), now, {
           userId: runUser,
           failedOnly,
+          after: runsClearedAt,
         })
       : null,
     spending
@@ -1613,13 +1618,24 @@ export default async function AccountsControlPage({
                   <DownloadIcon aria-hidden="true" className="size-3.5" />
                   Export {windowDays}-day runs CSV
                 </a>
+                {/* View only: the CSV above still exports every run in the window. */}
+                <form action={runsClearedAt ? restoreRunsView : clearRunsView}>
+                  <button
+                    type="submit"
+                    className="inline-flex h-7 items-center rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {runsClearedAt ? "Show all runs" : "Clear view"}
+                  </button>
+                </form>
               </div>
               <PendingRegion region="runs" fallback={<RowsSkeleton rows={8} />}>
                 {runLog.rows.length === 0 ? (
                   <EmptyState>
-                    {runUser || failedOnly
-                      ? "No runs match these filters in this window."
-                      : "No runs in this window."}
+                    {runsClearedAt
+                      ? "No runs since you cleared the view."
+                      : runUser || failedOnly
+                        ? "No runs match these filters in this window."
+                        : "No runs in this window."}
                   </EmptyState>
                 ) : (
                   <div className="flex flex-col gap-5">
