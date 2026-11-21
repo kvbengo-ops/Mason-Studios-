@@ -48,6 +48,11 @@ vi.mock("@/lib/admin-creations", () => ({
   loadEditorImages: vi.fn(),
 }));
 
+// The page reads the "runs cleared" cookie; no cookie = show every run.
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({ get: () => undefined })),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
